@@ -32,6 +32,28 @@ describe("BounceRequestSchema (SPEC §5.5)", () => {
     expect(parse(BOUNCE_MAX_TRACKS)).toBe(true);
   });
 
+  it("defaults the options like an older client: tempo and markers copied, no click", () => {
+    const r = BounceRequestSchema.parse(base);
+    expect(r).toMatchObject({ copyTempo: true, copyMarkers: true, includeClick: false });
+    const off = BounceRequestSchema.parse({
+      ...base,
+      copyTempo: false,
+      copyMarkers: false,
+      includeClick: true,
+    });
+    expect(off).toMatchObject({ copyTempo: false, copyMarkers: false, includeClick: true });
+  });
+
+  it("counts the click as an input toward the cap", () => {
+    const versions = Object.fromEntries(
+      Array.from({ length: BOUNCE_MAX_TRACKS }, (_, i) => [`t${i}`, `v${i}`]),
+    );
+    expect(BounceRequestSchema.safeParse({ ...base, versions }).success).toBe(true);
+    expect(BounceRequestSchema.safeParse({ ...base, versions, includeClick: true }).success).toBe(
+      false,
+    );
+  });
+
   it("validates the mixer state like the mixer route", () => {
     const bad = { ...base, mix: { tracks: { t1: { ...s(), gainDb: 20 } } } };
     expect(BounceRequestSchema.safeParse(bad).success).toBe(false);
@@ -78,6 +100,12 @@ describe("bounceTracks (engine rules, SPEC §5.5, §6.6)", () => {
       { trackId: "a", versionId: "va", gainDb: 0, pan: 0 },
       { trackId: "c", versionId: "vc", gainDb: -3, pan: 0.25 },
     ]);
+  });
+
+  it("a soloed click (when bounced) silences the unsoloed tracks", () => {
+    const mix = { tracks: { a: s(), b: s({ solo: true }), c: s() } };
+    expect(bounceTracks(versions, mix, none, true).map((t) => t.trackId)).toEqual(["b"]);
+    expect(bounceTracks(versions, { tracks: {} }, () => s(), true)).toEqual([]);
   });
 
   it("returns nothing when everything is silent", () => {

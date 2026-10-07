@@ -1,4 +1,6 @@
 import fs from "node:fs/promises";
+import path from "node:path";
+import { dbToGain } from "@bandroom/shared";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getUserById } from "../auth/users";
@@ -7,6 +9,7 @@ import { assets } from "../db/schema";
 import { recordEvent } from "../events/record";
 import { PermanentJobError, type JobHandler } from "../jobs/types";
 import { assetProbe, getAsset, setAssetStatus } from "./assets";
+import { BounceClickSchema, writeClickWav, type BounceClick } from "./clickTrack";
 import { enqueueAudioIngest } from "./ingestJobs";
 import { mixChannels, mixGain, panLaw, renderMix, type MixInput } from "./mixGraph";
 import type { Probe } from "./probe";
@@ -29,18 +32,22 @@ export const BounceInputSchema = z.object({
 });
 export type BounceInput = z.infer<typeof BounceInputSchema>;
 
-export const BouncePayloadSchema = z.object({
-  /** The new version's asset: the render becomes its `original`. */
-  assetId: z.string(),
-  projectId: z.string(),
-  /** The new song (SSE fan-out and the following ingest). */
-  songId: z.string(),
-  trackVersionId: z.string(),
-  sourceSongId: z.string(),
-  /** Who bounced: the asset counts toward their quota. */
-  userId: z.string(),
-  inputs: z.array(BounceInputSchema).min(1),
-});
+export const BouncePayloadSchema = z
+  .object({
+    /** The new version's asset: the render becomes its `original`. */
+    assetId: z.string(),
+    projectId: z.string(),
+    /** The new song (SSE fan-out and the following ingest). */
+    songId: z.string(),
+    trackVersionId: z.string(),
+    sourceSongId: z.string(),
+    /** Who bounced: the asset counts toward their quota. */
+    userId: z.string(),
+    inputs: z.array(BounceInputSchema),
+    /** The click track, when the bounce includes it (SPEC §5.5). */
+    click: BounceClickSchema.optional(),
+  })
+  .refine((p) => p.inputs.length > 0 || p.click !== undefined, { message: "Nothing to render" });
 export type BouncePayload = z.infer<typeof BouncePayloadSchema>;
 
 /**
@@ -69,6 +76,22 @@ export function bounceMixInput(
     channels: mixChannels(source.probe, source.variant),
     law: panLaw(source.probe),
     offsetSamples: input.offsetSamples,
+  };
+}
+
+/**
+ * The mix input of a bounced click (SPEC §5.5): the click WAV centred at the click volume. A mono
+ * file read with the balance law at pan 0 feeds both sides at unity, like the engine's click
+ * voices.
+ */
+export function bounceClickInput(file: string, click: Pick<BounceClick, "gainDb">): MixInput {
+  return {
+    path: file,
+    gain: dbToGain(click.gainDb),
+    pan: 0,
+    channels: 1,
+    law: "stereo",
+    offsetSamples: 0,
   };
 }
 
@@ -123,8 +146,14 @@ export const audioBounceHandler: JobHandler<BouncePayload, BounceResult> = {
       }
       const probe = assetProbe(source);
       lengthSec = Math.max(lengthSec, (probe?.durationSec ?? 0) + input.offsetSamples / 48_000);
-      const path = await ctx.input({ assetId: source.id, variant });
-      inputs.push(bounceMixInput(input, { path, variant, probe }));
+      const file = await ctx.input({ assetId: source.id, variant });
+      inputs.push(bounceMixInput(input, { path: file, variant, probe }));
+    }
+    if (payload.click) {
+      const file = path.join(ctx.tmpDir, "click.wav");
+      await writeClickWav(file, payload.click);
+      lengthSec = Math.max(lengthSec, payload.click.lengthFrames / 48_000);
+      inputs.push(bounceClickInput(file, payload.click));
     }
 
     const signal = withTimeLimit(ctx.signal, mediaTimeLimitMs(lengthSec));
@@ -161,6 +190,7 @@ export const audioBounceHandler: JobHandler<BouncePayload, BounceResult> = {
         sourceSongId: payload.sourceSongId,
         userId: payload.userId,
         inputs: inputs.length,
+        click: payload.click !== undefined,
         limited: rendered.limited,
         bytes: size,
       },

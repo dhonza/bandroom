@@ -75,6 +75,7 @@ export function registerSongRoutes(app: FastifyInstance, ctx: AppContext): void 
       title: body.title,
       userId: user.id,
       inputs: plan.inputs,
+      click: plan.click,
       request: body,
       event: {
         sessionId: request.session?.id ?? null,

@@ -26,7 +26,7 @@ import { clickSettingsOf } from "./model";
 export function useClickSettings(): ClickSettings {
   // Select the stored object (stable reference) and merge the defaults outside the selector.
   const click = usePlayerView((s) => s.mix.click);
-  return useMemo(() => clickSettingsOf({ tracks: {}, click }), [click]);
+  return useMemo(() => clickSettingsOf({ click }), [click]);
 }
 
 function useHasTempo(): boolean {

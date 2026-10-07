@@ -28,7 +28,7 @@ import {
 import { assetProbe } from "../media/assets";
 import type { SongRow } from "./access";
 import type { CommentRow } from "./comments";
-import { afterTimelineChange } from "./markers";
+import { afterTimelineChange, type MarkerRow } from "./markers";
 import { touchProject } from "./projects";
 import { createSongRow, softDeleteSong } from "./songs";
 import type { ResolvedItem } from "./trash";
@@ -307,18 +307,23 @@ function copyMarkers(
   shiftSec: number,
   from: string | null,
   now: number,
-): number {
+  createdBy?: string,
+): Pick<MarkerRow, "id" | "type" | "name">[] {
   const rows = db
     .select()
     .from(markers)
     .where(and(eq(markers.songId, fromSongId), isNull(markers.deletedAt)))
     .all();
+  const out: Pick<MarkerRow, "id" | "type" | "name">[] = [];
   for (const m of rows) {
+    const id = uuidv7(now);
+    out.push({ id, type: m.type, name: m.name });
     db.insert(markers)
       .values({
         ...m,
-        id: uuidv7(now),
+        id,
         songId,
+        ...(createdBy !== undefined && { createdBy, createdAt: now }),
         startSec: retime(m.startSec, shiftSec) ?? 0,
         endSec: retime(m.endSec, shiftSec),
         note:
@@ -330,7 +335,7 @@ function copyMarkers(
       })
       .run();
   }
-  return rows.length;
+  return out;
 }
 
 /**
@@ -599,6 +604,31 @@ export function makeMultitrackSong(
     touchProject(db, projectId, now);
   const fresh = db.select().from(songs).where(eq(songs.id, song.id)).get() ?? song;
   return { song: fresh, tracks: out, sourceSongIds: groups.map((g) => g.song.id), emptied };
+}
+
+/**
+ * Copies the source's tempo map (its current state as one revision by `userId`) and its live
+ * markers and sections (created by `userId`) into a bounce of it (SPEC §5.5), without a shift:
+ * the bounce starts at the same frame. In the caller's transaction. Returns what was copied, for
+ * the events.
+ */
+export function copyTimelineToBounce(
+  db: Db,
+  fromSongId: string,
+  songId: string,
+  userId: string,
+  opts: { tempo: boolean; markers: boolean },
+  now: number = Date.now(),
+): { tempoRevisionId: string | null; markers: Pick<MarkerRow, "id" | "type" | "name">[] } {
+  const maps = newMaps();
+  const tempo =
+    opts.tempo && copyTempo(db, fromSongId, songId, 0, maps, { history: false, userId }, now);
+  const copied = opts.markers ? copyMarkers(db, fromSongId, songId, 0, null, now, userId) : [];
+  if (tempo || copied.length > 0) afterTimelineChange(db, songId, now);
+  const revisionId = tempo
+    ? (db.select().from(tempoMaps).where(eq(tempoMaps.songId, songId)).get()?.revisionId ?? null)
+    : null;
+  return { tempoRevisionId: revisionId, markers: copied };
 }
 
 // ——— songs to another project ———————————————————————————————————————————————————————————

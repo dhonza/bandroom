@@ -1,7 +1,5 @@
 import type { EngineClip, EngineVariant, SongTimeline } from "@bandroom/audio-engine";
 import {
-  DEFAULT_CLICK_SETTINGS,
-  type ClickSettings,
   type MixerState,
   type MixerTrackState,
   type Track,
@@ -172,9 +170,7 @@ export function mergeMix(tracks: readonly Track[], saved: MixerState | null): Mi
 }
 
 /** The personal click and count-in settings (SPEC §6.7), with defaults for missing keys. */
-export function clickSettingsOf(mix: MixerState): ClickSettings {
-  return { ...DEFAULT_CLICK_SETTINGS, ...mix.click };
-}
+export { clickSettingsOf } from "@bandroom/shared";
 
 /** Keeps the listened versions, resets gain/pan/mute/solo to the track defaults. */
 export function resetMix(tracks: readonly Track[], mix: MixerState): MixerState {

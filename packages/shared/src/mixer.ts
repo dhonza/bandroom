@@ -65,16 +65,31 @@ export const MixerSnapshotSchema = z.object({
 export type MixerSnapshot = z.infer<typeof MixerSnapshotSchema>;
 
 /**
- * Tracks the mix leaves silent (SPEC §6.6): muted, or not soloed while another track is. The
- * engine applies the same rule to its tracks, the timeline draws these lanes faintly, and the
- * bounce leaves them out (SPEC §5.5). Sorted, so it works as a cheap change key (fader moves do
- * not change it).
+ * Tracks the mix leaves silent (SPEC §6.6): muted, or not soloed while another track (or the
+ * click, SPEC §6.7) is. The engine applies the same rule to its tracks, the timeline draws these
+ * lanes faintly, and the bounce leaves them out (SPEC §5.5). Sorted, so it works as a cheap change
+ * key (fader moves do not change it).
  */
-export function dimmedTrackIds(mix: Pick<MixerState, "tracks">): string[] {
+export function dimmedTrackIds(mix: Pick<MixerState, "tracks" | "click">): string[] {
   const tracks = Object.entries(mix.tracks);
-  const anySolo = tracks.some(([, s]) => s.solo);
+  const anySolo = tracks.some(([, s]) => s.solo) || mix.click?.solo === true;
   return tracks
     .filter(([, s]) => s.mute || (anySolo && !s.solo))
     .map(([id]) => id)
     .sort();
+}
+
+/** The full click settings of a mix: missing keys from {@link DEFAULT_CLICK_SETTINGS}. */
+export function clickSettingsOf(mix: Pick<MixerState, "click">): ClickSettings {
+  return { ...DEFAULT_CLICK_SETTINGS, ...mix.click };
+}
+
+/**
+ * Whether the click sounds in the Player (SPEC §6.6–§6.7): on (not muted in its Mixer lane), and
+ * not silenced by a soloed track while "solo excludes click" is on, unless it is soloed itself.
+ */
+export function clickAudible(mix: Pick<MixerState, "tracks" | "click">): boolean {
+  const c = clickSettingsOf(mix);
+  const trackSolo = Object.values(mix.tracks).some((s) => s.solo);
+  return c.enabled && !(c.soloExcludes && trackSolo && !c.solo);
 }
