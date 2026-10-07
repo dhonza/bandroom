@@ -1,0 +1,16 @@
+**/node_modules
+**/dist
+**/coverage
+.git
+.data
+.cache
+.env
+.env.*
+!.env.example
+deploy/data
+deploy/.env
+test-results
+playwright-report
+blob-report
+**/*.tsbuildinfo
+.DS_Store

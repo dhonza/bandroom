@@ -1,0 +1,373 @@
+import {
+  ActionIcon,
+  Badge,
+  Box,
+  Button,
+  Group,
+  Loader,
+  Menu,
+  Stack,
+  Text,
+  Tooltip,
+} from "@mantine/core";
+import {
+  IconAlertTriangle,
+  IconCheck,
+  IconDots,
+  IconKeyboard,
+  IconPlayerPauseFilled,
+  IconPlayerPlayFilled,
+  IconPlayerSkipBackFilled,
+  IconPlayerTrackNextFilled,
+  IconPlayerTrackPrevFilled,
+  IconRewindBackward5,
+  IconRewindForward5,
+} from "@tabler/icons-react";
+import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { formatClock } from "../player/format";
+import { musicalSnap, SNAP_MODES } from "../markers/model";
+import { BarBeatText } from "../tempo/readout";
+import { useTempoUi } from "../tempo/store";
+import {
+  ClickMenuItems,
+  ClickSettingsModal,
+  ClickToggles,
+  CountInCountdown,
+  LoopCountInOptions,
+} from "./ClickControls";
+import { LoopButton, SectionReadout } from "../markers/SongMarkers";
+import { goNext, goPrev, playPause, setHelpOpen, setSnap, useTimelineUi } from "../markers/store";
+import { positionSec, retryAudio, seekSec, setPrefs, skip, useRehearse } from "./controller";
+import { useDocsSheetOpen } from "../documents/store";
+import type { QualityPref } from "./model";
+
+const QUALITIES: QualityPref[] = ["auto", "lossless", "high", "low"];
+const WAKE: ("off" | "playing" | "songOpen")[] = ["off", "playing", "songOpen"];
+
+/** Position text updated every animation frame straight in the DOM (no React re-render). */
+export function PositionText({ size }: { size: "xl" | "lg" | "32px" }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    let last = "";
+    const tick = () => {
+      const text = formatClock(positionSec());
+      if (text !== last && ref.current) {
+        ref.current.textContent = text;
+        last = text;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+  return (
+    <Text
+      component="span"
+      ref={ref}
+      size={size}
+      fw={700}
+      className="tabular-nums"
+      data-testid="rehearse-position"
+    >
+      {formatClock(0)}
+    </Text>
+  );
+}
+
+/**
+ * Rehearse transport (SPEC §11.1, §11.3): start, −5 s, play/pause, +5 s, big position readout,
+ * buffering/struggling/interrupted states and the "⋯" options (quality, keep screen on).
+ * On phones it is a fixed bar above the tab bar, reachable one-handed.
+ */
+/** Loading/struggling badges (shown next to the readout). */
+export function TransportState() {
+  const { t } = useTranslation();
+  const status = useRehearse((s) => s.status);
+  const struggling = useRehearse((s) => s.struggling);
+  return (
+    <Group gap={6} wrap="nowrap">
+      {(status === "loading" || status === "buffering") && <Loader size="xs" />}
+      {status === "loading" && (
+        <Text size="xs" c="dimmed">
+          {t("rehearse.loading")}
+        </Text>
+      )}
+      {struggling && (
+        <Tooltip label={t("rehearse.strugglingTip")} multiline w={220}>
+          <Badge
+            color="orange"
+            variant="light"
+            leftSection={<IconAlertTriangle size={12} />}
+            data-testid="rehearse-struggling"
+          >
+            {t("rehearse.struggling")}
+          </Badge>
+        </Tooltip>
+      )}
+    </Group>
+  );
+}
+
+export function Transport({ phone, mixer }: { phone: boolean; mixer?: React.ReactNode }) {
+  const { t } = useTranslation();
+  const status = useRehearse((s) => s.status);
+  const quality = useRehearse((s) => s.quality);
+  const prefs = useRehearse((s) => s.prefs);
+  const fallback = useRehearse(
+    (s) => s.quality === "lossless" && s.tracks.some((p) => p.chosen.quality !== "lossless"),
+  );
+  const playing = status === "playing" || status === "buffering";
+  const duration = useRehearse((s) => s.lengthSec);
+  // While the documents sheet is open (phones, tablets), the transport stays pinned below it.
+  const docsSheet = useDocsSheetOpen();
+
+  const snap = useTimelineUi((s) => s.snap);
+  const hasTempo = useTempoUi((s) => s.grid !== null);
+  const [clickSettings, setClickSettingsOpen] = useState(false);
+  const loop = <LoopButton options={<LoopCountInOptions />} />;
+  const icon = (label: string, onClick: () => void, child: React.ReactNode, testId?: string) => (
+    <ActionIcon
+      size={44}
+      variant="subtle"
+      color="gray"
+      aria-label={label}
+      onClick={onClick}
+      data-testid={testId}
+    >
+      {child}
+    </ActionIcon>
+  );
+  const play = (
+    <ActionIcon
+      size={56}
+      radius="xl"
+      variant="filled"
+      onClick={playPause}
+      disabled={status === "idle"}
+      aria-label={playing ? t("listen.pause") : t("listen.play")}
+      data-testid="rehearse-play"
+    >
+      {playing ? <IconPlayerPauseFilled size={26} /> : <IconPlayerPlayFilled size={26} />}
+    </ActionIcon>
+  );
+  const prev = icon(t("markers.prev"), goPrev, <IconPlayerTrackPrevFilled size={20} />, "go-prev");
+  const next = icon(t("markers.next"), goNext, <IconPlayerTrackNextFilled size={20} />, "go-next");
+  // Phone (SPEC §11.3): ⟲ |◀◀ ▶/❚❚ ▶▶| ⋯ — the rest sits in "⋯" and on the page.
+  const buttons = phone ? (
+    <Group gap={4} wrap="nowrap">
+      {loop}
+      {prev}
+      {play}
+      {next}
+    </Group>
+  ) : (
+    <Group gap={4} wrap="nowrap">
+      {icon(
+        t("rehearse.toStart"),
+        () => {
+          seekSec(0);
+        },
+        <IconPlayerSkipBackFilled size={20} />,
+      )}
+      {prev}
+      {icon(
+        t("rehearse.back"),
+        () => {
+          skip(-5);
+        },
+        <IconRewindBackward5 size={22} />,
+      )}
+      {play}
+      {icon(
+        t("rehearse.forward"),
+        () => {
+          skip(5);
+        },
+        <IconRewindForward5 size={22} />,
+      )}
+      {next}
+      {loop}
+    </Group>
+  );
+
+  const state = <TransportState />;
+
+  const options = (
+    <Menu position="top-end" withinPortal closeOnItemClick={false}>
+      <Menu.Target>
+        <ActionIcon size={44} variant="subtle" color="gray" aria-label={t("rehearse.options")}>
+          <IconDots size={20} />
+        </ActionIcon>
+      </Menu.Target>
+      <Menu.Dropdown miw={260}>
+        <Menu.Label>
+          {t("rehearse.quality.title")} ·{" "}
+          {t("rehearse.quality.playing", { quality: t(`rehearse.quality.${quality}`) })}
+          {fallback ? ` (${t("rehearse.quality.noLossless")})` : ""}
+        </Menu.Label>
+        {QUALITIES.map((q) => (
+          <Menu.Item
+            key={q}
+            leftSection={prefs.quality === q ? <IconCheck size={14} /> : <Box w={14} />}
+            onClick={() => {
+              setPrefs({ quality: q });
+            }}
+          >
+            {t(`rehearse.quality.${q}`)}
+          </Menu.Item>
+        ))}
+        <Menu.Item
+          leftSection={prefs.preferLossless ? <IconCheck size={14} /> : <Box w={14} />}
+          onClick={() => {
+            setPrefs({ preferLossless: !prefs.preferLossless });
+          }}
+        >
+          {t("rehearse.quality.preferLossless")}
+        </Menu.Item>
+        {phone && (
+          <>
+            <Menu.Divider />
+            <ClickMenuItems
+              onSettings={() => {
+                setClickSettingsOpen(true);
+              }}
+            />
+          </>
+        )}
+        <Menu.Divider />
+        <Menu.Label>{t("markers.snapTitle")}</Menu.Label>
+        {SNAP_MODES.map((m) => (
+          <Menu.Item
+            key={m}
+            disabled={!hasTempo && musicalSnap(m) !== null}
+            leftSection={snap === m ? <IconCheck size={14} /> : <Box w={14} />}
+            onClick={() => {
+              setSnap(m);
+            }}
+          >
+            {t(`markers.snap.${m}`)}
+          </Menu.Item>
+        ))}
+        <Menu.Divider />
+        <Menu.Label>{t("rehearse.wakeLock.title")}</Menu.Label>
+        {WAKE.map((w) => (
+          <Menu.Item
+            key={w}
+            leftSection={prefs.wakeLock === w ? <IconCheck size={14} /> : <Box w={14} />}
+            onClick={() => {
+              setPrefs({ wakeLock: w });
+            }}
+          >
+            {t(`rehearse.wakeLock.${w}`)}
+          </Menu.Item>
+        ))}
+        {!phone && (
+          <>
+            <Menu.Divider />
+            <Menu.Item
+              leftSection={<IconKeyboard size={14} />}
+              onClick={() => {
+                setHelpOpen(true);
+              }}
+            >
+              {t("shortcuts.open")}
+            </Menu.Item>
+          </>
+        )}
+      </Menu.Dropdown>
+    </Menu>
+  );
+
+  const interrupted = status === "interrupted" && (
+    <Text size="sm" c="orange" data-testid="rehearse-interrupted">
+      {t("rehearse.interrupted")}
+    </Text>
+  );
+  const startFailed = status === "error" && (
+    <Group gap="xs" wrap="wrap" data-testid="rehearse-start-failed">
+      <Text size="sm" c="red">
+        {t("rehearse.startFailed")}
+      </Text>
+      <Button size="compact-md" mih={44} variant="light" onClick={retryAudio}>
+        {t("common.retry")}
+      </Button>
+    </Group>
+  );
+
+  if (phone) {
+    return (
+      <Box
+        data-testid="rehearse-transport"
+        pos={docsSheet ? "fixed" : "sticky"}
+        px="xs"
+        py={6}
+        style={{
+          bottom: "var(--app-shell-footer-offset, 0px)",
+          zIndex: docsSheet ? 151 : 5,
+          background: "var(--mantine-color-body)",
+          borderTop: "1px solid var(--mantine-color-default-border)",
+          ...(docsSheet
+            ? { left: 0, right: 0 }
+            : { marginInline: "calc(var(--mantine-spacing-md) * -1)" }),
+        }}
+      >
+        {interrupted}
+        {startFailed}
+        <Group justify="space-between" wrap="nowrap" gap={4}>
+          {buttons}
+          {options}
+        </Group>
+        <ClickSettingsModal
+          opened={clickSettings}
+          onClose={() => {
+            setClickSettingsOpen(false);
+          }}
+        />
+      </Box>
+    );
+  }
+  return (
+    <Box
+      data-testid="rehearse-transport"
+      pos={docsSheet ? "fixed" : "sticky"}
+      py="xs"
+      px={docsSheet ? "md" : undefined}
+      style={{
+        bottom: docsSheet ? "var(--app-shell-footer-offset, 0px)" : 0,
+        zIndex: docsSheet ? 151 : 5,
+        background: "var(--mantine-color-body)",
+        borderTop: "1px solid var(--mantine-color-default-border)",
+        ...(docsSheet && { left: "var(--app-shell-navbar-offset, 0px)", right: 0 }),
+      }}
+    >
+      {interrupted}
+      {startFailed}
+      <Group justify="space-between" wrap="wrap" gap="xs">
+        <Group gap="lg" wrap="wrap" style={{ rowGap: 4 }}>
+          {buttons}
+          <CountInCountdown />
+          <Stack gap={0}>
+            <Group gap="xs" wrap="nowrap">
+              <PositionText size="xl" />
+              <BarBeatText size="xl" c="dimmed" />
+            </Group>
+            <Text size="xs" c="dimmed" className="tabular-nums">
+              {formatClock(duration, false)}
+            </Text>
+          </Stack>
+          <SectionReadout />
+          {state}
+        </Group>
+        <Group gap={4} wrap="nowrap">
+          {mixer}
+          <ClickToggles />
+          {options}
+        </Group>
+      </Group>
+    </Box>
+  );
+}

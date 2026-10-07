@@ -1,0 +1,322 @@
+[
+  {
+    "id": "proj0001fixture",
+    "object": "project",
+    "name": "Project A",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 1614645434,
+    "color": "#a25e64",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1717154429076,
+    "timeModified": 1780483995434,
+    "sortBy": {
+      "criterion": "name",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0002fixture",
+    "object": "project",
+    "name": "Project B",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 168921892,
+    "color": "#6f3215",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1772293301349,
+    "timeModified": 1779279526710,
+    "sortBy": {
+      "criterion": "custom",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0003fixture",
+    "object": "project",
+    "name": "Project C",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 818534198,
+    "color": "#7c807c",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1740216647200,
+    "timeModified": 1779278934295,
+    "sortBy": {
+      "criterion": "custom",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0004fixture",
+    "object": "project",
+    "name": "Project D",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 264764889,
+    "color": "#26b90e",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1755199090876,
+    "timeModified": 1770655494769,
+    "sortBy": {
+      "criterion": "custom",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0005fixture",
+    "object": "project",
+    "name": "Project E",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 204426902,
+    "color": "#a3845b",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1708798087411,
+    "timeModified": 1757868566693,
+    "sortBy": {
+      "criterion": "name",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0006fixture",
+    "object": "project",
+    "name": "Project F",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 1534897784,
+    "color": "#bebdbd",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1749365236024,
+    "timeModified": 1756745475554,
+    "sortBy": {
+      "criterion": "custom",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0007fixture",
+    "object": "project",
+    "name": "Project G",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 49712374,
+    "color": "#7627fc",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1755199090220,
+    "timeModified": 1755202341450,
+    "sortBy": {
+      "criterion": "custom",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0008fixture",
+    "object": "project",
+    "name": "Project H",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 1476185681,
+    "color": "#c4c4bb",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1706609135278,
+    "timeModified": 1753104246448,
+    "sortBy": {
+      "criterion": "name",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0009fixture",
+    "object": "project",
+    "name": "Project I",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 1294079532,
+    "color": "#704b49",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1749226507073,
+    "timeModified": 1752339014298,
+    "sortBy": {
+      "criterion": "custom",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0010fixture",
+    "object": "project",
+    "name": "Project J",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 16869294,
+    "color": "#7e7e7e",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1740389007876,
+    "timeModified": 1749561197568,
+    "sortBy": {
+      "criterion": "custom",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0011fixture",
+    "object": "project",
+    "name": "Project K",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 155220063,
+    "color": "#aa7b5e",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1722786941952,
+    "timeModified": 1749561167752,
+    "sortBy": {
+      "criterion": "custom",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0012fixture",
+    "object": "project",
+    "name": "Project L",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 134207978,
+    "color": "#8a7153",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1709122532869,
+    "timeModified": 1740389348879,
+    "sortBy": {
+      "criterion": "name",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0013fixture",
+    "object": "project",
+    "name": "Project M",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 40022690,
+    "color": "#9e7357",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1738610358926,
+    "timeModified": 1738610438847,
+    "sortBy": {
+      "criterion": "custom",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0014fixture",
+    "object": "project",
+    "name": "Project N",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 245723977,
+    "color": "#757575",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1708798778783,
+    "timeModified": 1736443211460,
+    "sortBy": {
+      "criterion": "name",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0015fixture",
+    "object": "project",
+    "name": "Project O",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 49586824,
+    "color": "#b48b57",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1706621649326,
+    "timeModified": 1709126978638,
+    "sortBy": {
+      "criterion": "name",
+      "ascending": true
+    }
+  },
+  {
+    "id": "proj0016fixture",
+    "object": "project",
+    "name": "Project P",
+    "creator": {
+      "uid": "user0001fixture",
+      "displayName": "Owner",
+      "email": "owner@example.test",
+      "photoURL": ""
+    },
+    "size": 178989397,
+    "color": "#838383",
+    "artwork": "https://example.test/artwork.jpg",
+    "timeCreated": 1706613191565,
+    "timeModified": 1708797296257,
+    "sortBy": {
+      "criterion": "name",
+      "ascending": true
+    }
+  }
+]

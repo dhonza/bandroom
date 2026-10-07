@@ -1,0 +1,32 @@
+# Production Caddyfile. SITE_ADDRESS comes from compose (e.g. bandroom.example.com).
+{
+	# Uncomment to receive Let's Encrypt expiry notices:
+	# email you@example.com
+}
+
+{$SITE_ADDRESS} {
+	# Compress text only: never audio, blobs or the SSE stream (it must flush immediately).
+	encode {
+		zstd
+		gzip
+		match {
+			header Content-Type text/html*
+			header Content-Type text/css*
+			header Content-Type text/plain*
+			header Content-Type application/javascript*
+			header Content-Type application/json*
+			header Content-Type image/svg+xml*
+		}
+	}
+	# Worker → API channel; only reachable inside the Docker network (SPEC §18.4).
+	respond /internal/* 404
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+	reverse_proxy app:3000 {
+		flush_interval -1
+	}
+}
+
+# Sub-path variant (APP_URL=https://example.com/your-secret-path): use Caddyfile.subpath instead.

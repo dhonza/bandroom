@@ -1,0 +1,54 @@
+# Production Caddyfile for the sub-path variant (e.g. APP_URL=https://example.com/your-secret-path).
+# On the server, copy it over Caddyfile. Compose passes SITE_ADDRESS (example.com) and BASE_PATH
+# (/your-secret-path, must equal the path of APP_URL).
+{
+	# Uncomment to receive Let's Encrypt expiry notices:
+	# email you@example.com
+}
+
+{$SITE_ADDRESS} {
+	header {
+		# No includeSubDomains: on the apex it would force HTTPS on every other subdomain.
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# The app: the path is NOT stripped (the app mounts itself under the base path), and only
+	# the base path is proxied, so /internal and /healthz at the root stay unreachable.
+	@app path {$BASE_PATH} {$BASE_PATH}/*
+	handle @app {
+		# Compress text only: never audio, blobs or the SSE stream (it must flush immediately).
+		encode {
+			zstd
+			gzip
+			match {
+				header Content-Type text/html*
+				header Content-Type text/css*
+				header Content-Type text/plain*
+				header Content-Type application/javascript*
+				header Content-Type application/json*
+				header Content-Type image/svg+xml*
+			}
+		}
+		reverse_proxy app:3000 {
+			flush_interval -1
+		}
+	}
+
+	# Keep the whole site out of search engines without naming the base path. Replace this when
+	# a public site moves onto this host name (still never list the base path in robots.txt).
+	handle /robots.txt {
+		header Content-Type "text/plain; charset=utf-8"
+		respond <<TXT
+			User-agent: *
+			Disallow: /
+			TXT 200
+	}
+
+	# Everything else: a bare 404 that does not hint at what is hosted here. Other services on this
+	# host name get their own handle blocks above this one.
+	handle {
+		header X-Robots-Tag "noindex, nofollow, noarchive"
+		respond 404
+	}
+}

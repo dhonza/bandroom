@@ -1,0 +1,647 @@
+[
+  {
+    "id": "box0017fixture",
+    "object": "stack",
+    "name": "Song 1",
+    "color": "",
+    "timeCreated": 1777788953688,
+    "children": [
+      {
+        "id": "box0018fixture",
+        "name": "Take 24.wav"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0019fixture",
+    "object": "stack",
+    "name": "Song 2",
+    "color": "",
+    "timeCreated": 1717154856636,
+    "children": [
+      {
+        "id": "box0020fixture",
+        "name": "Take 28"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0021fixture",
+    "object": "stack",
+    "name": "Song 3",
+    "color": "",
+    "timeCreated": 1717154970449,
+    "children": [
+      {
+        "id": "box0022fixture",
+        "name": "Take 7"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0023fixture",
+    "object": "stack",
+    "name": "Song 4",
+    "color": "",
+    "timeCreated": 1777788928077,
+    "children": [
+      {
+        "id": "box0024fixture",
+        "name": "Take 21.wav"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0025fixture",
+    "object": "stack",
+    "name": "Song 5",
+    "color": "",
+    "timeCreated": 1779305736750,
+    "children": [
+      {
+        "id": "box0026fixture",
+        "name": "Take 43.wav"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0027fixture",
+    "object": "stack",
+    "name": "Song 6",
+    "color": "",
+    "timeCreated": 1777788953688,
+    "children": [
+      {
+        "id": "box0028fixture",
+        "name": "Take 13.wav"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0022fixture",
+    "object": "file",
+    "name": "Take 7",
+    "color": "",
+    "timeCreated": 1717154971301,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 217.42
+  },
+  {
+    "id": "box0029fixture",
+    "object": "file",
+    "name": "Take 8",
+    "color": "",
+    "timeCreated": 1717154765865,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 337.95
+  },
+  {
+    "id": "box0030fixture",
+    "object": "file",
+    "name": "Take 9",
+    "color": "",
+    "timeCreated": 1717154657369,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 258.04
+  },
+  {
+    "id": "box0031fixture",
+    "object": "folder",
+    "name": "Folder 10",
+    "color": "",
+    "timeCreated": 1777788897351,
+    "children": [
+      {
+        "id": "box0023fixture",
+        "name": "Song 4"
+      },
+      {
+        "id": "box0017fixture",
+        "name": "Song 1"
+      },
+      {
+        "id": "box0032fixture",
+        "name": "Song 31"
+      },
+      {
+        "id": "box0033fixture",
+        "name": "Song 32"
+      },
+      {
+        "id": "box0034fixture",
+        "name": "Song 39"
+      },
+      {
+        "id": "box0027fixture",
+        "name": "Song 6"
+      },
+      {
+        "id": "box0035fixture",
+        "name": "Song 33"
+      },
+      {
+        "id": "box0025fixture",
+        "name": "Song 5"
+      },
+      {
+        "id": "box0036fixture",
+        "name": "Song 40"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0037fixture",
+    "object": "file",
+    "name": "Take 11",
+    "color": "",
+    "timeCreated": 1717154856430,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 203.55
+  },
+  {
+    "id": "box0038fixture",
+    "object": "stack",
+    "name": "Song 12",
+    "color": "",
+    "timeCreated": 1717154626591,
+    "children": [
+      {
+        "id": "box0039fixture",
+        "name": "Take 17"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0028fixture",
+    "object": "file",
+    "name": "Take 13.wav",
+    "color": "",
+    "timeCreated": 1777788957524,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 558.42
+  },
+  {
+    "id": "box0040fixture",
+    "object": "file",
+    "name": "Take 14.wav",
+    "color": "",
+    "timeCreated": 1780483993236,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 318.96
+  },
+  {
+    "id": "box0041fixture",
+    "object": "stack",
+    "name": "Song 15",
+    "color": "",
+    "timeCreated": 1717154857823,
+    "children": [
+      {
+        "id": "box0042fixture",
+        "name": "Take 29"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0043fixture",
+    "object": "stack",
+    "name": "Song 16",
+    "color": "",
+    "timeCreated": 1717154765002,
+    "children": [
+      {
+        "id": "box0029fixture",
+        "name": "Take 8"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0039fixture",
+    "object": "file",
+    "name": "Take 17",
+    "color": "",
+    "timeCreated": 1717154627498,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 215.82
+  },
+  {
+    "id": "box0044fixture",
+    "object": "stack",
+    "name": "Song 18",
+    "color": "",
+    "timeCreated": 1717154763931,
+    "children": [
+      {
+        "id": "box0045fixture",
+        "name": "Take 42"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0046fixture",
+    "object": "file",
+    "name": "Take 19",
+    "color": "",
+    "timeCreated": 1717154628526,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 370.57
+  },
+  {
+    "id": "box0047fixture",
+    "object": "file",
+    "name": "Take 20.m4a",
+    "color": "",
+    "timeCreated": 1780483945802,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 910.76
+  },
+  {
+    "id": "box0024fixture",
+    "object": "file",
+    "name": "Take 21.wav",
+    "color": "",
+    "timeCreated": 1777788928972,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 558.42
+  },
+  {
+    "id": "box0048fixture",
+    "object": "stack",
+    "name": "Song 22",
+    "color": "",
+    "timeCreated": 1717154969397,
+    "children": [
+      {
+        "id": "box0049fixture",
+        "name": "Take 38"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0050fixture",
+    "object": "file",
+    "name": "Take 23",
+    "color": "",
+    "timeCreated": 1717154626401,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 247.8
+  },
+  {
+    "id": "box0018fixture",
+    "object": "file",
+    "name": "Take 24.wav",
+    "color": "",
+    "timeCreated": 1777788957524,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 558.42
+  },
+  {
+    "id": "box0051fixture",
+    "object": "file",
+    "name": "Take 25.wav",
+    "color": "",
+    "timeCreated": 1777788957524,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 558.42
+  },
+  {
+    "id": "box0052fixture",
+    "object": "stack",
+    "name": "Song 26",
+    "color": "",
+    "timeCreated": 1780483993117,
+    "children": [
+      {
+        "id": "box0040fixture",
+        "name": "Take 14.wav"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0053fixture",
+    "object": "stack",
+    "name": "Song 27",
+    "color": "",
+    "timeCreated": 1717154627693,
+    "children": [
+      {
+        "id": "box0046fixture",
+        "name": "Take 19"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0020fixture",
+    "object": "file",
+    "name": "Take 28",
+    "color": "",
+    "timeCreated": 1717154857628,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 244.58
+  },
+  {
+    "id": "box0042fixture",
+    "object": "file",
+    "name": "Take 29",
+    "color": "",
+    "timeCreated": 1717154858690,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 351.09
+  },
+  {
+    "id": "box0054fixture",
+    "object": "file",
+    "name": "Take 30.wav",
+    "color": "",
+    "timeCreated": 1777788957524,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 558.42
+  },
+  {
+    "id": "box0032fixture",
+    "object": "stack",
+    "name": "Song 31",
+    "color": "",
+    "timeCreated": 1777788953688,
+    "children": [
+      {
+        "id": "box0051fixture",
+        "name": "Take 25.wav"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0033fixture",
+    "object": "stack",
+    "name": "Song 32",
+    "color": "",
+    "timeCreated": 1777788953688,
+    "children": [
+      {
+        "id": "box0055fixture",
+        "name": "Take 44.wav"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0035fixture",
+    "object": "stack",
+    "name": "Song 33",
+    "color": "",
+    "timeCreated": 1779305736750,
+    "children": [
+      {
+        "id": "box0056fixture",
+        "name": "Take 34.wav"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0056fixture",
+    "object": "file",
+    "name": "Take 34.wav",
+    "color": "",
+    "timeCreated": 1779305738782,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 106.03
+  },
+  {
+    "id": "box0057fixture",
+    "object": "stack",
+    "name": "Song 35",
+    "color": "",
+    "timeCreated": 1717154968343,
+    "children": [
+      {
+        "id": "box0058fixture",
+        "name": "Take 37"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0059fixture",
+    "object": "stack",
+    "name": "Song 36",
+    "color": "",
+    "timeCreated": 1717154625499,
+    "children": [
+      {
+        "id": "box0050fixture",
+        "name": "Take 23"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0058fixture",
+    "object": "file",
+    "name": "Take 37",
+    "color": "",
+    "timeCreated": 1717154969185,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 401.14
+  },
+  {
+    "id": "box0049fixture",
+    "object": "file",
+    "name": "Take 38",
+    "color": "",
+    "timeCreated": 1717154970253,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 190.93
+  },
+  {
+    "id": "box0034fixture",
+    "object": "stack",
+    "name": "Song 39",
+    "color": "",
+    "timeCreated": 1777788953688,
+    "children": [
+      {
+        "id": "box0054fixture",
+        "name": "Take 30.wav"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0036fixture",
+    "object": "stack",
+    "name": "Song 40",
+    "color": "",
+    "timeCreated": 1779710885570,
+    "children": [
+      {
+        "id": "box0060fixture",
+        "name": "Take 47.wav"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0061fixture",
+    "object": "stack",
+    "name": "Song 41",
+    "color": "",
+    "timeCreated": 1717154656471,
+    "children": [
+      {
+        "id": "box0030fixture",
+        "name": "Take 9"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0045fixture",
+    "object": "file",
+    "name": "Take 42",
+    "color": "",
+    "timeCreated": 1717154764788,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 77.56
+  },
+  {
+    "id": "box0026fixture",
+    "object": "file",
+    "name": "Take 43.wav",
+    "color": "",
+    "timeCreated": 1779305738782,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 106.03
+  },
+  {
+    "id": "box0055fixture",
+    "object": "file",
+    "name": "Take 44.wav",
+    "color": "",
+    "timeCreated": 1777788957524,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 558.42
+  },
+  {
+    "id": "box0062fixture",
+    "object": "stack",
+    "name": "Song 45",
+    "color": "",
+    "timeCreated": 1717154854882,
+    "children": [
+      {
+        "id": "box0037fixture",
+        "name": "Take 11"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0063fixture",
+    "object": "stack",
+    "name": "Song 46",
+    "color": "",
+    "timeCreated": 1780483944735,
+    "children": [
+      {
+        "id": "box0047fixture",
+        "name": "Take 20.m4a"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0060fixture",
+    "object": "file",
+    "name": "Take 47.wav",
+    "color": "",
+    "timeCreated": 1779710887065,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 14.79
+  }
+]

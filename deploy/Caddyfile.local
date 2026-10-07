@@ -1,0 +1,23 @@
+# Local HTTPS with Caddy's internal CA (browser warning unless you trust Caddy's root cert).
+# Works for both https://localhost and https://localhost/bandroom (path is not stripped).
+localhost {
+	tls internal
+	# Compress text only: never audio, blobs or the SSE stream (it must flush immediately).
+	encode {
+		zstd
+		gzip
+		match {
+			header Content-Type text/html*
+			header Content-Type text/css*
+			header Content-Type text/plain*
+			header Content-Type application/javascript*
+			header Content-Type application/json*
+			header Content-Type image/svg+xml*
+		}
+	}
+	# Worker → API channel; only reachable inside the Docker network (SPEC §18.4).
+	respond /internal/* 404
+	reverse_proxy app:3000 {
+		flush_interval -1
+	}
+}

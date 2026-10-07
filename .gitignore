@@ -1,0 +1,29 @@
+node_modules/
+dist/
+coverage/
+.data/
+*.tsbuildinfo
+.vite/
+.DS_Store
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# generated test fixtures
+tools/fixtures/out/
+
+# playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# docker local data
+deploy/data/
+.cache/
+
+# internal notes (private repo dhonza/bandroom-notes) and Claude Code rules
+research/
+/CLAUDE.md

@@ -1,0 +1,134 @@
+/* Time readouts use tabular numerals (SPEC §11.5). */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/*
+ * Document viewer typography (SPEC §10: readable on a music stand). Sizes are relative to the
+ * viewer's font size (the per-user slider), colors come from Mantine theme variables.
+ */
+.doc-markdown {
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.doc-markdown h1 {
+  font-size: 1.8em;
+  margin: 0.6em 0 0.4em;
+}
+.doc-markdown h2 {
+  font-size: 1.45em;
+  margin: 0.6em 0 0.4em;
+}
+.doc-markdown h3,
+.doc-markdown h4,
+.doc-markdown h5,
+.doc-markdown h6 {
+  font-size: 1.15em;
+  margin: 0.6em 0 0.3em;
+}
+.doc-markdown p,
+.doc-markdown ul,
+.doc-markdown ol,
+.doc-markdown blockquote,
+.doc-markdown table,
+.doc-markdown pre {
+  margin: 0 0 0.75em;
+}
+.doc-markdown ul,
+.doc-markdown ol {
+  padding-left: 1.4em;
+}
+.doc-markdown blockquote {
+  padding-left: 0.8em;
+  border-left: 3px solid var(--mantine-color-default-border);
+  color: var(--mantine-color-dimmed);
+}
+.doc-markdown code {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.9em;
+  background: var(--mantine-color-default-hover);
+  padding: 0.05em 0.3em;
+  border-radius: 4px;
+}
+.doc-markdown pre {
+  overflow-x: auto;
+  padding: 0.6em;
+  background: var(--mantine-color-default-hover);
+  border-radius: 6px;
+}
+.doc-markdown pre code {
+  background: none;
+  padding: 0;
+}
+.doc-markdown table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+.doc-markdown th,
+.doc-markdown td {
+  border: 1px solid var(--mantine-color-default-border);
+  padding: 0.25em 0.6em;
+}
+.doc-markdown hr {
+  border: none;
+  border-top: 1px solid var(--mantine-color-default-border);
+}
+.doc-markdown a {
+  color: var(--mantine-color-anchor);
+}
+/* Chord charts over lyrics: spacing must be kept exactly. */
+.doc-plaintext {
+  font-family: var(--mantine-font-family-monospace);
+  white-space: pre;
+  line-height: 1.4;
+  margin: 0;
+  tab-size: 8;
+}
+
+/*
+ * Touch targets are at least 44×44 px on touch screens (SPEC §11.1). Mantine's default control
+ * sizes (buttons 36 px, compact buttons 22–30 px, action icons 28 px) are kept for mouse users;
+ * a coarse pointer raises their minimum size instead of every call site setting h={44}.
+ */
+@media (pointer: coarse) {
+  .mantine-Button-root,
+  .mantine-ActionIcon-root,
+  .mantine-CloseButton-root,
+  .mantine-Burger-root,
+  .mantine-Chip-label,
+  .mantine-Tabs-tab,
+  .mantine-SegmentedControl-label,
+  .mantine-Pagination-control {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .mantine-Chip-label,
+  .mantine-SegmentedControl-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mantine-Input-input {
+    min-height: 44px;
+  }
+}
+
+/* Slow spinner of the header's processing button (SPEC §25.3). */
+@keyframes br-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.br-spin {
+  animation: br-spin 2s linear infinite;
+}

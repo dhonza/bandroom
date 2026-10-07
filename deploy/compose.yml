@@ -1,0 +1,107 @@
+# Production stack (SPEC §19.2). Usage on the VPS, in this directory:
+#   cp .env.example .env   # then edit
+#   docker compose pull && docker compose up -d
+#
+# Resources on the 1 vCPU / 1 GB VPS: the memory limits add up to 896 MB (caddy 64 + app 384 +
+# worker 448), more than is left beside the OS, so the host's 2 GB swap (host-setup.md) absorbs
+# rare peaks such as a long ingest while the API is busy. The worker gets a quarter of the API's
+# CPU weight (cpu_shares 256 vs the default 1024), so ffmpeg yields to requests under contention
+# and still uses the whole CPU when the API is idle. pids_limit stops a runaway process (or
+# thread) explosion from taking the host down. Health checks never start a Node process.
+name: bandroom
+
+# The app and worker run as the dedicated host user that owns ./data (host-setup.md §5);
+# the image's own user is uid 1000.
+x-app-env: &app-env
+  user: "${BANDROOM_UID:-1000}:${BANDROOM_GID:-1000}"
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    DATA_DIR: /data
+    TRUST_PROXY: "true"
+    # The worker posts job events to the API over the Docker network (SPEC §18.4).
+    INTERNAL_API_URL: http://app:3000
+    # Worker only: refreshed every 30 s (apps/worker/src/alive.ts) for its health check.
+    WORKER_ALIVE_FILE: /tmp/bandroom-worker-alive
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      # Caddyfile.subpath only: the path of APP_URL (e.g. /your-secret-path).
+      BASE_PATH: ${BASE_PATH:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 64m
+    pids_limit: 128
+    healthcheck:
+      # Caddy's admin API (localhost only, inside the container); busybox wget ships in the image.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 60s
+      timeout: 5s
+      start_period: 30s
+      start_interval: 5s
+      retries: 3
+    depends_on:
+      app:
+        condition: service_healthy
+
+  app:
+    image: ghcr.io/dhonza/bandroom:${BANDROOM_TAG:-latest}
+    restart: unless-stopped
+    <<: *app-env
+    command: ["node", "--max-old-space-size=256", "apps/server/dist/main.js"]
+    volumes:
+      - ./data:/data
+    mem_limit: 384m
+    pids_limit: 256
+    healthcheck:
+      # Plain HTTP over bash's /dev/tcp: no extra Node process (~40 MB) per probe. /healthz answers
+      # 503 only when the DB or the data directory is unusable.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/3000 &&
+          printf 'GET /healthz HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 &&
+          head -n 1 <&3 | grep -q ' 200 '
+      interval: 60s
+      timeout: 5s
+      start_period: 30s
+      start_interval: 2s
+      retries: 3
+
+  worker:
+    image: ghcr.io/dhonza/bandroom:${BANDROOM_TAG:-latest}
+    restart: unless-stopped
+    <<: *app-env
+    command: ["node", "--max-old-space-size=192", "apps/worker/dist/main.js"]
+    volumes:
+      - ./data:/data
+    mem_limit: 448m
+    cpu_shares: 256
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "sh", "-c", "find /tmp/bandroom-worker-alive -mmin -2 | grep -q ."]
+      interval: 60s
+      timeout: 5s
+      start_period: 60s
+      start_interval: 5s
+      retries: 3
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  caddy_data:
+  caddy_config:

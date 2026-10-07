@@ -1,0 +1,63 @@
+/// <reference lib="webworker" />
+import { createFlacCodec, createOpusCodec } from "../decode/wasm";
+import type { ToDecoder } from "../mixer/protocol";
+import type { WorkerCommand, WorkerEvent } from "../types";
+import type { FetchLike } from "./bytes";
+import { DecodeScheduler } from "./scheduler";
+
+/** Decoder Web Worker entry (SPEC §6.2): message glue around `DecodeScheduler`. */
+
+declare const self: DedicatedWorkerGlobalScope;
+
+let scheduler: DecodeScheduler | null = null;
+
+const fetchSameOrigin: FetchLike = (url, init) =>
+  fetch(url, { ...init, credentials: "same-origin" });
+
+self.onmessage = (e: MessageEvent<WorkerCommand>) => {
+  const cmd = e.data;
+  if (cmd.t === "init") {
+    const port = cmd.port;
+    scheduler?.dispose();
+    const s = new DecodeScheduler(
+      {
+        fetch: fetchSameOrigin,
+        opusCodec: createOpusCodec,
+        flacCodec: createFlacCodec,
+        toMixer: (msg, transfer) => {
+          port.postMessage(msg, transfer);
+        },
+        toMain: (msg: WorkerEvent) => {
+          self.postMessage(msg);
+        },
+        yieldNow: () =>
+          new Promise((resolve) => {
+            setTimeout(resolve, 0);
+          }),
+      },
+      cmd.cacheBytes,
+      cmd.windowFrames,
+    );
+    scheduler = s;
+    port.onmessage = (ev: MessageEvent<ToDecoder>) => {
+      const m = ev.data;
+      if (m.t === "pos") s.position(m.frame, m.lap);
+      else if (m.t === "seek") s.seek(m.frame, m.lap);
+      else s.retime(m.fromLap, m.frame, m.base, m.loop, m.cache);
+    };
+    return;
+  }
+  const s = scheduler;
+  if (!s) return;
+  switch (cmd.t) {
+    case "load":
+      s.load(cmd.id, cmd.tracks, cmd.lengthFrames, cmd.mixer);
+      break;
+    case "source":
+      s.setSource(cmd.index, cmd.source, cmd.clips, cmd.offsetDb, cmd.trimDb);
+      break;
+    case "unload":
+      s.unload();
+      break;
+  }
+};

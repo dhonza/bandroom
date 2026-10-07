@@ -1,0 +1,17 @@
+{
+  "name": "@bandroom/fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "tsx src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "midi-file": "1.2.4",
+    "tsx": "4.23.15"
+  }
+}

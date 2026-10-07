@@ -1,0 +1,23 @@
+{
+  "name": "@bandroom/audio-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./worker": "./src/worker/entry.ts",
+    "./worklet": "./src/mixer/processor.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@bandroom/shared": "workspace:*",
+    "@wasm-audio-decoders/flac": "0.2.11",
+    "opus-decoder": "0.7.12"
+  },
+  "devDependencies": {
+    "@bandroom/fixtures": "workspace:*",
+    "@bandroom/server-core": "workspace:*"
+  }
+}

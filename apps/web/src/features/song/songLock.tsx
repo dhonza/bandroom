@@ -1,0 +1,130 @@
+import { lockSong, unlockSong, type Song } from "@bandroom/shared";
+import { ActionIcon, Alert, Tooltip } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
+import { IconLock, IconLockOpen } from "@tabler/icons-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import { api } from "../../api/client";
+import { useApiError } from "../../api/useApiError";
+import { useFormatters } from "../../i18n/format";
+import { songKeys } from "../library/queries";
+
+/**
+ * Song lock (SPEC §25.12). The server refuses frozen changes (`SONG_LOCKED`); the client keeps
+ * the controls visible but disabled, with a "Song is locked" hint.
+ */
+export function isSongLocked(song: Pick<Song, "locked">): boolean {
+  return song.locked !== null;
+}
+
+/** "Locked by Jana since 5 Oct 2026, 14:03" (or without the name for link visitors). */
+export function useLockLabel(song: Pick<Song, "locked">): string | null {
+  const { t } = useTranslation();
+  const fmt = useFormatters();
+  const lock = song.locked;
+  if (!lock) return null;
+  const date = fmt.dateTime(lock.at);
+  return lock.by.displayName
+    ? t("songs.lock.lockedBy", { name: lock.by.displayName, date })
+    : t("songs.lock.lockedSince", { date });
+}
+
+/**
+ * Wraps a control that the lock disables: the tooltip explains why. The wrapper takes the hover,
+ * since a disabled button gets no pointer events.
+ */
+export function LockedHint({ locked, children }: { locked: boolean; children: ReactNode }) {
+  const { t } = useTranslation();
+  if (!locked) return children;
+  return (
+    <Tooltip label={t("songs.lock.locked")} events={{ hover: true, focus: true, touch: true }}>
+      <span style={{ display: "inline-flex" }} data-testid="song-locked-hint">
+        {children}
+      </span>
+    </Tooltip>
+  );
+}
+
+/**
+ * Lock toggle in the song header: editors switch it; everyone else sees the lock icon while the
+ * song is locked.
+ */
+export function SongLockButton({ song }: { song: Song }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const apiError = useApiError();
+  const locked = isSongLocked(song);
+  const label = useLockLabel(song);
+  const canToggle = song.access.capabilities.includes("edit.any");
+  const toggle = useMutation({
+    mutationFn: () => api(locked ? unlockSong : lockSong, { params: { id: song.id } }),
+    onSuccess: (res) => {
+      qc.setQueryData(songKeys.detail(song.id), res);
+      notifications.show({
+        color: "teal",
+        message: res.song.locked ? t("songs.lock.lockedDone") : t("songs.lock.unlockedDone"),
+      });
+    },
+    onError: (err) => {
+      notifications.show({ color: "red", message: apiError(err) });
+    },
+  });
+  if (!canToggle && !locked) return null;
+  const icon = locked ? <IconLock size={20} /> : <IconLockOpen size={20} />;
+  const tip = locked
+    ? `${label ?? t("songs.lock.locked")}${canToggle ? ` · ${t("songs.lock.unlock")}` : ""}`
+    : t("songs.lock.lockHint");
+  return (
+    <Tooltip label={tip} multiline w={280}>
+      {canToggle ? (
+        <ActionIcon
+          size={44}
+          variant={locked ? "light" : "default"}
+          color={locked ? "yellow" : "gray"}
+          loading={toggle.isPending}
+          aria-pressed={locked}
+          aria-label={locked ? t("songs.lock.unlock") : t("songs.lock.lock")}
+          onClick={() => {
+            toggle.mutate();
+          }}
+          data-testid="song-lock-toggle"
+        >
+          {icon}
+        </ActionIcon>
+      ) : (
+        <ActionIcon
+          size={44}
+          variant="light"
+          color="yellow"
+          component="span"
+          role="img"
+          aria-label={label ?? t("songs.lock.locked")}
+          data-testid="song-lock-state"
+        >
+          {icon}
+        </ActionIcon>
+      )}
+    </Tooltip>
+  );
+}
+
+/** Banner on the song page while it is locked. */
+export function SongLockBanner({ song }: { song: Song }) {
+  const { t } = useTranslation();
+  const label = useLockLabel(song);
+  if (!song.locked) return null;
+  const canToggle = song.access.capabilities.includes("edit.any");
+  return (
+    <Alert
+      color="yellow"
+      variant="light"
+      icon={<IconLock size={18} />}
+      title={label}
+      data-testid="song-lock-banner"
+    >
+      {t("songs.lock.banner")}
+      {canToggle ? ` ${t("songs.lock.bannerEditor")}` : ""}
+    </Alert>
+  );
+}

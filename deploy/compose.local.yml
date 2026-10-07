@@ -1,0 +1,36 @@
+# Local development override: builds the image on this machine (arm64 on Apple Silicon) and
+# serves it on https://localhost with Caddy's internal CA. Never push images built this way.
+#
+#   docker compose -f deploy/compose.yml -f deploy/compose.local.yml up --build
+#
+# Sub-path test: BANDROOM_APP_URL=https://localhost/bandroom docker compose ... up --build
+services:
+  caddy:
+    volumes: !override
+      - ./Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  app:
+    image: bandroom:local
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        APP_VERSION: 0.0.0-local
+    environment:
+      APP_URL: ${BANDROOM_APP_URL:-https://localhost}
+      # Local-only placeholder; production secrets live in deploy/.env (never committed).
+      APP_SECRET: local-compose-insecure-secret-0123456789abcdef
+      INTERNAL_EVENTS_SECRET: local-compose-internal-secret-0123456789ab
+    volumes: !override
+      - ../.data/compose:/data
+
+  worker:
+    image: bandroom:local
+    environment:
+      APP_URL: ${BANDROOM_APP_URL:-https://localhost}
+      APP_SECRET: local-compose-insecure-secret-0123456789abcdef
+      INTERNAL_EVENTS_SECRET: local-compose-internal-secret-0123456789ab
+    volumes: !override
+      - ../.data/compose:/data

@@ -1,0 +1,22 @@
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 44px;
+  color: var(--mantine-color-dimmed);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* React Router sets aria-current="page" on the active NavLink. */
+/* The anchor color: the filled primary is too dark for text on the dark scheme (WCAG AA). */
+.tab[aria-current="page"] {
+  color: var(--mantine-color-anchor);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: -4px;
+  border-radius: var(--mantine-radius-md);
+}

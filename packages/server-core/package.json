@@ -1,0 +1,27 @@
+{
+  "name": "@bandroom/server-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./image": "./src/image.ts",
+    "./testing/ingest": "./src/testing/ingestHarness.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@bandroom/shared": "workspace:*",
+    "@node-rs/argon2": "2.2.1",
+    "better-sqlite3": "13.0.3",
+    "drizzle-orm": "0.45.3",
+    "pino": "10.3.1",
+    "sharp": "0.35.4",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@bandroom/fixtures": "workspace:*",
+    "@types/better-sqlite3": "9.6.0"
+  }
+}

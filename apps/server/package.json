@@ -1,0 +1,43 @@
+{
+  "name": "server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "bandroom": "./dist/cli.js"
+  },
+  "scripts": {
+    "dev": "DATA_DIR=${DATA_DIR:-../../.data} PORT=${PORT:-3100} APP_URL=${APP_URL:-http://localhost:5180} tsx watch --env-file-if-exists=../../.env src/main.ts | pino-pretty",
+    "cli": "DATA_DIR=${DATA_DIR:-../../.data} tsx --env-file-if-exists=../../.env src/cli.ts",
+    "samply:probe": "tsx --env-file-if-exists=../../.env src/importers/samply/probe.ts",
+    "build": "tsdown",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@bandroom/server-core": "workspace:*",
+    "@bandroom/shared": "workspace:*",
+    "@fastify/cookie": "11.1.2",
+    "@fastify/rate-limit": "11.2.0",
+    "@fastify/static": "10.1.5",
+    "@node-rs/argon2": "2.2.1",
+    "@tus/file-store": "2.1.1",
+    "@tus/server": "2.4.5",
+    "better-sqlite3": "13.0.3",
+    "drizzle-orm": "0.45.3",
+    "fastify": "5.12.5",
+    "fastify-type-provider-zod": "7.0.0",
+    "midi-file": "1.2.4",
+    "pino": "10.3.1",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@bandroom/fixtures": "workspace:*",
+    "drizzle-kit": "0.31.11",
+    "pino-pretty": "13.1.3",
+    "sharp": "0.35.4",
+    "tsdown": "0.23.0",
+    "tsx": "4.23.15"
+  }
+}

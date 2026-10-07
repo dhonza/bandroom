@@ -1,0 +1,1 @@
+ALTER TABLE `track_versions` ADD `archived_by` text REFERENCES users(id);

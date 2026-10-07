@@ -1,0 +1,44 @@
+{
+  "name": "bandroom",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@12.6.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc -p tsconfig.json && pnpm -r --parallel typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "i18n:check": "pnpm --filter @bandroom/i18n-check check",
+    "dev": "pnpm --parallel --stream --filter web --filter server --filter worker dev",
+    "build": "pnpm -r build",
+    "test:e2e": "pnpm build && PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:-$PWD/.cache/ms-playwright} playwright test",
+    "test:ios-sim": "node e2e/ios-sim/run.mjs",
+    "test:e2e:install": "PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:-$PWD/.cache/ms-playwright} playwright install chromium webkit",
+    "db:generate": "pnpm --filter server db:generate",
+    "fixtures": "pnpm --filter @bandroom/fixtures generate"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@bandroom/fixtures": "workspace:*",
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.19.0",
+    "@vitest/coverage-v8": "5.0.2",
+    "eslint": "10.11.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-i18next": "6.1.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.12.0",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.1",
+    "vitest": "5.0.2"
+  }
+}

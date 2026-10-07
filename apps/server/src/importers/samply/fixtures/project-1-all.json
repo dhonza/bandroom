@@ -1,0 +1,64 @@
+[
+  {
+    "id": "box0064fixture",
+    "object": "stack",
+    "name": "Song 1",
+    "color": "",
+    "timeCreated": 1772293778227,
+    "children": [
+      {
+        "id": "box0065fixture",
+        "name": "Take 3.wav"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0066fixture",
+    "object": "file",
+    "name": "Take 2.wav",
+    "color": "",
+    "timeCreated": 1779279509189,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 542.93
+  },
+  {
+    "id": "box0065fixture",
+    "object": "file",
+    "name": "Take 3.wav",
+    "color": "",
+    "timeCreated": 1772293779304,
+    "children": [],
+    "trashed": false,
+    "hidden": false,
+    "duration": 34.8
+  },
+  {
+    "id": "box0067fixture",
+    "object": "stack",
+    "name": "Song 4",
+    "color": "",
+    "timeCreated": 1779279508244,
+    "children": [
+      {
+        "id": "box0066fixture",
+        "name": "Take 2.wav"
+      }
+    ],
+    "trashed": false,
+    "hidden": false
+  },
+  {
+    "id": "box0068fixture",
+    "object": "file",
+    "name": "Take 5.png",
+    "color": "",
+    "timeCreated": 1772294058329,
+    "children": [],
+    "trashed": false,
+    "hidden": false
+  }
+]
