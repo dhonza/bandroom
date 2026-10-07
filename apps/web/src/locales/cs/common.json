@@ -674,7 +674,11 @@
     "defaultTitle": "{{title}} (bounce)",
     "submit": "Uložit mix",
     "started": "Nová píseň se připravuje",
-    "open": "Otevřít „{{title}}“"
+    "open": "Otevřít „{{title}}“",
+    "copyTempo": "Zkopírovat tempovou mapu",
+    "copyMarkers": "Zkopírovat značky a části",
+    "includeClick": "Včetně metronomu",
+    "alwaysCopied": "Podtitul a tónina se zkopírují, komentáře, dokumenty a sdílení ne."
   },
   "rehearse": {
     "toStart": "Na začátek",

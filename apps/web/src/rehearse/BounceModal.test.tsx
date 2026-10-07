@@ -10,6 +10,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { initI18n } from "../i18n/i18n";
 import { mockApi } from "../test/mockApi";
 import { BounceModal } from "./BounceModal";
+import { setSongTempo, useTempoUi } from "../tempo/store";
 import { useRehearse, type RehearseState } from "./controller";
 
 const i18n = i18next.createInstance();
@@ -91,6 +92,9 @@ describe("BounceModal (SPEC §5.5)", () => {
         title: "Blue Moon (bounce)",
         mix,
         versions: { t1: "v1", t2: "v2b" },
+        copyTempo: true,
+        copyMarkers: true,
+        includeClick: false,
       });
       expect(onClose).toHaveBeenCalled();
       await userEvent.click(screen.getByTestId("bounce-open"));
@@ -113,4 +117,47 @@ describe("BounceModal (SPEC §5.5)", () => {
     await userEvent.click(screen.getByTestId("bounce-submit"));
     expect(await screen.findByText(i18n.t("errors.BOUNCE_SILENT"))).toBeInTheDocument();
   });
+
+  it(
+    "copies tempo and markers by default; the click needs a tempo map",
+    { timeout: 20_000 },
+    async () => {
+      const fetch = mockApi({
+        "POST /songs/s1/bounce": () => ({ status: 400, body: { code: "BOUNCE_SILENT" } }),
+      });
+      useTempoUi.setState({ songId: null, tempo: null, grid: null, preview: false });
+      renderModal();
+      const click = await screen.findByTestId("bounce-includeClick");
+      expect(screen.getByTestId("bounce-copyTempo")).toBeChecked();
+      expect(screen.getByTestId("bounce-copyMarkers")).toBeChecked();
+      expect(click).not.toBeChecked();
+      expect(click).toBeDisabled();
+      expect(screen.getByText(i18n.t("click.noTempo"))).toBeInTheDocument();
+
+      setSongTempo("s1", {
+        map: { segments: [{ startBeat: 0, bpm: 120, meter: { num: 4, den: 4 }, barIndex: 0 }] },
+        bar1OffsetSec: 0,
+        source: "manual",
+        midiFileName: null,
+        revisionId: "r1",
+        updatedByName: null,
+        updatedAt: 0,
+      });
+      await vi.waitFor(() => {
+        expect(screen.getByTestId("bounce-includeClick")).toBeEnabled();
+      });
+      await userEvent.click(screen.getByTestId("bounce-includeClick"));
+      await userEvent.click(screen.getByTestId("bounce-copyMarkers"));
+      await userEvent.click(screen.getByTestId("bounce-submit"));
+      await vi.waitFor(() => {
+        expect(fetch).toHaveBeenCalled();
+      });
+      const init = fetch.mock.calls[0]?.[1] as RequestInit;
+      expect(JSON.parse(init.body as string)).toMatchObject({
+        copyTempo: true,
+        copyMarkers: false,
+        includeClick: true,
+      });
+    },
+  );
 });
