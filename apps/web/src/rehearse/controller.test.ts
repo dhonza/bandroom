@@ -22,7 +22,6 @@ const fake = vi.hoisted(() => {
     trims: { trackId: string; trimDb: number }[] = [];
     plays = 0;
     inits = 0;
-    suspended = 0;
     listeners = new Map<string, Set<Listener>>();
     constructor() {
       FakeEngine.instance = this;
@@ -66,10 +65,6 @@ const fake = vi.hoisted(() => {
     }
     pause() {
       if (this.state === "playing" || this.state === "buffering") this.setState("stopped");
-    }
-    suspend() {
-      this.suspended++;
-      this.pause();
     }
     seeks: number[] = [];
     seek(frames: number) {
@@ -205,7 +200,6 @@ beforeEach(() => {
     e.loops = [];
     e.plays = 0;
     e.inits = 0;
-    e.suspended = 0;
     e.failInit = 0;
     e.state = "stopped";
   }

@@ -89,12 +89,6 @@ export class Engine {
   private stale = false;
   /** A rebuild is restoring the song: mixer state and position reports are not shown yet. */
   private restoring = false;
-  /**
-   * Set by `suspend()`: the context stops before the worklet renders the pause, so the mixer's
-   * "stopped" report may never come; the engine reports it itself and ignores stale "playing"
-   * reports until the next `play()`.
-   */
-  private handedOff = false;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   /** Silent meter reports in a row (after a second of them, no more are sent). */
   private silentReports = 0;
@@ -260,11 +254,10 @@ export class Engine {
   play(opts: { countIn?: CountInSpec | null } = {}): void {
     const ctx = this.ctx;
     if (!ctx) return;
-    this.handedOff = false;
     const countIn = opts.countIn ?? null;
     if (countIn) this.lastCountIn = countIn;
-    // Safari can leave the context interrupted after another player took the audio (Listen
-    // mode's <audio>); resume() then never completes.
+    // Safari can leave the context interrupted (another app or tab took the audio); resume()
+    // then never completes.
     const st = ctx.state as string;
     if (this.song && !this.restoring && (this.stale || st === "interrupted" || st === "closed")) {
       this.rebuild(countIn);
@@ -529,21 +522,9 @@ export class Engine {
   }
 
   /**
-   * Stops audio for another player (Listen mode) without tearing the engine down: the context is
-   * suspended so the worklet stops rendering; the next `play()` resumes it inside the tap.
-   */
-  suspend(): void {
-    this.pause();
-    this.handedOff = true;
-    if (this._state === "playing" || this._state === "buffering") this.setState("stopped");
-    this.cancelIdle();
-    void this.ctx?.suspend();
-  }
-
-  /**
    * After a while stopped, the context is suspended: the worklet stops running (battery) and no
    * meters or positions are sent. `play()` resumes it synchronously inside the tap (iOS), and a
-   * context that does not come back is rebuilt (`stale`, as after Listen mode).
+   * context that does not come back is rebuilt (`stale`).
    */
   private scheduleIdle() {
     if (this.idleTimer) return;
@@ -598,7 +579,6 @@ export class Engine {
       case "state":
         if (this._state === "loading" || this.restoring) break;
         if (this._state === "interrupted" && m.state !== "playing") break;
-        if (this.handedOff && m.state !== "stopped") break;
         this.setState(m.state);
         break;
       case "report": {

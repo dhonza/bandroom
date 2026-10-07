@@ -185,27 +185,6 @@ describe("Engine idle suspend", () => {
     expect(ctx().state).toBe("suspended");
   });
 
-  it("suspends right away when another player takes the audio", async () => {
-    const e = engine();
-    await e.loadSong(song);
-    e.play();
-    FakeNode.last?.port.deliver({ type: "state", state: "playing" });
-    e.suspend();
-    expect(ctx().state).toBe("suspended");
-    expect(FakeNode.last?.port.sent.at(-1)).toEqual({ t: "pause" });
-    // The suspended worklet may never render the pause: the engine reports the stop itself
-    // (not an interruption), and a late "playing" report from the mixer does not undo it.
-    expect(e.state).toBe("stopped");
-    expect(states.at(-1)).toBe("stopped");
-    FakeNode.last?.port.deliver({ type: "state", state: "playing" });
-    expect(e.state).toBe("stopped");
-    // The next play() takes the audio back and follows the mixer again.
-    e.play();
-    expect(ctx().state).toBe("running");
-    FakeNode.last?.port.deliver({ type: "state", state: "playing" });
-    expect(e.state).toBe("playing");
-  });
-
   it("stops sending meters a second into silence", async () => {
     const e = engine();
     await e.loadSong({ lengthFrames: 48_000, tracks: [] });
