@@ -1,6 +1,7 @@
 import { API_PREFIX, brandingLogoPath, joinBasePath } from "@bandroom/shared";
 import { basePathFromDocument } from "../config/clientConfig";
 import { linkPathPrefix } from "../links/linkMode";
+import { expandZip, isZipFile } from "./zip";
 
 let basePath: string | null = null;
 
@@ -62,6 +63,11 @@ const AUDIO_EXT = /\.(wav|wave|aif|aiff|flac|mp3|m4a|aac|ogg|oga|opus|wv|alac)$/
 
 export function isProbablyAudio(file: File): boolean {
   return file.type.startsWith("audio/") || AUDIO_EXT.test(file.name);
+}
+
+/** Whether a file name looks like audio (zip entries carry no MIME type). */
+export function isAudioName(name: string): boolean {
+  return AUDIO_EXT.test(name);
 }
 
 /**
@@ -134,16 +140,96 @@ export function proposeMatches(
   });
 }
 
-/** Groups dropped files by their top folder (react-dropzone `path`, e.g. "/Song/bass.wav"). */
+/** A dropped or picked file with its relative path (react-dropzone `path`, zip entries). */
+export type PathFile = File & { path?: string };
+
+/**
+ * The relative path of a dropped, picked or unpacked file ("Song/bass.wav"): react-dropzone's
+ * `path` ("/Song/bass.wav", "./bass.wav"), else the folder picker's `webkitRelativePath`, else the
+ * name.
+ */
+export function pathOf(file: { name: string; path?: string; webkitRelativePath?: string }): string {
+  const raw = file.path || file.webkitRelativePath || file.name;
+  return raw.replace(/^\.?\/+/, "");
+}
+
+function withPath(file: File, path: string): PathFile {
+  const copy = new File([file], file.name, { type: file.type, lastModified: file.lastModified });
+  return Object.assign(copy, { path });
+}
+
+/**
+ * Re-roots files from one archive or picked folder for a project (SPEC §28.1): a single common
+ * top folder is stripped, files in a subfolder keep it (one song per subfolder), and loose files
+ * go under `root` (one song named after the zip or folder).
+ */
+export function rerootFiles(files: readonly PathFile[], root: string): PathFile[] {
+  const split = files.map((f) => pathOf(f).split("/").filter(Boolean));
+  const top = split[0]?.[0];
+  const common = top !== undefined && split.every((parts) => parts.length >= 2 && parts[0] === top);
+  return files.map((f, i) => {
+    const parts = common ? (split[i] ?? []).slice(1) : (split[i] ?? []);
+    return withPath(
+      f,
+      parts.length >= 2 ? parts.join("/") : `${root}/${parts.join("/") || f.name}`,
+    );
+  });
+}
+
+/** Dropped or picked files ready for upload; `failedZips` could not be unpacked. */
+export interface PreparedFiles {
+  files: PathFile[];
+  skipped: number;
+  failedZips: string[];
+}
+
+/**
+ * Prepares dropped or picked files for upload (SPEC §28.1): zips are unpacked in the browser and
+ * non-audio files are counted as skipped. In `project` mode a zip's entries (and a picked folder,
+ * `picked`) are re-rooted with {@link rerootFiles} so subfolders become songs and loose files one
+ * song named after the zip or folder; in `song` mode the result is a flat list of audio files.
+ */
+export async function prepareDroppedFiles(
+  input: readonly PathFile[],
+  mode: "project" | "song",
+  picked = false,
+): Promise<PreparedFiles> {
+  const out: PathFile[] = [];
+  const failedZips: string[] = [];
+  let skipped = 0;
+  const loose: PathFile[] = [];
+  for (const file of input) {
+    if (isZipFile(file)) {
+      try {
+        const zip = await expandZip(file, isAudioName);
+        skipped += zip.skipped;
+        const root = file.name.replace(/\.zip$/i, "") || file.name;
+        out.push(...(mode === "project" ? rerootFiles(zip.files, root) : zip.files));
+      } catch {
+        failedZips.push(file.name);
+      }
+    } else if (isProbablyAudio(file)) {
+      loose.push(file);
+    } else {
+      skipped++;
+    }
+  }
+  if (picked && mode === "project" && loose.length > 0) {
+    const root = pathOf(loose[0] ?? { name: "" }).split("/")[0] ?? "";
+    out.unshift(...rerootFiles(loose, root));
+  } else {
+    out.unshift(...loose);
+  }
+  return { files: out, skipped, failedZips };
+}
+
+/** Groups dropped files by their top folder ({@link pathOf}, e.g. "Song/bass.wav" → "Song"). */
 export function groupByFolder(
-  files: readonly { name: string; path?: string }[],
+  files: readonly { name: string; path?: string; webkitRelativePath?: string }[],
 ): { folder: string | null; indexes: number[] }[] {
   const groups = new Map<string | null, number[]>();
   files.forEach((f, i) => {
-    const parts = (f.path ?? f.name)
-      .replace(/^\.?\//, "")
-      .split("/")
-      .filter(Boolean);
+    const parts = pathOf(f).split("/").filter(Boolean);
     const folder = parts.length >= 2 ? (parts[0] ?? null) : null;
     const list = groups.get(folder) ?? [];
     list.push(i);

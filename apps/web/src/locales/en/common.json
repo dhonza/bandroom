@@ -533,7 +533,8 @@
     "keyLabel": "key {{key}}",
     "tracksComing": "Tracks, versions and the player arrive in a later milestone.",
     "dropFolder": "Drop song folders here",
-    "dropFolderHint": "Each folder becomes a song and its audio files become tracks. A single file becomes a song with one track, named after the file.",
+    "dropFolderHint": "Each folder becomes a song and its audio files become tracks. A single file becomes a song with one track, named after the file. A ZIP is unpacked: its subfolders become songs, its loose files one song named after the ZIP.",
+    "uploadFolder": "Upload folder",
     "createdFromFolder_one": "Created {{count}} song from your files.",
     "createdFromFolder_other": "Created {{count}} songs from your files.",
     "lock": {
@@ -571,7 +572,11 @@
   "tracks": {
     "title": "Tracks",
     "dropHint": "Drop audio files here or tap to upload",
-    "dropFormats": "WAV, AIFF, FLAC, ALAC, WavPack, MP3, AAC, Ogg, Opus · each file becomes a track",
+    "dropFormats": "WAV, AIFF, FLAC, ALAC, WavPack, MP3, AAC, Ogg, Opus or a ZIP of them · each file becomes a track",
+    "uploadFolder": "Upload folder",
+    "unpacking": "Unpacking ZIP…",
+    "zipFailed": "{{name}} could not be unpacked (damaged, encrypted, or larger than 4 GB).",
+    "zipLarge": "This ZIP is large. Unpacking it needs a lot of memory on this device; if the upload fails, upload the folders instead.",
     "skippedNonAudio": "Some files were skipped because they are not audio.",
     "empty": "No tracks yet.",
     "uploading": "Uploading {{percent}} % of {{size}}",

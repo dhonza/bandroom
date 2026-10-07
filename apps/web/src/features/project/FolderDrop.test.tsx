@@ -2,7 +2,8 @@ import type { Project, SongSummary } from "@bandroom/shared";
 import { MantineProvider } from "@mantine/core";
 import { Notifications, notifications } from "@mantine/notifications";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { strToU8, zipSync } from "fflate";
 import userEvent from "@testing-library/user-event";
 import i18next from "i18next";
 import { I18nextProvider } from "react-i18next";
@@ -116,6 +117,88 @@ describe("FolderDrop (SPEC §5.1)", () => {
       { type: "newTrack", songId: "s1", name: "take1" },
       { songId: "s1", projectId: "p1" },
     );
+  });
+
+  it("unpacks a zip: its loose audio files become one song named after the zip (SPEC §28.1)", async () => {
+    const titles: string[] = [];
+    mockApi({
+      "POST /projects/p1/songs": (init) => {
+        const { title } = JSON.parse(init?.body as string) as { title: string };
+        titles.push(title);
+        return { status: 201, body: { song: { ...song, id: `s-${title}`, title } } };
+      },
+    });
+    vi.mocked(startUpload).mockResolvedValue({ assetId: "a", trackId: "t", trackVersionId: "v" });
+    const zip = new File(
+      [
+        zipSync({
+          "Rehearsal/Gig_Bass.wav": strToU8("b"),
+          "Rehearsal/Gig_Drums.wav": strToU8("d"),
+          "Rehearsal/notes.txt": strToU8("n"),
+          "__MACOSX/Rehearsal/._Gig_Bass.wav": strToU8("x"),
+        }),
+      ],
+      "Rehearsal 3.zip",
+      { type: "application/zip" },
+    );
+    const { container } = renderDrop();
+    await drop(container, [zip]);
+    await waitFor(() => {
+      expect(startUpload).toHaveBeenCalledTimes(2);
+    });
+    expect(titles).toEqual(["Rehearsal 3"]);
+    expect(vi.mocked(startUpload).mock.calls.map((c) => c[1])).toEqual([
+      { type: "newTrack", songId: "s-Rehearsal 3", name: "Bass" },
+      { type: "newTrack", songId: "s-Rehearsal 3", name: "Drums" },
+    ]);
+  });
+
+  it("groups a picked folder by its subfolders (SPEC §28.1)", async () => {
+    Object.defineProperty(HTMLInputElement.prototype, "webkitdirectory", {
+      configurable: true,
+      value: false,
+    });
+    try {
+      const titles: string[] = [];
+      mockApi({
+        "POST /projects/p1/songs": (init) => {
+          const { title } = JSON.parse(init?.body as string) as { title: string };
+          titles.push(title);
+          return { status: 201, body: { song: { ...song, id: `s-${title}`, title } } };
+        },
+      });
+      vi.mocked(startUpload).mockResolvedValue({
+        assetId: "a",
+        trackId: "t",
+        trackVersionId: "v",
+      });
+      const picked = [
+        ["Gig/Song A/bass.wav", "bass.wav"],
+        ["Gig/Song A/drums.wav", "drums.wav"],
+        ["Gig/Song B/gtr.wav", "gtr.wav"],
+      ].map(([path, name]) => {
+        const f = new File(["x"], name ?? "", { type: "audio/wav" });
+        Object.defineProperty(f, "webkitRelativePath", { value: path });
+        return f;
+      });
+      renderDrop();
+      const button = screen.getByTestId("project-upload-folder");
+      expect(button).toHaveTextContent(i18n.t("songs.uploadFolder"));
+      const input = document.querySelector<HTMLInputElement>("input[webkitdirectory]");
+      if (!input) throw new Error("no folder input");
+      fireEvent.change(input, { target: { files: picked } });
+      await waitFor(() => {
+        expect(startUpload).toHaveBeenCalledTimes(3);
+      });
+      expect(titles).toEqual(["Song A", "Song B"]);
+    } finally {
+      Reflect.deleteProperty(HTMLInputElement.prototype, "webkitdirectory");
+    }
+  });
+
+  it("has no folder button where the browser cannot pick folders", () => {
+    renderDrop();
+    expect(screen.queryByTestId("project-upload-folder")).toBeNull();
   });
 
   it("lists this project's track uploads", () => {

@@ -8,7 +8,9 @@ import { useTranslation } from "react-i18next";
 import { useOnline } from "../../offline/online";
 import { api } from "../../api/client";
 import { useApiError } from "../../api/useApiError";
-import { groupByFolder, isProbablyAudio, trackNamesFromFiles } from "../../lib/media";
+import { groupByFolder, trackNamesFromFiles, type PathFile } from "../../lib/media";
+import { canPickFolder, FolderButton } from "../../upload/FolderButton";
+import { usePrepareFiles } from "../../upload/usePrepareFiles";
 import { startUpload } from "../../upload/startUpload";
 import { useUploads } from "../../upload/uploadStore";
 import {
@@ -19,11 +21,11 @@ import {
 } from "../../upload/UploadRow";
 import { useInvalidateContent } from "../library/queries";
 
-type FileWithPath = File & { path?: string };
-
 /**
  * Dropping folders onto a project (SPEC §5.1): each folder becomes a song named after it, with one
- * track per audio file. A single loose file becomes a one-track song named after the file. The uploads it
+ * track per audio file. A single loose file becomes a one-track song named after the file. A zip
+ * is unpacked in the browser and a picked folder ("Upload folder") is treated like one: subfolders
+ * become songs, loose files one song named after the zip or folder (SPEC §28.1). The uploads it
  * starts are listed below the drop zone; failures are reported per song or file.
  */
 export function FolderDrop({ project }: { project: Project }) {
@@ -33,6 +35,7 @@ export function FolderDrop({ project }: { project: Project }) {
   const apiError = useApiError();
   const errorText = useUploadErrorText();
   const uploadErrorToast = useUploadErrorToast();
+  const prepareFiles = usePrepareFiles();
   // Select the stable array, filter outside the selector (a new array per call would loop).
   const allUploads = useUploads((s) => s.items);
   const uploads = useMemo(
@@ -47,10 +50,8 @@ export function FolderDrop({ project }: { project: Project }) {
     [allUploads, project.id],
   );
 
-  const onDrop = async (dropped: FileWithPath[]) => {
-    const files = dropped.filter(isProbablyAudio);
-    if (files.length < dropped.length)
-      notifications.show({ color: "yellow", message: t("tracks.skippedNonAudio") });
+  const onDrop = async (dropped: PathFile[], picked: boolean) => {
+    const files = await prepareFiles(dropped, "project", picked);
     const groups = groupByFolder(files);
     let created = 0;
     for (const g of groups) {
@@ -99,8 +100,8 @@ export function FolderDrop({ project }: { project: Project }) {
       });
   };
 
-  const handleDrop = (dropped: FileWithPath[]) => {
-    onDrop(dropped)
+  const handleDrop = (dropped: PathFile[], picked = false) => {
+    onDrop(dropped, picked)
       .catch((err: unknown) => {
         notifications.show({ color: "red", message: apiError(err) });
       })
@@ -110,7 +111,9 @@ export function FolderDrop({ project }: { project: Project }) {
   return (
     <Stack gap="xs">
       <Dropzone
-        onDrop={handleDrop}
+        onDrop={(files) => {
+          handleDrop(files);
+        }}
         disabled={!online}
         multiple
         radius="md"
@@ -128,6 +131,18 @@ export function FolderDrop({ project }: { project: Project }) {
           </Stack>
         </Group>
       </Dropzone>
+      {canPickFolder() && (
+        <Group justify="flex-end">
+          <FolderButton
+            label={t("songs.uploadFolder")}
+            disabled={!online}
+            testId="project-upload-folder"
+            onFiles={(files) => {
+              handleDrop(files, true);
+            }}
+          />
+        </Group>
+      )}
       {uploads.map((u) => (
         <UploadRow key={u.id} item={u} errorText={errorText} />
       ))}

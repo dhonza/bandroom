@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { expect, test } from "@playwright/test";
-import { BWF_FILE, generateFixtures } from "@bandroom/fixtures";
-import { loginAsNewUser, uniqueUsername } from "./helpers";
+import { BWF_FILE, FLAC_FILE, generateFixtures, TONE_FILE } from "@bandroom/fixtures";
+import { loginAsNewUser, storedZip, uniqueUsername } from "./helpers";
 
 test.beforeAll(async () => {
   await generateFixtures();
@@ -44,4 +44,60 @@ test("upload a WAV, watch it process live, and download an identical WAV", async
   const res = await page.request.get(new URL(href ?? "", page.url()).toString());
   expect(res.ok()).toBe(true);
   expect((await res.body()).equals(await fs.readFile(BWF_FILE()))).toBe(true);
+});
+
+test("a zip on a project makes a song per folder; a zip on a song goes through the match dialog", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.skip(!["chromium", "iphone"].includes(testInfo.project.name), "Chromium and iPhone");
+  test.setTimeout(90_000);
+  await loginAsNewUser(page, request, testInfo, "member");
+  const tone = await fs.readFile(TONE_FILE());
+  const flac = await fs.readFile(FLAC_FILE());
+
+  await page.goto("library");
+  await page.getByTestId("new-project").click();
+  await page.getByLabel("Name").fill(`Zip ${uniqueUsername(testInfo)}`);
+  await page.getByTestId("create-project-submit").click();
+  await page.getByTestId("project-settings-tab").waitFor();
+  // SPEC §28.1: one common top folder is stripped, each subfolder becomes a song.
+  await page
+    .getByTestId("folder-dropzone")
+    .locator('input[type="file"]')
+    .setInputFiles({
+      name: "Gig.zip",
+      mimeType: "application/zip",
+      buffer: storedZip([
+        { name: "Gig/Song A/Song A_bass.wav", data: tone },
+        { name: "Gig/Song A/Song A_keys.flac", data: flac },
+        { name: "Gig/Song B/gtr.wav", data: tone },
+        { name: "__MACOSX/Gig/._gtr.wav", data: Buffer.from("x") },
+      ]),
+    });
+  const rows = page.getByTestId("song-row");
+  await expect(rows).toHaveCount(2, { timeout: 30_000 });
+  await expect(rows.filter({ hasText: "Song B" })).toBeVisible();
+
+  await rows.filter({ hasText: "Song A" }).getByRole("link").click();
+  const tracks = page.getByTestId("track-row");
+  await expect(tracks).toHaveCount(2, { timeout: 30_000 });
+  await expect(tracks.filter({ hasText: "bass" })).toBeVisible();
+
+  // On a song the zip's audio files are flattened into the match dialog.
+  await page
+    .getByTestId("track-dropzone")
+    .locator('input[type="file"]')
+    .setInputFiles({
+      name: "takes.zip",
+      mimeType: "application/zip",
+      buffer: storedZip([
+        { name: "takes/v2_bass.wav", data: tone },
+        { name: "takes/deep/v2_drums.wav", data: tone },
+      ]),
+    });
+  await expect(page.getByTestId("match-row")).toHaveCount(2);
+  await page.getByTestId("match-confirm").click();
+  await expect(tracks).toHaveCount(3, { timeout: 30_000 });
+  await expect(tracks.filter({ hasText: "drums" })).toBeVisible();
 });

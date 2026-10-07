@@ -9,7 +9,6 @@ import {
 } from "@bandroom/shared";
 import { Alert, Button, Group, Loader, Stack, Text, ThemeIcon } from "@mantine/core";
 import { Dropzone } from "@mantine/dropzone";
-import { notifications } from "@mantine/notifications";
 import {
   IconArrowsTransferUp,
   IconStack2,
@@ -25,7 +24,9 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useOnline } from "../../offline/online";
 import { Section } from "../../components/Section";
-import { isProbablyAudio, proposeMatches, type MatchProposal } from "../../lib/media";
+import { proposeMatches, type MatchProposal } from "../../lib/media";
+import { canPickFolder, FolderButton } from "../../upload/FolderButton";
+import { usePrepareFiles } from "../../upload/usePrepareFiles";
 import { startUpload } from "../../upload/startUpload";
 import { useUploads } from "../../upload/uploadStore";
 import {
@@ -54,6 +55,7 @@ export function TracksSection({ song }: { song: Song }) {
   const qc = useQueryClient();
   const errorText = useUploadErrorText();
   const uploadErrorToast = useUploadErrorToast();
+  const prepareFiles = usePrepareFiles();
   const tracks = useSongTracks(song.id);
   // Select the stable array, filter outside the selector (a new array per call would loop).
   const allUploads = useUploads((s) => s.items);
@@ -124,11 +126,12 @@ export function TracksSection({ song }: { song: Song }) {
       });
   };
 
-  /** New tracks for an empty song; otherwise confirm matches to existing tracks (SPEC §5.1). */
-  const uploadFiles = (files: File[]) => {
-    const audio = files.filter(isProbablyAudio);
-    if (audio.length < files.length)
-      notifications.show({ color: "yellow", message: t("tracks.skippedNonAudio") });
+  /**
+   * New tracks for an empty song; otherwise confirm matches to existing tracks (SPEC §5.1). Zips
+   * are unpacked and folders flattened first (SPEC §28.1).
+   */
+  const uploadFiles = async (files: File[]) => {
+    const audio = await prepareFiles(files, "song");
     if (audio.length === 0) return;
     const proposals = proposeMatches(
       audio.map((f) => f.name),
@@ -147,7 +150,9 @@ export function TracksSection({ song }: { song: Song }) {
     <Section title={t("tracks.title")} testId="tracks-section">
       {canUpload && (
         <Dropzone
-          onDrop={uploadFiles}
+          onDrop={(files) => {
+            void uploadFiles(files);
+          }}
           disabled={!online}
           multiple
           radius="md"
@@ -167,6 +172,18 @@ export function TracksSection({ song }: { song: Song }) {
             </Stack>
           </Group>
         </Dropzone>
+      )}
+      {canUpload && canPickFolder() && (
+        <Group justify="flex-end">
+          <FolderButton
+            label={t("tracks.uploadFolder")}
+            disabled={!online}
+            testId="track-upload-folder"
+            onFiles={(files) => {
+              void uploadFiles(files);
+            }}
+          />
+        </Group>
       )}
 
       {uploads.map((u) => (
