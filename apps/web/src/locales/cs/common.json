@@ -589,6 +589,7 @@
     "skippedNonAudio": "Některé soubory byly přeskočeny, protože nejsou zvukové.",
     "empty": "Zatím žádné stopy.",
     "uploading": "Nahrávání {{percent}} % z {{size}}",
+    "uploadQueued": "Čeká na nahrání… ({{size}})",
     "cancelUpload": "Zrušit nahrávání",
     "failed": "Zpracování selhalo",
     "processing": "Zpracování… {{percent}} %",

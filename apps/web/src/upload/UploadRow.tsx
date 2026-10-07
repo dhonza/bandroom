@@ -50,8 +50,9 @@ export function UploadRow({
 }) {
   const { t, i18n } = useTranslation();
   const remove = useUploads((s) => s.remove);
+  const active = item.status === "uploading" || item.status === "queued";
   return (
-    <Paper withBorder radius="md" p="sm" data-testid="upload-row">
+    <Paper withBorder radius="md" p="sm" data-testid="upload-row" data-status={item.status}>
       <Group justify="space-between" wrap="nowrap">
         <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
           <Text size="sm" fw={500} truncate>
@@ -69,10 +70,14 @@ export function UploadRow({
                 animated={item.status === "uploading"}
               />
               <Text size="xs" c="dimmed">
-                {t("tracks.uploading", {
-                  percent: Math.round(item.progress * 100),
-                  size: formatBytes(item.size, i18n.resolvedLanguage ?? "en"),
-                })}
+                {item.status === "queued"
+                  ? t("tracks.uploadQueued", {
+                      size: formatBytes(item.size, i18n.resolvedLanguage ?? "en"),
+                    })
+                  : t("tracks.uploading", {
+                      percent: Math.round(item.progress * 100),
+                      size: formatBytes(item.size, i18n.resolvedLanguage ?? "en"),
+                    })}
               </Text>
             </>
           )}
@@ -81,9 +86,9 @@ export function UploadRow({
           variant="subtle"
           color="gray"
           size={44}
-          aria-label={item.status === "uploading" ? t("tracks.cancelUpload") : t("common.close")}
+          aria-label={active ? t("tracks.cancelUpload") : t("common.close")}
           onClick={() => {
-            if (item.status === "uploading") item.abort?.();
+            if (active) item.abort?.();
             remove(item.id);
           }}
         >

@@ -575,6 +575,7 @@
     "skippedNonAudio": "Some files were skipped because they are not audio.",
     "empty": "No tracks yet.",
     "uploading": "Uploading {{percent}} % of {{size}}",
+    "uploadQueued": "Waiting to upload… ({{size}})",
     "cancelUpload": "Cancel upload",
     "failed": "Processing failed",
     "processing": "Processing… {{percent}} %",

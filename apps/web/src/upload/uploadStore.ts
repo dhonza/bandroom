@@ -1,7 +1,8 @@
 import type { UploadTarget } from "@bandroom/shared";
 import { create } from "zustand";
 
-export type UploadStatus = "uploading" | "done" | "error" | "cancelled";
+/** `queued` waits for a free upload slot (SPEC §28.1). */
+export type UploadStatus = "queued" | "uploading" | "done" | "error" | "cancelled";
 
 export interface UploadItem {
   id: string;
