@@ -664,6 +664,16 @@
     "edit": "Upravit popisek a poznámky",
     "delete": "Smazat verzi"
   },
+  "bounce": {
+    "action": "Uložit mix jako novou píseň…",
+    "title": "Uložit mix jako novou píseň",
+    "explain": "Server vytvoří z mixu, který právě slyšíte (ztlumení, sóla, hlasitosti, panorama a verze v přehrávači), novou píseň s jednou stopou hned za touto. Tato píseň zůstane beze změny. Nový soubor se započítá do vašeho úložiště.",
+    "name": "Název nové písně",
+    "defaultTitle": "{{title}} (bounce)",
+    "submit": "Uložit mix",
+    "started": "Nová píseň se připravuje",
+    "open": "Otevřít „{{title}}“"
+  },
   "rehearse": {
     "toStart": "Na začátek",
     "back": "O 5 sekund zpět",

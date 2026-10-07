@@ -9,7 +9,7 @@ import {
 import { Alert, Group, Loader, Text } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { api } from "../api/client";
@@ -54,6 +54,7 @@ import {
 import { CountInCountdown } from "./ClickControls";
 import { BarBeatText } from "../tempo/readout";
 import { touchMinLaneHeight } from "./headerTier";
+import { BounceModal } from "./BounceModal";
 import { MixerTools } from "./MixerTools";
 import { TrackStrip } from "./TrackStrip";
 import { Transport, TransportState } from "./Transport";
@@ -145,6 +146,13 @@ export function RehearsePanel({
   const status = useRehearse((s) => s.status);
   const lengthSec = useRehearse((s) => s.lengthSec);
   const lockHint = useRehearse((s) => s.lockHint);
+  // Bounce (SPEC §5.5): offered when the user may create songs in the project.
+  const [bounceOpen, setBounceOpen] = useState(false);
+  const onBounce = song.canBounce
+    ? () => {
+        setBounceOpen(true);
+      }
+    : undefined;
 
   const hashes = playing.map((p) => p.version.variants.peaks?.hash ?? null);
   const pyramids = usePeaks(hashes);
@@ -202,7 +210,7 @@ export function RehearsePanel({
         <Text c="dimmed">{t("rehearse.noTracks")}</Text>
       ) : (
         <>
-          <Transport phone={isPhone} />
+          <Transport phone={isPhone} onBounce={onBounce} />
           {isPhone && (
             // A fixed minimum height: the section name appearing must not move the page.
             <Group
@@ -238,6 +246,7 @@ export function RehearsePanel({
                     snapshots={snapshots}
                     canSetDefaults={canSetDefaults}
                     defaultsLocked={song.locked !== null}
+                    onBounce={onBounce}
                   />
                 ),
                 headerWidth: isPhone ? HEADER_W_NARROW : HEADER_W,
@@ -262,6 +271,16 @@ export function RehearsePanel({
           />
           <MarkerEditor song={song} />
           <ShortcutHelp />
+          {onBounce && (
+            <BounceModal
+              song={song}
+              opened={bounceOpen}
+              fullScreen={isPhone}
+              onClose={() => {
+                setBounceOpen(false);
+              }}
+            />
+          )}
         </>
       )}
     </Section>

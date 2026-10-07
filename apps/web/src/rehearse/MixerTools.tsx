@@ -18,7 +18,13 @@ import {
   Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconCamera, IconMicrophoneOff, IconRestore, IconTrash } from "@tabler/icons-react";
+import {
+  IconCamera,
+  IconFileMusic,
+  IconMicrophoneOff,
+  IconRestore,
+  IconTrash,
+} from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -41,6 +47,7 @@ export function MixerTools({
   snapshots,
   canSetDefaults,
   defaultsLocked = false,
+  onBounce,
 }: {
   songId: string;
   snapshots: MixerSnapshot[];
@@ -48,6 +55,8 @@ export function MixerTools({
   canSetDefaults: boolean;
   /** The song is locked: "Save as default mix" is shown disabled. */
   defaultsLocked?: boolean;
+  /** Opens "Bounce to new song…" (SPEC §5.5); absent when the user may not bounce. */
+  onBounce?: (() => void) | undefined;
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -221,6 +230,16 @@ export function MixerTools({
               {t("rehearse.saveDefaults")}
             </Button>
           </Tooltip>
+        )}
+        {onBounce && (
+          <Button
+            variant="subtle"
+            leftSection={<IconFileMusic size={16} />}
+            onClick={onBounce}
+            data-testid="mixer-bounce"
+          >
+            {t("bounce.action")}
+          </Button>
         )}
       </Group>
       {anyAB && (

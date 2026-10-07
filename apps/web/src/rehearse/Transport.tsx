@@ -14,6 +14,7 @@ import {
   IconAlertTriangle,
   IconCheck,
   IconDots,
+  IconFileMusic,
   IconKeyboard,
   IconPlayerPauseFilled,
   IconPlayerPlayFilled,
@@ -122,7 +123,14 @@ export function TransportState() {
  * on). Phones: loop, previous, play/pause, next, the position and "⋯", which also holds click and
  * count-in.
  */
-export function Transport({ phone }: { phone: boolean }) {
+export function Transport({
+  phone,
+  onBounce,
+}: {
+  phone: boolean;
+  /** Opens "Bounce to new song…" (SPEC §5.5); absent when the user may not bounce. */
+  onBounce?: (() => void) | undefined;
+}) {
   const { t } = useTranslation();
   const status = useRehearse((s) => s.status);
   const quality = useRehearse((s) => s.quality);
@@ -273,6 +281,19 @@ export function Transport({ phone }: { phone: boolean }) {
             {t(`rehearse.wakeLock.${w}`)}
           </Menu.Item>
         ))}
+        {onBounce && (
+          <>
+            <Menu.Divider />
+            <Menu.Item
+              leftSection={<IconFileMusic size={14} />}
+              closeMenuOnClick
+              onClick={onBounce}
+              data-testid="transport-bounce"
+            >
+              {t("bounce.action")}
+            </Menu.Item>
+          </>
+        )}
         {!phone && (
           <>
             <Menu.Divider />

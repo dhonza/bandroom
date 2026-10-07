@@ -648,6 +648,16 @@
     "edit": "Edit label and notes",
     "delete": "Delete version"
   },
+  "bounce": {
+    "action": "Bounce to new song…",
+    "title": "Bounce to new song",
+    "explain": "The server renders the mix you hear now — mutes, solos, volumes, pans and the versions in the Player — into a new song with one track, right after this one. This song stays as it is. The new file counts toward your storage.",
+    "name": "Title of the new song",
+    "defaultTitle": "{{title}} (bounce)",
+    "submit": "Bounce",
+    "started": "The new song is being rendered",
+    "open": "Open “{{title}}”"
+  },
   "rehearse": {
     "toStart": "Back to start",
     "back": "Back 5 seconds",
