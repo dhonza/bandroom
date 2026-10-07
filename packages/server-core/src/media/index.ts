@@ -11,5 +11,6 @@ export * from "./variants";
 export * from "./wav";
 export * from "./uploadSessions";
 export * from "./mixdown";
+export * from "./mixGraph";
 export * from "./documentJobs";
 export * from "./ingestJobs";

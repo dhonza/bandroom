@@ -32,10 +32,6 @@ import { assetProbe, createAsset, getAsset } from "./assets";
 import {
   MIXDOWN_DELAY_MS,
   MIXDOWN_IMPORT_DELAY_MS,
-  mixdownFilter,
-  mixGain,
-  mixChannels,
-  panLaw,
   scheduleMixdown,
   scheduleMixdownAfterIngest,
 } from "./mixdown";
@@ -103,64 +99,6 @@ async function decodeStereo(file: string): Promise<Float32Array> {
   const buf = Buffer.concat(chunks);
   return new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
 }
-
-describe("mixdownFilter", () => {
-  it("pans mono with equal power, keeps stereo balance, delays by offset, sums unnormalized", () => {
-    const f = mixdownFilter(
-      [
-        { path: "a", gain: 1, pan: 0, channels: 1, law: "mono", offsetSamples: 0 },
-        { path: "b", gain: 0.5, pan: 0, channels: 2, law: "stereo", offsetSamples: 4800 },
-      ],
-      "aresample=48000",
-    );
-    expect(f).toBe(
-      "[0:a]aresample=48000,pan=stereo|c0=0.707107*c0|c1=0.707107*c0[a0];" +
-        "[1:a]aresample=48000,pan=stereo|c0=0.500000*c0|c1=0.500000*c1,adelay=delays=4800S:all=1[a1];" +
-        "[a0][a1]amix=inputs=2:normalize=0:duration=longest[m]",
-    );
-  });
-
-  it("feeds both sides of a dual-mono source from its one channel, at unity", () => {
-    const f = mixdownFilter(
-      [{ path: "a", gain: 1, pan: 0, channels: 1, law: "stereo", offsetSamples: 0 }],
-      "aresample=48000",
-    );
-    expect(f).toBe(
-      "[0:a]aresample=48000,pan=stereo|c0=1.000000*c0|c1=1.000000*c0[a0];[a0]anull[m]",
-    );
-    // Panned hard left: the right side is silent, the left stays at unity.
-    expect(
-      mixdownFilter(
-        [{ path: "a", gain: 1, pan: -1, channels: 1, law: "stereo", offsetSamples: 0 }],
-        "x",
-      ),
-    ).toContain("pan=stereo|c0=1.000000*c0|c1=0.000000*c0");
-  });
-
-  it("chooses the pan law from the probe", () => {
-    expect(panLaw({ channels: 1 })).toBe("mono");
-    expect(panLaw({ channels: 2, dualMono: true })).toBe("stereo");
-    expect(panLaw({ channels: 2 })).toBe("stereo");
-    expect(panLaw(null)).toBe("stereo");
-    // A dual-mono upload's FLAC and Opus hold one channel, its kept original two.
-    expect(mixChannels({ channels: 2, dualMono: true }, "flac")).toBe(1);
-    expect(mixChannels({ channels: 2, dualMono: true }, "opus")).toBe(1);
-    expect(mixChannels({ channels: 2, dualMono: true }, "original")).toBe(2);
-    expect(mixChannels({ channels: 1 }, "original")).toBe(1);
-    expect(mixChannels({ channels: 2 }, "flac")).toBe(2);
-    expect(mixChannels(null, "flac")).toBe(2);
-  });
-});
-
-describe("mixGain (SPEC §25.6)", () => {
-  it("multiplies the version gain with the track's default gain", () => {
-    expect(mixGain(0, 0)).toBe(1);
-    expect(mixGain(-6, 6)).toBeCloseTo(1, 12);
-    expect(mixGain(-6, 0)).toBeCloseTo(0.501187, 6);
-    expect(mixGain(0, 12)).toBeCloseTo(3.981072, 6);
-    expect(mixGain(-120, 40)).toBe(0); // a silenced default stays silent
-  });
-});
 
 describe("scheduleMixdown", () => {
   it("keeps one queued job per song and postpones it on each change", () => {

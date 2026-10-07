@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { dbToGain, panGains, uuidv7 } from "@bandroom/shared";
+import { dbToGain, uuidv7 } from "@bandroom/shared";
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { getTrackVersionRow, systemMixTrack, userMixTrack, type TrackRow } from "../content/tracks";
@@ -8,13 +8,13 @@ import type { Db } from "../db/connection";
 import { assets, songs, tracks, trackVersions } from "../db/schema";
 import { enqueueJob } from "../jobs/queue";
 import type { JobHandler } from "../jobs/types";
-import { measureLoudness } from "./analysis";
 import { assetProbe, createAsset, getAsset, setAssetProbe, setAssetStatus } from "./assets";
-import { encodeOpus, resampleFilter } from "./encode";
+import { encodeOpus } from "./encode";
+import { mixChannels, mixGain, panLaw, renderMix, type MixInput } from "./mixGraph";
 import { readOggOpus } from "./ogg";
 import { computePeaks } from "./peaks";
 import { sha256File } from "../storage/hash";
-import { ffmpegArgs, mediaTimeLimitMs, runTool, withTimeLimit } from "./tools";
+import { mediaTimeLimitMs, withTimeLimit } from "./tools";
 import { getVariant, removeAllVariants } from "./variants";
 
 /** Debounce after the last relevant change (SPEC §5.5). */
@@ -29,9 +29,6 @@ export const MIXDOWN_IMPORT_DELAY_MS = 10_000;
  * interactive uploads (0), so a song imported early gets its mix while later songs still ingest.
  */
 export const MIXDOWN_PRIORITY = -1;
-/** Sums above this true peak get the limiter (SPEC §5.5: −1 dBTP). */
-export const MIXDOWN_TRUE_PEAK_LIMIT_DB = -1;
-
 /**
  * Schedules (or postpones) the song's auto-mix. One queued job per song via the dedupe key; a new
  * change moves its start time another `delayMs` (60 s) out.
@@ -103,37 +100,6 @@ export type MixdownResult =
   | { status: "rendered"; inputs: number; limited: boolean }
   | { status: "removed" | "skipped"; reason: string };
 
-interface MixInput {
-  path: string;
-  gain: number;
-  pan: number;
-  /** Channels of the stored file: 1 for mono and dual-mono sources, else 2. */
-  channels: 1 | 2;
-  /**
-   * Pan law (SPEC §6.6): `mono` is equal power (−3 dB per side at centre), `stereo` the balance
-   * law (unity at centre). Dual-mono sources are stored as one channel but use `stereo`.
-   */
-  law: "mono" | "stereo";
-  offsetSamples: number;
-}
-
-/** The pan law of a source: true mono pans with equal power, dual-mono and stereo by balance. */
-export function panLaw(probe: { channels: number; dualMono?: boolean } | null): "mono" | "stereo" {
-  return probe?.channels === 1 && !probe.dualMono ? "mono" : "stereo";
-}
-
-/**
- * Channels of the file the mix reads: the probe describes the upload, but a dual-mono upload's
- * `flac` and `opus` hold one channel (SPEC §5.2); its kept `original` still has two.
- */
-export function mixChannels(
-  probe: { channels: number; dualMono?: boolean } | null,
-  variant: string,
-): 1 | 2 {
-  if (probe?.channels === 1) return 1;
-  return probe?.dualMono && variant !== "original" ? 1 : 2;
-}
-
 /** Removes the auto-mix (e.g. the band uploaded its own mix). */
 export function removeAutoMix(db: Db, songId: string, now: number = Date.now()): boolean {
   const sys = systemMixTrack(db, songId);
@@ -157,14 +123,6 @@ function discardAsset(db: Db, assetId: string): void {
   });
 }
 
-/**
- * Linear gain of one input: the track's default gain and the version's own gain (SPEC §25.6), both
- * in dB, so `version gain × default gain`.
- */
-export function mixGain(defaultGainDb: number, versionGainDb: number): number {
-  return dbToGain(defaultGainDb) * dbToGain(versionGainDb);
-}
-
 function eligibleTracks(db: Db, songId: string): TrackRow[] {
   return db
     .select()
@@ -179,27 +137,6 @@ function eligibleTracks(db: Db, songId: string): TrackRow[] {
     )
     .all()
     .filter((t) => !t.defaultMuted && dbToGain(t.defaultGainDb) > 0 && t.currentVersionId !== null);
-}
-
-/**
- * Builds the ffmpeg filter graph: per input resample → equal-power pan → gain → delay by the
- * version's timeline offset; then `amix` without normalization (SPEC §5.5).
- */
-export function mixdownFilter(inputs: readonly MixInput[], resample: string): string {
-  const chains = inputs.map((inp, i) => {
-    const g = panGains(inp.pan, inp.law);
-    // A one-channel file (mono or dual-mono) feeds both sides from its only channel.
-    const right = inp.channels === 1 ? "c0" : "c1";
-    const pan = `pan=stereo|c0=${(g.left * inp.gain).toFixed(6)}*c0|c1=${(g.right * inp.gain).toFixed(6)}*${right}`;
-    const delay = inp.offsetSamples > 0 ? `,adelay=delays=${inp.offsetSamples}S:all=1` : "";
-    return `[${i}:a]${resample},${pan}${delay}[a${i}]`;
-  });
-  const labels = inputs.map((_, i) => `[a${i}]`).join("");
-  const mix =
-    inputs.length === 1
-      ? `${labels}anull[m]`
-      : `${labels}amix=inputs=${inputs.length}:normalize=0:duration=longest[m]`;
-  return [...chains, mix].join(";");
 }
 
 /** `audio.mixdown` (SPEC §5.5): renders the auto-mix onto the hidden system track. */
@@ -248,49 +185,10 @@ export const audioMixdownHandler: JobHandler<MixdownPayload, MixdownResult> = {
 
     const signal = withTimeLimit(ctx.signal, mediaTimeLimitMs(lengthSec));
     ctx.progress(0.1, "render");
-    const wav = path.join(ctx.tmpDir, "mix.wav");
-    const graph = mixdownFilter(inputs, await resampleFilter(tools));
-    await runTool(
-      tools.ffmpeg,
-      ffmpegArgs(
-        ...inputs.flatMap((i) => ["-i", i.path]),
-        "-filter_complex",
-        graph,
-        "-map",
-        "[m]",
-        "-ar",
-        "48000",
-        "-c:a",
-        "pcm_f32le",
-        wav,
-      ),
-      { signal },
-    );
-
-    // True-peak check; limit only if the sum clips (SPEC §5.5).
-    let loudness = await measureLoudness(wav, tools, signal);
-    let limited = false;
-    let source = wav;
-    if (loudness.truePeakDbtp !== null && loudness.truePeakDbtp > MIXDOWN_TRUE_PEAK_LIMIT_DB) {
-      const out = path.join(ctx.tmpDir, "mix-limited.wav");
-      // alimiter works on sample peaks: aim at −1.5 dBFS to keep inter-sample peaks under −1 dBTP.
-      await runTool(
-        tools.ffmpeg,
-        ffmpegArgs(
-          "-i",
-          wav,
-          "-af",
-          "alimiter=limit=0.841:level=false:attack=5:release=50",
-          "-c:a",
-          "pcm_f32le",
-          out,
-        ),
-        { signal },
-      );
-      source = out;
-      limited = true;
-      loudness = await measureLoudness(out, tools, signal);
-    }
+    // One streaming render; the −1 dBTP limiter only when the sum clips (SPEC §5.5).
+    const rendered = await renderMix({ tools, tmpDir: ctx.tmpDir, signal }, inputs);
+    const { limited, loudness } = rendered;
+    const source = rendered.path;
     ctx.progress(0.5, "encode");
 
     const { size } = await fs.stat(source);
