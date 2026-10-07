@@ -255,3 +255,104 @@ test("track rows keep the track name readable at 360 px", async ({ page, request
   expect(actions.x + actions.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 0.5);
   await noHorizontalOverflow(page);
 });
+
+interface ClickDebug {
+  clickSettings: { enabled: boolean; solo: boolean; gainDb: number };
+  hasTempo: boolean;
+}
+
+const clickState = (page: Page) =>
+  page.evaluate(
+    () =>
+      (
+        window as unknown as { __bandroomRehearse?: { state: () => ClickDebug } }
+      ).__bandroomRehearse?.state() ?? null,
+  );
+
+test("Mixer: the click is a lane with its own header (M, S, volume), saved like a track", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(600_000);
+  const phone = isMobile(testInfo);
+  await loginAsNewUser(page, request, testInfo, "member");
+  await songWithTrack(page, testInfo);
+  const songId = /songs\/([^/?#]+)/.exec(page.url())?.[1] ?? "";
+  const timeline = page.getByTestId("timeline");
+  const headers = page.getByTestId("track-headers");
+
+  // Without a tempo map there is no click lane.
+  await page.getByTestId("mixer-toggle").click();
+  await expect(timeline).toHaveAttribute("data-lanes", "1", { timeout: 30_000 });
+  await expect(page.getByTestId("click-strip")).toHaveCount(0);
+
+  const put = await page.request.put(`api/v1/songs/${songId}/tempo`, {
+    headers: { "X-Requested-With": "bandroom" },
+    data: {
+      map: { segments: [{ startBeat: 0, bpm: 120, meter: { num: 4, den: 4 } }] },
+      bar1OffsetSec: 0,
+    },
+  });
+  expect(put.status()).toBe(200);
+  await page.reload();
+  const strip = headers.getByTestId("click-strip");
+  await expect(strip).toBeVisible({ timeout: 30_000 });
+  await expect(timeline).toHaveAttribute("data-lanes", "2");
+  if (phone) await noHorizontalOverflow(page);
+
+  // M is the click switched off (it starts off), the same state as the transport's Click.
+  const mute = strip.getByTestId("click-mute");
+  const solo = strip.getByTestId("click-solo");
+  for (const b of [mute, solo]) {
+    const r = await box(b);
+    expect(r.width).toBeGreaterThanOrEqual(44);
+    expect(r.height).toBeGreaterThanOrEqual(44);
+  }
+  await expect(mute).toHaveAttribute("aria-pressed", "true");
+  await mute.click();
+  await expect(mute).toHaveAttribute("aria-pressed", "false");
+  if (!phone)
+    await expect(page.getByTestId("click-toggle")).toHaveAttribute("aria-pressed", "true");
+  await solo.click();
+  await expect(solo).toHaveAttribute("aria-pressed", "true");
+
+  // The volume: inline on wide headers, in the bottom sheet on phones.
+  if (phone) {
+    await strip.getByTestId("click-strip-settings").click(TAP_NAME);
+    await expect(page.getByTestId("click-settings")).toBeVisible();
+  }
+  const volume = page.getByRole("slider", { name: "Click volume" }).first();
+  await volume.focus();
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  if (phone) await page.keyboard.press("Escape");
+  await expect
+    .poll(async () => (await clickState(page))?.clickSettings)
+    .toMatchObject({ enabled: true, solo: true, gainDb: -8 });
+
+  // Saved with the personal mix: after a reload the header shows the same state.
+  await expect
+    .poll(
+      async () => {
+        const res = await page.request.get(`api/v1/songs/${songId}/mixer`, {
+          headers: { "X-Requested-With": "bandroom" },
+        });
+        const body = (await res.json()) as {
+          state: { click?: { enabled?: boolean; solo?: boolean; gainDb?: number } } | null;
+        };
+        return body.state?.click;
+      },
+      { timeout: 15_000 },
+    )
+    .toMatchObject({ enabled: true, solo: true, gainDb: -8 });
+  await page.reload();
+  await expect(strip).toBeVisible({ timeout: 30_000 });
+  await expect(mute).toHaveAttribute("aria-pressed", "false");
+  await expect(solo).toHaveAttribute("aria-pressed", "true");
+  expect((await clickState(page))?.clickSettings.gainDb).toBe(-8);
+
+  // With the Mixer closed the click lane goes with the track lanes.
+  await page.getByTestId("mixer-toggle").click();
+  await expect(timeline).toHaveAttribute("data-lanes", "0");
+  await expect(page.getByTestId("click-strip")).toHaveCount(0);
+});
