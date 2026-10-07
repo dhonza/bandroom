@@ -5,4 +5,3 @@ apps/server/drizzle/
 CLAUDE.md
 .cache/
 deploy/Caddyfile*
-research/

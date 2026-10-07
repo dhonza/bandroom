@@ -24,6 +24,3 @@ playwright/.cache/
 deploy/data/
 .cache/
 
-# internal notes (private repo dhonza/bandroom-notes) and Claude Code rules
-research/
-/CLAUDE.md
