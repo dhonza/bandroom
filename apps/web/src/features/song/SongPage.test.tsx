@@ -120,7 +120,6 @@ describe("song page tracks", () => {
       "GET /auth/session": () => ({ body: { user: makeUser({ id: "u1", globalRole: "member" }) } }),
       "GET /songs/s1": () => ({ body: { song } }),
       "GET /songs/s1/tracks": () => ({ body: { tracks: [track] } }),
-      "GET /songs/s1/listen": () => ({ body: { listen: null } }),
     });
     const i18n = i18next.createInstance();
     await initI18n("en", i18n);
@@ -159,7 +158,6 @@ describe("song page delete", () => {
             };
       },
       "GET /songs/s1/tracks": () => ({ body: { tracks: [] } }),
-      "GET /songs/s1/listen": () => ({ body: { listen: null } }),
       "DELETE /songs/s1": () => {
         deleted = true;
         return { body: { ok: true } };

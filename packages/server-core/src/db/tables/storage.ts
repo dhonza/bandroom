@@ -133,7 +133,7 @@ export const uploadSessions = sqliteTable("upload_sessions", {
   completedAt: integer("completed_at"),
 });
 
-/** Storage used per uploader, maintained incrementally (SPEC §15.1). `system` for auto-mixes. */
+/** Storage used per uploader, maintained incrementally (SPEC §15.1). `system` for versions without an uploader (pre-M21 auto-mixes). */
 export const userUsage = sqliteTable("user_usage", {
   userId: text("user_id").primaryKey(),
   bytes: integer("bytes").notNull().default(0),

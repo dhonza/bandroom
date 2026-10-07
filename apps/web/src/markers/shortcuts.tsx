@@ -49,7 +49,7 @@ function ignoredTarget(e: KeyboardEvent, r: Resolved): boolean {
 }
 
 /**
- * Song page keyboard and pedal shortcuts (SPEC §11.4) for Listen and Rehearse mode. A pedal
+ * Song page keyboard and pedal shortcuts (SPEC §11.4). A pedal
  * mapping from Settings → Keyboard overrides the defaults for its keys.
  */
 export function useSongShortcuts(song: Song, extras: ShortcutExtras = {}): void {

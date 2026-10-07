@@ -545,7 +545,7 @@
     "keyLabel": "tónina {{key}}",
     "tracksComing": "Stopy, verze a přehrávač přibudou v některé z dalších etap.",
     "dropFolder": "Přetáhněte sem složky s písněmi",
-    "dropFolderHint": "Z každé složky bude píseň a z jejích zvukových souborů stopy. Z jednotlivých souborů budou písně s jednou stopou typu mix.",
+    "dropFolderHint": "Z každé složky bude píseň a z jejích zvukových souborů stopy. Z jednotlivého souboru bude píseň s jednou stopou pojmenovaná podle souboru.",
     "createdFromFolder_one": "Vytvořena {{count}} píseň z vašich souborů.",
     "createdFromFolder_few": "Vytvořeny {{count}} písně z vašich souborů.",
     "createdFromFolder_many": "Vytvořeno {{count}} písně z vašich souborů.",
@@ -711,7 +711,7 @@
     "colorLabel": "Barva stopy",
     "versionGain": "Zesílení v{{number}}",
     "versionGainFor": "Zesílení stopy {{track}} v{{number}} v dB",
-    "versionGainHint": "Před fadérem, pro všechny i v automatickém mixu.",
+    "versionGainHint": "Před fadérem, pro všechny i při uložení mixu jako nové písně.",
     "versionGainBadge": "Zesílení v{{number}} {{value}}",
     "meter": "Úroveň stopy {{track}}",
     "versionButton": "v{{number}}",
@@ -750,7 +750,7 @@
       "songOpen": "Když je otevřená píseň"
     },
     "saveDefaults": "Uložit jako výchozí mix",
-    "saveDefaultsHint": "Nastaví tuto hlasitost, panorámu a ztlumení jako výchozí mix pro všechny (i pro automatický mix). Osobní mixy zůstanou beze změny.",
+    "saveDefaultsHint": "Nastaví tuto hlasitost, panorámu a ztlumení jako výchozí mix pro všechny. Osobní mixy zůstanou beze změny.",
     "defaultsSaved": "Výchozí mix uložen."
   },
   "mixer": {

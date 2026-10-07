@@ -241,7 +241,7 @@ test("Offline project, Range answers from the cache, Offline page, logout cleanu
   await page.goto(songPath.replace(/^\/bandroom/, "").replace(/^\//, ""));
   await expect(page.getByTestId("offline-button")).toHaveAttribute("data-status", "project");
 
-  // The worker answers the engine's and <audio>'s requests from the cached blobs: whole files,
+  // The worker answers the engine's (and any media element's) requests from the cached blobs: whole files,
   // open and closed ranges, and 416 outside the file.
   const songId = songPath.split("/").at(-1) ?? "";
   const reads = await page.evaluate(async (id) => {

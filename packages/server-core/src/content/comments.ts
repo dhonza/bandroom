@@ -392,7 +392,7 @@ export function mentionableUsers(db: Db, songId: string): MentionableUser[] {
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
-/** Uploaders of the song's (non-auto-mix) versions: "comment on a song I uploaded to". */
+/** Uploaders of the song's versions: "comment on a song I uploaded to". */
 export function songUploaderIds(db: Db, songId: string): string[] {
   return db
     .selectDistinct({ u: trackVersions.uploadedBy })

@@ -31,7 +31,6 @@ beforeEach(() => {
   resetTapForTests();
   seeks = [];
   registerPlayer({
-    mode: "rehearse",
     position: () => 0,
     duration: () => 100,
     seek: (s) => seeks.push(s),

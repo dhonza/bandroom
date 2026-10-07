@@ -135,7 +135,6 @@ export function RehearsePanel({
   useEffect(
     () =>
       registerPlayer({
-        mode: "rehearse",
         position: positionSec,
         duration: durationSec,
         seek: seekSec,

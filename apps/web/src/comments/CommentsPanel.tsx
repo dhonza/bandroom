@@ -37,7 +37,7 @@ function useSongTrackList(songId: string): Track[] {
 
 /**
  * Comment buttons for the song page ("Comments (N)" and "Comment at playhead") and the panel
- * itself; used by Listen and Rehearse mode.
+ * itself.
  */
 export function SongComments({ song }: { song: Song }) {
   const { t } = useTranslation();

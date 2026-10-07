@@ -54,7 +54,6 @@ function fakePlayer() {
     loops: [] as ({ start: number; end: number } | null)[],
   };
   const adapter: PlayerAdapter = {
-    mode: "rehearse",
     position: () => p.pos,
     duration: () => 100,
     seek: (s) => {

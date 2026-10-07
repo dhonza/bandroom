@@ -23,7 +23,7 @@ type FileWithPath = File & { path?: string };
 
 /**
  * Dropping folders onto a project (SPEC §5.1): each folder becomes a song named after it, with one
- * track per audio file. A single loose file becomes a song with one mix track. The uploads it
+ * track per audio file. A single loose file becomes a one-track song named after the file. The uploads it
  * starts are listed below the drop zone; failures are reported per song or file.
  */
 export function FolderDrop({ project }: { project: Project }) {

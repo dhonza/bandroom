@@ -18,18 +18,17 @@ import {
 } from "./model";
 
 /**
- * Song-page timeline state shared by Listen and Rehearse mode (SPEC §7.4–§7.6): selection, loop,
- * snap mode, the marker editor, and navigation actions against whichever player is active.
+ * Song-page timeline state (SPEC §7.4–§7.6): selection, loop, snap mode, the marker editor, and
+ * navigation actions against the song page's player.
  * The loop always equals the selection while it is on, so dragging the selection moves the loop.
  */
 
-/** The active player on the song page (Listen `<audio>` or the Rehearse engine). */
+/** The song page's player (the engine, SPEC §27.4). */
 export interface PlayerAdapter {
-  mode: "listen" | "rehearse";
   position(): number;
   duration(): number;
   seek(sec: number): void;
-  /** Applies (or clears) the loop; Rehearse is frame-accurate, Listen approximate. */
+  /** Applies (or clears) the loop (frame-accurate). */
   setLoop(range: Range | null): void;
   togglePlay(): void;
   isPlaying(): boolean;

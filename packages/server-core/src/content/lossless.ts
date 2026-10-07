@@ -32,8 +32,7 @@ export interface LosslessTarget {
 
 /**
  * The live versions an item stands for: a song → every version of its tracks, a track → its
- * versions, a version → itself. Hidden system tracks (the automatic mix) and items in the Trash
- * are left out.
+ * versions, a version → itself. Items in the Trash are left out.
  */
 function expandItem(db: Db, kind: TrashKind, id: string): LosslessTarget[] {
   return db

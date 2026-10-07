@@ -465,7 +465,7 @@ export interface TrashRow {
 }
 
 /**
- * Deleted songs, tracks, versions (not the hidden auto-mix) and documents, newest first; all
+ * Deleted songs, tracks, versions and documents, newest first; all
  * projects or one. Items of deleted projects are left out; the admin list (all projects) shows
  * the deleted projects themselves. Documents of a song in the Trash go with the song.
  */
@@ -677,7 +677,7 @@ export function purgeTrashItems(
 
 /**
  * What the daily maintenance purges (SPEC §26.3): projects deleted before `cutoff`, and songs,
- * tracks, versions (including old auto-mix versions) and documents deleted before it in live
+ * tracks, versions and documents deleted before it in live
  * projects. Items inside an expired song are left to the song.
  */
 export function expiredTrashIds(db: Db, cutoff: number): Required<TrashIds> {

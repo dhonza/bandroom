@@ -139,7 +139,7 @@ test("Rehearse: recovers when the browser does not resume the audio context", as
   request,
 }, testInfo) => {
   test.setTimeout(240_000);
-  // Safari can leave the context interrupted after the mix player's <audio> played: resume() then
+  // Safari can leave the context interrupted after another player took the audio: resume() then
   // never settles. Contexts marked `__stuck` behave like that.
   await page.addInitScript(() => {
     const w = window as unknown as { __ctxs: AudioContext[]; AudioContext: typeof AudioContext };

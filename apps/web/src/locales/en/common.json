@@ -533,7 +533,7 @@
     "keyLabel": "key {{key}}",
     "tracksComing": "Tracks, versions and the player arrive in a later milestone.",
     "dropFolder": "Drop song folders here",
-    "dropFolderHint": "Each folder becomes a song and its audio files become tracks. Single files become songs with one mix track.",
+    "dropFolderHint": "Each folder becomes a song and its audio files become tracks. A single file becomes a song with one track, named after the file.",
     "createdFromFolder_one": "Created {{count}} song from your files.",
     "createdFromFolder_other": "Created {{count}} songs from your files.",
     "lock": {
@@ -695,7 +695,7 @@
     "colorLabel": "Track color",
     "versionGain": "Gain of v{{number}}",
     "versionGainFor": "Gain of {{track}} v{{number}} in dB",
-    "versionGainHint": "Before the fader, for everyone and in the automatic mix.",
+    "versionGainHint": "Before the fader, for everyone and in bounces.",
     "versionGainBadge": "v{{number}} gain {{value}}",
     "meter": "Level of {{track}}",
     "versionButton": "v{{number}}",
@@ -734,7 +734,7 @@
       "songOpen": "While a song is open"
     },
     "saveDefaults": "Save as default mix",
-    "saveDefaultsHint": "Makes this gain, pan and mute the starting mix for everyone (and for the automatic mix). Personal mixes stay as they are.",
+    "saveDefaultsHint": "Makes this gain, pan and mute the starting mix for everyone. Personal mixes stay as they are.",
     "defaultsSaved": "Default mix saved."
   },
   "mixer": {
