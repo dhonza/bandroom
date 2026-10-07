@@ -63,7 +63,8 @@ export function useDownloadPercent(key: string): number | null {
 
 /**
  * "Make available offline" on a song or project (SPEC §13), with the size estimate first; once
- * downloaded, a menu to update or remove it.
+ * downloaded, a menu to update or remove it. The label is short ("Offline") so the song header
+ * stays compact; icon and colour show the state, which the tooltip and accessible name spell out.
  */
 export function OfflineButton(target: Target) {
   const { t, i18n } = useTranslation();
@@ -79,14 +80,20 @@ export function OfflineButton(target: Target) {
   const [open, setOpen] = useState(false);
   if (!offlineSupported() || !ready) return null;
 
-  const compact = (label: string, icon: React.ReactNode, color: string, onClick?: () => void) =>
+  const compact = (
+    label: string,
+    hint: string,
+    icon: React.ReactNode,
+    color: string,
+    onClick?: () => void,
+  ) =>
     isPhone ? (
-      <Tooltip label={label}>
+      <Tooltip label={hint}>
         <ActionIcon
           size={44}
           variant="default"
           color={color}
-          aria-label={label}
+          aria-label={hint}
           onClick={onClick}
           data-testid="offline-button"
           data-status={own?.status ?? (viaProject ? "project" : "none")}
@@ -95,23 +102,27 @@ export function OfflineButton(target: Target) {
         </ActionIcon>
       </Tooltip>
     ) : (
-      <Button
-        variant={own || viaProject ? "light" : "default"}
-        color={color}
-        h={44}
-        leftSection={icon}
-        onClick={onClick}
-        data-testid="offline-button"
-        data-status={own?.status ?? (viaProject ? "project" : "none")}
-      >
-        {label}
-      </Button>
+      <Tooltip label={hint} disabled={hint === label}>
+        <Button
+          variant={own || viaProject ? "light" : "default"}
+          color={color}
+          h={44}
+          leftSection={icon}
+          onClick={onClick}
+          aria-label={hint}
+          data-testid="offline-button"
+          data-status={own?.status ?? (viaProject ? "project" : "none")}
+        >
+          {label}
+        </Button>
+      </Tooltip>
     );
+  const short = t("offline.button.make");
 
   if (viaProject) {
     return (
       <Link to="/offline" style={{ display: "contents" }}>
-        {compact(t("offline.button.viaProject"), <IconCloudCheck size={18} />, GREEN)}
+        {compact(short, t("offline.button.viaProject"), <IconCloudCheck size={18} />, GREEN)}
       </Link>
     );
   }
@@ -121,8 +132,14 @@ export function OfflineButton(target: Target) {
       return (
         <Tooltip label={t("offline.needsNetwork")}>
           <span>
-            <Button variant="default" h={44} disabled leftSection={<IconCloudDown size={16} />}>
-              {isPhone ? null : t("offline.button.make")}
+            <Button
+              variant="default"
+              h={44}
+              disabled
+              leftSection={<IconCloudDown size={16} />}
+              aria-label={t("offline.button.makeHint")}
+            >
+              {isPhone ? null : short}
             </Button>
           </span>
         </Tooltip>
@@ -130,7 +147,7 @@ export function OfflineButton(target: Target) {
     }
     return (
       <>
-        {compact(t("offline.button.make"), <IconCloudDown size={18} />, GRAY, () => {
+        {compact(short, t("offline.button.makeHint"), <IconCloudDown size={18} />, GRAY, () => {
           setOpen(true);
         })}
         {open && (
@@ -150,10 +167,10 @@ export function OfflineButton(target: Target) {
       percent === null
         ? t("offline.button.preparing")
         : t("offline.button.downloading", { percent });
-    return compact(label, <Loader size={16} />, "blue");
+    return compact(label, label, <Loader size={16} />, "blue");
   }
 
-  const [label, icon, color] =
+  const [hint, icon, color] =
     own.status === "error"
       ? [t("offline.button.failed"), <IconCloudExclamation key="i" size={18} />, "red"]
       : own.status === "outdated"
@@ -162,7 +179,7 @@ export function OfflineButton(target: Target) {
 
   return (
     <Menu position="bottom-end" withinPortal>
-      <Menu.Target>{compact(label, icon, color)}</Menu.Target>
+      <Menu.Target>{compact(short, hint, icon, color)}</Menu.Target>
       <Menu.Dropdown>
         <Menu.Label>
           {t("offline.sizeOnDevice", {

@@ -1286,9 +1286,10 @@
     "logoutNeedsNetwork": "Logging out needs a connection. Try again when you're online.",
     "unsupported": "This browser can't keep songs offline.",
     "button": {
-      "make": "Make available offline",
-      "preparing": "Preparing download…",
-      "downloading": "Downloading… {{percent}} %",
+      "make": "Offline",
+      "makeHint": "Make available offline",
+      "preparing": "Preparing…",
+      "downloading": "Offline {{percent}} %",
       "ready": "Available offline",
       "outdated": "Offline: update available",
       "failed": "Offline: update failed",

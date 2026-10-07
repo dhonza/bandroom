@@ -1346,9 +1346,10 @@
     "logoutNeedsNetwork": "Odhlášení vyžaduje připojení. Zkuste to znovu, až budete online.",
     "unsupported": "Tento prohlížeč neumí uchovávat písně offline.",
     "button": {
-      "make": "Uložit pro offline",
-      "preparing": "Připravuje se stahování…",
-      "downloading": "Stahuje se… {{percent}} %",
+      "make": "Offline",
+      "makeHint": "Uložit pro offline",
+      "preparing": "Připravuje se…",
+      "downloading": "Offline {{percent}} %",
       "ready": "Dostupné offline",
       "outdated": "Offline: je dostupná aktualizace",
       "failed": "Offline: aktualizace selhala",
