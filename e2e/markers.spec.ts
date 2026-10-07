@@ -158,10 +158,14 @@ test("Markers: add a section, loop it with two taps, frame-accurate loop cache",
   await page.reload();
   await expect(page.getByTestId("section-chip")).toHaveCount(1, { timeout: 30_000 });
   if (phone) {
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    // Polled: the layout settles while the song loads.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        ),
+      )
+      .toBeLessThanOrEqual(0);
     expect(
       await page.evaluate(() => window.innerWidth === document.documentElement.clientWidth),
     ).toBe(true);

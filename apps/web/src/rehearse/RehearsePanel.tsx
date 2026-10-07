@@ -211,7 +211,14 @@ export function RehearsePanel({
         <>
           <Transport phone={isPhone} />
           {isPhone && (
-            <Group gap="sm" wrap="wrap" data-testid="rehearse-readout" style={{ rowGap: 0 }}>
+            // A fixed minimum height: the section name appearing must not move the page.
+            <Group
+              gap="sm"
+              wrap="wrap"
+              mih={30}
+              data-testid="rehearse-readout"
+              style={{ rowGap: 0 }}
+            >
               <CountInCountdown />
               <BarBeatText size="lg" c="dimmed" />
               <SectionReadout />
