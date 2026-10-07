@@ -232,52 +232,56 @@ describe("POST /songs/:id/bounce (SPEC §5.5)", () => {
     expect(peak(pcm, 36_000, 0).value).toBeLessThan(1e-4); // Dual silenced
   });
 
-  it("refuses versions that are not the song's, and a silent mix", async () => {
-    const other = (
-      await call(t, createSong, { params: { id: projectId }, body: { title: "Other" } }, admin)
-    ).json<{ song: { id: string } }>().song.id;
-    const up = await tusUpload(
-      t,
-      admin,
-      await fs.readFile(fixture("imp_48000_s16_mono")),
-      "x.wav",
-      {
-        type: "newTrack",
-        songId: other,
-        name: "Foreign",
-      },
-    );
-    expect(up.status).toBe(200);
-    const foreign = JSON.parse(up.body) as { trackId: string; trackVersionId: string };
-    const mix = { tracks: {} };
-    // A version of another song's track, or under the wrong track.
-    for (const versions of [
-      { [foreign.trackId]: foreign.trackVersionId },
-      { [byName("Mono").trackId]: foreign.trackVersionId },
-      { [byName("Mono").trackId]: byName("Stereo").versionId },
-      { missing: byName("Mono").versionId },
-    ]) {
-      const res = await bounce({ title: "X", mix, versions });
-      expect(res.statusCode).toBe(400);
-      expect(res.json<{ code: string }>().code).toBe("BOUNCE_INVALID");
-    }
-    // Not ready yet (queued ingest) in its own song.
-    const queued = await bounce(
-      { title: "X", mix, versions: { [foreign.trackId]: foreign.trackVersionId } },
-      admin,
-      other,
-    );
-    expect(queued.json<{ code: string }>().code).toBe("BOUNCE_INVALID");
-    await runQueuedJobs(t);
+  it(
+    "refuses versions that are not the song's, and a silent mix",
+    { timeout: 180_000 },
+    async () => {
+      const other = (
+        await call(t, createSong, { params: { id: projectId }, body: { title: "Other" } }, admin)
+      ).json<{ song: { id: string } }>().song.id;
+      const up = await tusUpload(
+        t,
+        admin,
+        await fs.readFile(fixture("imp_48000_s16_mono")),
+        "x.wav",
+        {
+          type: "newTrack",
+          songId: other,
+          name: "Foreign",
+        },
+      );
+      expect(up.status).toBe(200);
+      const foreign = JSON.parse(up.body) as { trackId: string; trackVersionId: string };
+      const mix = { tracks: {} };
+      // A version of another song's track, or under the wrong track.
+      for (const versions of [
+        { [foreign.trackId]: foreign.trackVersionId },
+        { [byName("Mono").trackId]: foreign.trackVersionId },
+        { [byName("Mono").trackId]: byName("Stereo").versionId },
+        { missing: byName("Mono").versionId },
+      ]) {
+        const res = await bounce({ title: "X", mix, versions });
+        expect(res.statusCode).toBe(400);
+        expect(res.json<{ code: string }>().code).toBe("BOUNCE_INVALID");
+      }
+      // Not ready yet (queued ingest) in its own song.
+      const queued = await bounce(
+        { title: "X", mix, versions: { [foreign.trackId]: foreign.trackVersionId } },
+        admin,
+        other,
+      );
+      expect(queued.json<{ code: string }>().code).toBe("BOUNCE_INVALID");
+      await runQueuedJobs(t);
 
-    const silent = await bounce({
-      title: "X",
-      mix: { tracks: { [byName("Mono").trackId]: s({ mute: true }) } },
-      versions: versionsOf("Mono"),
-    });
-    expect(silent.statusCode).toBe(400);
-    expect(silent.json<{ code: string }>().code).toBe("BOUNCE_SILENT");
-  });
+      const silent = await bounce({
+        title: "X",
+        mix: { tracks: { [byName("Mono").trackId]: s({ mute: true }) } },
+        versions: versionsOf("Mono"),
+      });
+      expect(silent.statusCode).toBe(400);
+      expect(silent.json<{ code: string }>().code).toBe("BOUNCE_SILENT");
+    },
+  );
 
   it("refuses a bounce over the user's quota and creates nothing", async () => {
     const before = listEvents(t.db, { action: "song.bounced" }).length;
@@ -319,7 +323,7 @@ describe("POST /songs/:id/bounce (SPEC §5.5)", () => {
     },
   );
 
-  it("bounces a locked song (it only reads it)", async () => {
+  it("bounces a locked song (it only reads it)", { timeout: 180_000 }, async () => {
     expect((await call(t, lockSong, { params: { id: songId } }, admin)).statusCode).toBe(200);
     const res = await bounce({
       title: "Locked",

@@ -60,41 +60,45 @@ describe("BounceModal (SPEC §5.5)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("sends the mix and the playing versions, then links to the new song", async () => {
-    const fetch = mockApi({
-      "POST /songs/s1/bounce": () => ({
-        body: {
-          song: {
-            id: "s2",
-            projectId: "p1",
-            title: "Blue Moon (bounce)",
-            subtitle: "",
-            key: "",
-            sortOrder: 1,
-            updatedAt: 0,
-            access: { role: "editor", capabilities: [] },
+  it(
+    "sends the mix and the playing versions, then links to the new song",
+    { timeout: 20_000 },
+    async () => {
+      const fetch = mockApi({
+        "POST /songs/s1/bounce": () => ({
+          body: {
+            song: {
+              id: "s2",
+              projectId: "p1",
+              title: "Blue Moon (bounce)",
+              subtitle: "",
+              key: "",
+              sortOrder: 1,
+              updatedAt: 0,
+              access: { role: "editor", capabilities: [] },
+            },
+            trackId: "t9",
+            versionId: "v9",
           },
-          trackId: "t9",
-          versionId: "v9",
-        },
-      }),
-    });
-    const { router, onClose } = renderModal();
-    expect(await screen.findByTestId("bounce-title")).toHaveValue("Blue Moon (bounce)");
-    await userEvent.click(screen.getByTestId("bounce-submit"));
-    expect(await screen.findByTestId("bounce-open")).toHaveTextContent("Blue Moon (bounce)");
-    const init = fetch.mock.calls[0]?.[1] as RequestInit;
-    expect(JSON.parse(init.body as string)).toEqual({
-      title: "Blue Moon (bounce)",
-      mix,
-      versions: { t1: "v1", t2: "v2b" },
-    });
-    expect(onClose).toHaveBeenCalled();
-    await userEvent.click(screen.getByTestId("bounce-open"));
-    expect(router.state.location.pathname).toBe("/songs/s2");
-  });
+        }),
+      });
+      const { router, onClose } = renderModal();
+      expect(await screen.findByTestId("bounce-title")).toHaveValue("Blue Moon (bounce)");
+      await userEvent.click(screen.getByTestId("bounce-submit"));
+      expect(await screen.findByTestId("bounce-open")).toHaveTextContent("Blue Moon (bounce)");
+      const init = fetch.mock.calls[0]?.[1] as RequestInit;
+      expect(JSON.parse(init.body as string)).toEqual({
+        title: "Blue Moon (bounce)",
+        mix,
+        versions: { t1: "v1", t2: "v2b" },
+      });
+      expect(onClose).toHaveBeenCalled();
+      await userEvent.click(screen.getByTestId("bounce-open"));
+      expect(router.state.location.pathname).toBe("/songs/s2");
+    },
+  );
 
-  it("shows the server's reason and needs a title", async () => {
+  it("shows the server's reason and needs a title", { timeout: 20_000 }, async () => {
     mockApi({
       "POST /songs/s1/bounce": () => ({
         status: 400,

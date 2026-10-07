@@ -222,16 +222,23 @@ describe("renderMix (SPEC §5.5)", () => {
     expect(Math.abs(pcm[2 * 1.5 * 48_000] ?? 0)).toBeGreaterThan(0.8);
   });
 
-  it("writes 24-bit PCM when asked, with or without the limiter", { timeout: 120_000 }, async () => {
-    const codecOf = async (file: string) => (await probeAudio(file)).bitDepth;
-    const quiet = await render([input({ path: TONE_FILE(), gain: mixGain(-12, 0) })], "pcm_s24le");
-    expect(quiet.limited).toBe(false);
-    expect(await codecOf(quiet.path)).toBe(24);
-    const loud = await render(
-      [input({ path: TONE_FILE(), gain: mixGain(6, 0) }), input({ path: TONE_FILE(), gain: 2 })],
-      "pcm_s24le",
-    );
-    expect(loud.limited).toBe(true);
-    expect(await codecOf(loud.path)).toBe(24);
-  });
+  it(
+    "writes 24-bit PCM when asked, with or without the limiter",
+    { timeout: 120_000 },
+    async () => {
+      const codecOf = async (file: string) => (await probeAudio(file)).bitDepth;
+      const quiet = await render(
+        [input({ path: TONE_FILE(), gain: mixGain(-12, 0) })],
+        "pcm_s24le",
+      );
+      expect(quiet.limited).toBe(false);
+      expect(await codecOf(quiet.path)).toBe(24);
+      const loud = await render(
+        [input({ path: TONE_FILE(), gain: mixGain(6, 0) }), input({ path: TONE_FILE(), gain: 2 })],
+        "pcm_s24le",
+      );
+      expect(loud.limited).toBe(true);
+      expect(await codecOf(loud.path)).toBe(24);
+    },
+  );
 });
