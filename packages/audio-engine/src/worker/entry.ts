@@ -40,10 +40,7 @@ self.onmessage = (e: MessageEvent<WorkerCommand>) => {
     );
     scheduler = s;
     port.onmessage = (ev: MessageEvent<ToDecoder>) => {
-      const m = ev.data;
-      if (m.t === "pos") s.position(m.frame, m.lap);
-      else if (m.t === "seek") s.seek(m.frame, m.lap);
-      else s.retime(m.fromLap, m.frame, m.base, m.loop, m.cache);
+      s.fromMixer(ev.data);
     };
     return;
   }

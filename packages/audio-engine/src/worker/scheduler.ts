@@ -3,7 +3,7 @@ import { SAMPLE_RATE } from "../constants";
 import type { SeekIndex } from "../decode/seek";
 import type { FlacCodec, OpusCodec } from "../decode/streams";
 import type { ClipRange, MixerTrackConfig } from "../mixer/core";
-import type { MixerCommand } from "../mixer/protocol";
+import type { MixerCommand, ToDecoder } from "../mixer/protocol";
 import {
   clipRanges,
   type EngineClip,
@@ -66,6 +66,8 @@ export class DecodeScheduler {
   private inUse = new Set<string>();
   /** Per-file share of the budget for the current song (see `applyWholeLimit`). */
   private wholeLimit = Infinity;
+  /** The current song load's id (mixer messages about earlier loads are dropped). */
+  private loadId = 0;
 
   constructor(
     private readonly deps: SchedulerDeps,
@@ -81,6 +83,7 @@ export class DecodeScheduler {
     mixer: MixerTrackConfig[],
   ): void {
     for (const p of this.producers) p.dispose();
+    this.loadId = id;
     this.length = lengthFrames;
     this.loop = null;
     this.cache = false;
@@ -94,6 +97,17 @@ export class DecodeScheduler {
     for (const t of tracks) for (const c of t.clips) this.fetcher(c.variant).begin();
     this.evict();
     this.kick();
+  }
+
+  /**
+   * A message from the mixer: playhead reports, seeks and loop changes. Those sent for an earlier
+   * song load (still in flight when this one started) are dropped, see `ToDecoder`.
+   */
+  fromMixer(m: ToDecoder): void {
+    if (m.load !== this.loadId) return;
+    if (m.t === "pos") this.position(m.frame, m.lap);
+    else if (m.t === "seek") this.seek(m.frame, m.lap);
+    else this.retime(m.fromLap, m.frame, m.base, m.loop, m.cache);
   }
 
   unload(): void {

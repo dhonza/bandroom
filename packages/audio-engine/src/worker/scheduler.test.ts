@@ -1,6 +1,6 @@
 import path from "node:path";
 import { FIXTURES_DIR, generateFixtures } from "@bandroom/fixtures";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FlacCodec } from "../decode/streams";
 import { createFlacCodec, createOpusCodec } from "../decode/wasm";
 import { applyMixerCommand } from "../mixer/apply";
@@ -208,6 +208,31 @@ describe("decoder worker + mixer", () => {
     expect(Math.abs(rig.peak(LAPS_PER_SEEK, "l", 60 * 48_000) - 60 * 48_000)).toBeLessThanOrEqual(
       1,
     );
+    rig.dispose();
+  });
+
+  it("drops mixer messages about an earlier song load", async () => {
+    const rig = new Rig();
+    const v = await fx.variant(mono48, "opus");
+    rig.load([[clip(v)]]); // load id 1
+    const position = vi.spyOn(rig.sched, "position");
+    const seek = vi.spyOn(rig.sched, "seek");
+    const retime = vi.spyOn(rig.sched, "retime");
+    // In flight from the song before (load 0): applied, a late playhead report would move the
+    // new song's decoding to the old position while the mixer waits at the start (WebKit).
+    rig.sched.fromMixer({ t: "pos", load: 0, frame: 4 * 48_000, lap: 0 });
+    rig.sched.fromMixer({ t: "seek", load: 0, frame: 4 * 48_000, lap: LAPS_PER_SEEK });
+    const retimeMsg = { load: 0, fromLap: 0, frame: 0, base: 0, loop: null, cache: false };
+    rig.sched.fromMixer({ t: "retime", ...retimeMsg });
+    expect(position).not.toHaveBeenCalled();
+    expect(seek).not.toHaveBeenCalled();
+    expect(retime).not.toHaveBeenCalled();
+    rig.sched.fromMixer({ t: "pos", load: 1, frame: 100, lap: 0 });
+    rig.sched.fromMixer({ t: "seek", load: 1, frame: 200, lap: LAPS_PER_SEEK });
+    rig.sched.fromMixer({ t: "retime", ...retimeMsg, load: 1 });
+    expect(position).toHaveBeenCalledWith(100, 0);
+    expect(seek).toHaveBeenCalledWith(200, LAPS_PER_SEEK);
+    expect(retime).toHaveBeenCalledTimes(1);
     rig.dispose();
   });
 

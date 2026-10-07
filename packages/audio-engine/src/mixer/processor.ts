@@ -26,7 +26,9 @@ class MixerProcessor extends AudioWorkletProcessor {
   private worker: MessagePort | null = null;
   private silent = new Float32Array(128);
   /** Playhead report to the decoder, reused (postMessage clones it). */
-  private pos = { t: "pos" as const, frame: 0, lap: 0 } satisfies ToDecoder;
+  private pos = { t: "pos" as const, load: 0, frame: 0, lap: 0 } satisfies ToDecoder;
+  /** The current song load (see `ToDecoder`). */
+  private load = 0;
 
   constructor() {
     super();
@@ -44,10 +46,13 @@ class MixerProcessor extends AudioWorkletProcessor {
       return;
     }
     applyMixerCommand(this.core, cmd);
-    if (cmd.t === "load") this.port.postMessage({ type: "loaded", id: cmd.id });
+    if (cmd.t === "load") {
+      this.load = cmd.id;
+      this.port.postMessage({ type: "loaded", id: cmd.id });
+    }
     // Seeks reach the decoder through the mixer, ordered with loop changes and position reports.
     if (cmd.t === "seek") {
-      const msg: ToDecoder = { t: "seek", frame: cmd.frame, lap: cmd.lap };
+      const msg: ToDecoder = { t: "seek", load: this.load, frame: cmd.frame, lap: cmd.lap };
       this.worker?.postMessage(msg);
     }
   }
@@ -55,7 +60,7 @@ class MixerProcessor extends AudioWorkletProcessor {
   private onEvent(e: MixerEvent) {
     if (e.type === "retime") {
       const { fromLap, frame, base, loop, cache } = e;
-      const msg: ToDecoder = { t: "retime", fromLap, frame, base, loop, cache };
+      const msg: ToDecoder = { t: "retime", load: this.load, fromLap, frame, base, loop, cache };
       this.worker?.postMessage(msg);
       return;
     }
@@ -64,6 +69,7 @@ class MixerProcessor extends AudioWorkletProcessor {
     if (e.type === "report") {
       this.pos.frame = e.frame;
       this.pos.lap = e.lap;
+      this.pos.load = this.load;
       this.worker?.postMessage(this.pos);
     }
   }
