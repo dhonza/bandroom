@@ -1,6 +1,7 @@
 import { autoTrackColor, uuidv7 } from "@bandroom/shared";
 import { and, asc, desc, eq, inArray, isNull, max } from "drizzle-orm";
 import type { Db } from "../db/connection";
+import { MEDIA_JOB_TYPES } from "./processing";
 import { assets, assetVariants, jobs, songs, tracks, trackVersions, users } from "../db/schema";
 import { assetProbe, type AssetRow } from "../media/assets";
 import type { Probe } from "../media/probe";
@@ -248,7 +249,7 @@ export function versionDetails(db: Db, version: TrackVersionRow): TrackListVersi
     const job = db
       .select({ progress: jobs.progress, payload: jobs.payload })
       .from(jobs)
-      .where(and(eq(jobs.type, "audio.ingest"), inArray(jobs.status, ["queued", "running"])))
+      .where(and(inArray(jobs.type, MEDIA_JOB_TYPES), inArray(jobs.status, ["queued", "running"])))
       .orderBy(desc(jobs.createdAt))
       .all()
       .find((j) => j.payload.includes(asset.id));

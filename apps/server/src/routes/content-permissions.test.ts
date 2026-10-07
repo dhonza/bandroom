@@ -29,6 +29,7 @@ import {
   setSongFollow,
   updateComment,
   createSong,
+  bounceSong,
   deleteSongTempo,
   getSongTempo,
   importSongTempoMidi,
@@ -77,6 +78,7 @@ import {
   findUserByLogin,
   createSongRow,
   setProjectGrantRow,
+  setSongGrantRow,
   updateProjectRow,
 } from "@bandroom/server-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -266,6 +268,14 @@ const ENDPOINTS: Endpoint[] = [
     body: { active: false },
   },
   { name: "revokeLink", contract: revokeLink, scope: "link" },
+  // Bounce (SPEC §5.5): stream on the song and song.create on the project. Allowed requests
+  // answer BOUNCE_INVALID for the dummy track.
+  {
+    name: "bounceSong",
+    contract: bounceSong,
+    scope: "song",
+    body: { title: "B", mix: { tracks: {} }, versions: { t: "v" } },
+  },
   { name: "deleteSong", contract: deleteSong, scope: "song" },
   { name: "deleteProject", contract: deleteProject, scope: "project" },
 ];
@@ -352,7 +362,10 @@ function expectedFor(role: ContentRole, e: Endpoint): "allowed" | "NOT_FOUND" | 
   if (role === "none") return "NOT_FOUND";
   const auth = e.contract.auth;
   if (!auth || !("capability" in auth)) throw new Error(`${e.name} is not scoped`);
-  return hasCapability(role, auth.capability) ? "allowed" : "FORBIDDEN";
+  // The member's project grant is also their song role here.
+  const project =
+    auth.projectCapability === undefined || hasCapability(role, auth.projectCapability);
+  return hasCapability(role, auth.capability) && project ? "allowed" : "FORBIDDEN";
 }
 
 describe("content permission matrix (project role via grant)", () => {
@@ -411,4 +424,37 @@ describe("download policy on project scope (review L8)", () => {
     );
     updateProjectRow(t.db, f.projectId, { downloadPolicy: "all" });
   });
+});
+
+describe("bounce: song role and project role (SPEC §5.5)", () => {
+  const body = { title: "B", mix: { tracks: {} }, versions: { t: "v" } };
+  const cases: [ContentRole, ContentRole, "allowed" | "FORBIDDEN" | "NOT_FOUND"][] = [
+    // [project grant, song grant, outcome]
+    ["editor", "viewer", "allowed"], // streams the song, creates songs in the project
+    ["manager", "viewer", "allowed"],
+    ["viewer", "editor", "FORBIDDEN"], // a song grant does not give song.create on the project
+    ["contributor", "manager", "FORBIDDEN"],
+    ["none", "editor", "FORBIDDEN"], // reduced view: sees the song, not the project
+    ["editor", "none", "NOT_FOUND"], // the song is hidden
+  ];
+  for (const [projectRole, songRole, want] of cases) {
+    it(`project ${projectRole} + song ${songRole} → ${want}`, async () => {
+      const owner = findUserByLogin(t.db, "owner");
+      if (!owner) throw new Error("owner missing");
+      const name = `b${projectRole}${songRole}`;
+      const user = await seedUser(t, name, "member");
+      const project = createProjectRow(t.db, { name: `B ${name}`, createdBy: owner.id });
+      const song = createSongRow(t.db, { projectId: project.id, title: "S", createdBy: owner.id });
+      setProjectGrantRow(t.db, project.id, user.id, projectRole, owner.id);
+      setSongGrantRow(t.db, song.id, user.id, songRole, owner.id);
+      const res = await call(
+        t,
+        bounceSong,
+        { params: { id: song.id }, body },
+        await loginAs(t, name),
+      );
+      const code = res.statusCode >= 400 ? ApiErrorSchema.parse(res.json()).code : "allowed";
+      expect(code).toBe(want === "allowed" ? "BOUNCE_INVALID" : want);
+    });
+  }
 });

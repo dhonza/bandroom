@@ -6,7 +6,7 @@ import type {
   SongSummary,
 } from "@bandroom/shared";
 import { PaletteColorSchema, uuidv7 } from "@bandroom/shared";
-import { and, eq, isNull, max } from "drizzle-orm";
+import { and, eq, gte, isNull, max, sql } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { songs, users } from "../db/schema";
 import { accessOf, type ProjectRow, type SongRow } from "./access";
@@ -48,7 +48,10 @@ export function toSong(
   };
 }
 
-/** New songs go to the end of the project's list. */
+/**
+ * New songs go to the end of the project's list, or right after `after` (a song of the same
+ * project; the songs behind it move down one place).
+ */
 export function createSongRow(
   db: Db,
   input: {
@@ -57,14 +60,25 @@ export function createSongRow(
     subtitle?: string;
     key?: string;
     createdBy: string | null;
+    after?: Pick<SongRow, "projectId" | "sortOrder">;
   },
   now: number = Date.now(),
 ): SongRow {
-  const last = db
-    .select({ m: max(songs.sortOrder) })
-    .from(songs)
-    .where(and(eq(songs.projectId, input.projectId), isNull(songs.deletedAt)))
-    .get();
+  let sortOrder: number;
+  if (input.after && input.after.projectId === input.projectId) {
+    sortOrder = input.after.sortOrder + 1;
+    db.update(songs)
+      .set({ sortOrder: sql`${songs.sortOrder} + 1` })
+      .where(and(eq(songs.projectId, input.projectId), gte(songs.sortOrder, sortOrder)))
+      .run();
+  } else {
+    const last = db
+      .select({ m: max(songs.sortOrder) })
+      .from(songs)
+      .where(and(eq(songs.projectId, input.projectId), isNull(songs.deletedAt)))
+      .get();
+    sortOrder = (last?.m ?? -1) + 1;
+  }
   const song = db
     .insert(songs)
     .values({
@@ -73,7 +87,7 @@ export function createSongRow(
       title: input.title,
       subtitle: input.subtitle ?? "",
       key: input.key ?? "",
-      sortOrder: (last?.m ?? -1) + 1,
+      sortOrder,
       createdBy: input.createdBy,
       createdAt: now,
       updatedAt: now,

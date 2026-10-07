@@ -98,7 +98,9 @@
     "SONG_LOCKED": "Píseň je zamčená, proto to nelze změnit. Odemknout ji může editor.",
     "FORBIDDEN_ITEMS": "Některé vybrané položky nesmíte měnit. Nic se nezměnilo.",
     "TRASH_PARENT_DELETED": "Nejdřív obnovte píseň: je stále v koši.",
-    "LOSSLESS_REMOVED": "Soubory této verze v plné kvalitě byly odstraněny; zbyl jen komprimovaný zvuk."
+    "LOSSLESS_REMOVED": "Soubory této verze v plné kvalitě byly odstraněny; zbyl jen komprimovaný zvuk.",
+    "BOUNCE_INVALID": "Některá stopa nebo verze mixu už v písni není nebo ještě není připravená. Načtěte stránku znovu a zkuste to znovu.",
+    "BOUNCE_SILENT": "Všechny stopy jsou ztlumené nebo potichu, takže není co uložit."
   },
   "footer": {
     "version": "Verze {{version}}"

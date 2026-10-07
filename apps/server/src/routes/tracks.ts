@@ -12,7 +12,9 @@ import {
   getAsset,
   getTrackRow,
   getTrackVersionRow,
+  getVariant,
   listSongTracks,
+  retryBounce,
   setAssetStatus,
   softDeleteTrack,
 } from "@bandroom/server-core";
@@ -86,13 +88,17 @@ export function registerTrackRoutes(app: FastifyInstance, ctx: AppContext): void
       throw new AppError("LOSSLESS_REMOVED", "Full-quality files were removed");
     db.transaction(() => {
       setAssetStatus(db, asset.id, "queued");
-      enqueueAudioIngest(db, {
-        assetId: asset.id,
-        projectId: access.project.id,
-        songId: access.song.id,
-        trackVersionId: version.id,
-        createdBy: user.id,
-      });
+      // A bounce whose render failed has no file yet: render it again (SPEC §5.5).
+      const rendered = getVariant(db, asset.id, "original") ?? getVariant(db, asset.id, "flac");
+      if (rendered || version.source !== "render" || !retryBounce(db, asset.id, user.id)) {
+        enqueueAudioIngest(db, {
+          assetId: asset.id,
+          projectId: access.project.id,
+          songId: access.song.id,
+          trackVersionId: version.id,
+          createdBy: user.id,
+        });
+      }
       audit(db, request, {
         action: "version.retried",
         projectId: access.project.id,

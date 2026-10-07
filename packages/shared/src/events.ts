@@ -41,6 +41,11 @@ export const EVENT_ACTIONS = [
   /** An editor locked or unlocked the song (SPEC §25.12). */
   "song.locked",
   "song.unlocked",
+  /**
+   * A user bounced a song's mix into a new song (SPEC §5.5; target: the new song; details:
+   * sourceSongId, versions, mix). The worker writes `version.rendered` when the render is attached.
+   */
+  "song.bounced",
   "songs.reordered",
   /** Restored from the Trash, or deleted permanently (SPEC §26.3; batch actions carry a batchId). */
   "song.restored",
@@ -69,6 +74,8 @@ export const EVENT_ACTIONS = [
   "version.deleted",
   "version.uploaded",
   "version.retried",
+  /** The worker attached a rendered file to its version (a bounce, SPEC §5.5). */
+  "version.rendered",
   /** Full-quality files removed (SPEC §26.4; details: batchId, files, bytes, copy). */
   "version.lossless_removed",
   "asset.downloaded",

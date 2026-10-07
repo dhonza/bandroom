@@ -266,6 +266,23 @@ export function canAddSongsTo(role: EffectiveRole): boolean {
   return hasCapability(role, "song.create") && hasCapability(role, "upload");
 }
 
+// --- Bounce (SPEC §5.5) ---------------------------------------------------------------------------
+
+/** The capability a bounce needs on the source song, and the one it needs on its project. */
+export const BOUNCE_SONG_CAPABILITY = "stream" satisfies Capability;
+export const BOUNCE_PROJECT_CAPABILITY = "song.create" satisfies Capability;
+
+/**
+ * Bouncing a song's mix into a new song of the same project (SPEC §5.5): `stream` on the song
+ * (its own role, song grants included) and `song.create` on the project (the project role).
+ */
+export function canBounce(songRole: EffectiveRole, projectRole: EffectiveRole): boolean {
+  return (
+    hasCapability(songRole, BOUNCE_SONG_CAPABILITY) &&
+    hasCapability(projectRole, BOUNCE_PROJECT_CAPABILITY)
+  );
+}
+
 // --- Song lock (SPEC §25.12) --------------------------------------------------------------------
 
 /**

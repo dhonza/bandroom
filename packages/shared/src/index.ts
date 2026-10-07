@@ -2,6 +2,7 @@ export * from "./api";
 export * from "./audio";
 export * from "./auth";
 export * from "./basePath";
+export * from "./bounce";
 export * from "./branding";
 export * from "./clientConfig";
 export * from "./colorScheme";

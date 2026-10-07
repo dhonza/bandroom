@@ -7,6 +7,7 @@ import {
   canPurgeContainer,
   canRestoreContainer,
   canAddSongsTo,
+  canBounce,
   canCopyContent,
   canMoveContent,
   canRemoveLossless,
@@ -383,6 +384,18 @@ describe("Trash and batch rights (SPEC §26.3, §26.6)", () => {
         canCopyContent(role),
         canAddSongsTo(role),
       ]).toEqual(want[role]);
+    }
+  });
+});
+
+describe("canBounce (SPEC §5.5)", () => {
+  it("needs stream on the song and song.create on the project", () => {
+    const all = [...CONTENT_ROLES, "admin"] as const;
+    for (const song of all) {
+      for (const project of all) {
+        const want = !["none"].includes(song) && ["editor", "manager", "admin"].includes(project);
+        expect(canBounce(song, project), `${song}/${project}`).toBe(want);
+      }
     }
   });
 });

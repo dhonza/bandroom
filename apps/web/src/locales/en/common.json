@@ -96,7 +96,9 @@
     "SONG_LOCKED": "The song is locked, so this cannot be changed. An editor can unlock it.",
     "FORBIDDEN_ITEMS": "You may not change some of the selected items. Nothing was changed.",
     "TRASH_PARENT_DELETED": "Restore the song first: it is still in the Trash.",
-    "LOSSLESS_REMOVED": "The full-quality files of this version were removed; only the compressed audio is left."
+    "LOSSLESS_REMOVED": "The full-quality files of this version were removed; only the compressed audio is left.",
+    "BOUNCE_INVALID": "A track or version of the mix is no longer in the song or not ready yet. Reload the page and try again.",
+    "BOUNCE_SILENT": "Every track is muted or silent, so there is nothing to bounce."
   },
   "footer": {
     "version": "Version {{version}}"

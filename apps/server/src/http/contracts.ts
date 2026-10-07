@@ -101,7 +101,7 @@ export function authorize(
     const params = request.params as Record<string, string | undefined>;
     const id = params[auth.param ?? "id"];
     if (!id) throw new AppError("NOT_FOUND", "Missing scope id");
-    return checkScope(db, user, auth.scope, id, auth.capability);
+    return checkScope(db, user, auth.scope, id, auth.capability, auth.projectCapability);
   }
   return null;
 }

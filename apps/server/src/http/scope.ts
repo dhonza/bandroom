@@ -89,8 +89,30 @@ export function downloadAllowed(access: SongAccess): boolean {
  * NOT_FOUND so their existence does not leak; visible scopes without the capability answer
  * FORBIDDEN. Viewing a project is also allowed in "reduced" visibility. `download` additionally
  * applies the effective download policy, on every scope (the project's own on project scope).
+ * `projectCapability` is also needed on the scope's project, with the project role (song grants
+ * do not count), e.g. `song.create` for a bounce (SPEC §5.5).
  */
 export function checkScope(
+  db: Db,
+  user: UserRow,
+  scope: ContentScope,
+  id: string,
+  capability: Capability,
+  projectCapability?: Capability,
+): ScopeAccess {
+  const access = checkOneScope(db, user, scope, id, capability);
+  if (projectCapability === undefined) return access;
+  const projectRole =
+    access.scope === "project"
+      ? access.role
+      : (resolveProjectAccess(db, user, access.project.id)?.role ?? "none");
+  if (!hasCapability(projectRole, projectCapability)) {
+    throw new AppError("FORBIDDEN", `Missing capability ${projectCapability} on the project`);
+  }
+  return access;
+}
+
+function checkOneScope(
   db: Db,
   user: UserRow,
   scope: ContentScope,

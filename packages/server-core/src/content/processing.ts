@@ -3,6 +3,9 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { assets, jobs, songs, tracks, trackVersions } from "../db/schema";
 
+/** Jobs that work on a track version's file: a bounce renders it before the ingest (SPEC §5.5). */
+export const MEDIA_JOB_TYPES = ["audio.ingest", "audio.bounce"];
+
 const EMPTY: Processing = { queued: 0, processing: 0, failed: 0, progress: null };
 
 function assetIdOf(payload: string): string | null {
@@ -40,7 +43,7 @@ export function processingBySong(db: Db, projectId?: string): Map<string, Proces
   const running = db
     .select({ payload: jobs.payload, progress: jobs.progress })
     .from(jobs)
-    .where(and(eq(jobs.status, "running"), eq(jobs.type, "audio.ingest")))
+    .where(and(eq(jobs.status, "running"), inArray(jobs.type, MEDIA_JOB_TYPES)))
     .all();
   const progressByAsset = new Map<string, number>();
   for (const j of running) {

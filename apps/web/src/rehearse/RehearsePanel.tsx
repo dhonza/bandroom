@@ -1,5 +1,6 @@
 import {
   dbToGain,
+  dimmedTrackIds,
   listTrackVersions,
   type Song,
   type Track,
@@ -54,7 +55,6 @@ import { CountInCountdown } from "./ClickControls";
 import { BarBeatText } from "../tempo/readout";
 import { touchMinLaneHeight } from "./headerTier";
 import { MixerTools } from "./MixerTools";
-import { dimmedTrackIds } from "./model";
 import { TrackStrip } from "./TrackStrip";
 import { Transport, TransportState } from "./Transport";
 

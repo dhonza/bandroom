@@ -1,6 +1,12 @@
 import { z } from "zod";
-import { GrantRowSchema, SongSchema, SongTitleSchema } from "../content";
-import { ContentRoleSchema, SongDownloadPolicySchema } from "../permissions/content";
+import { BounceRequestSchema } from "../bounce";
+import { GrantRowSchema, SongSchema, SongSummarySchema, SongTitleSchema } from "../content";
+import {
+  BOUNCE_PROJECT_CAPABILITY,
+  BOUNCE_SONG_CAPABILITY,
+  ContentRoleSchema,
+  SongDownloadPolicySchema,
+} from "../permissions/content";
 import { OkSchema } from "./auth";
 import { defineContract } from "./contract";
 
@@ -85,4 +91,23 @@ export const unlockSong = defineContract({
   params: IdParams,
   response: z.object({ song: SongSchema }),
   auth: { capability: "edit.any", scope: "song" },
+});
+
+/**
+ * Bounces the mix the user hears into a new song of the same project (SPEC §5.5): the song (after
+ * the source) and one track named after it are created at once, and the worker renders the file
+ * (`audio.bounce`) before the normal ingest. Reading only: a locked song can be bounced.
+ */
+export const bounceSong = defineContract({
+  method: "POST",
+  path: "/songs/:id/bounce",
+  params: IdParams,
+  body: BounceRequestSchema,
+  response: z.object({ song: SongSummarySchema, trackId: z.string(), versionId: z.string() }),
+  errors: ["BOUNCE_INVALID", "BOUNCE_SILENT", "QUOTA_EXCEEDED", "DISK_FULL"],
+  auth: {
+    capability: BOUNCE_SONG_CAPABILITY,
+    scope: "song",
+    projectCapability: BOUNCE_PROJECT_CAPABILITY,
+  },
 });

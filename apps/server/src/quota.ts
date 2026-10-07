@@ -1,8 +1,8 @@
 import {
   activeAdminNames,
   diskUsage,
-  getSetting,
-  getUsage,
+  quotaCheck,
+  userQuotaBytes,
   type UserRow,
 } from "@bandroom/server-core";
 import type { AppContext } from "./context";
@@ -10,13 +10,11 @@ import { AppError } from "./http/errors";
 
 /** Keep at least this much disk free after an upload (SPEC §5.1). */
 export const MIN_FREE_AFTER_UPLOAD = 2 * 1024 ** 3;
-/** Declared size × 1.1 accounts for derived variants (SPEC §15.1). */
-export const QUOTA_OVERHEAD = 1.1;
+export { QUOTA_OVERHEAD } from "@bandroom/server-core";
 
 /** The user's storage quota in bytes, or null when unlimited (SPEC §15.1). */
 export function effectiveQuota(ctx: Pick<AppContext, "db">, user: UserRow): number | null {
-  if (user.quotaBytes === -1) return null; // unlimited
-  return user.quotaBytes ?? getSetting(ctx.db, "defaultQuotaBytes");
+  return userQuotaBytes(ctx.db, user);
 }
 
 /** Quota (size × 1.1) and free-disk checks for content created without tus (SPEC §5.1, §15.1). */
@@ -25,11 +23,10 @@ export async function checkQuotaAndDisk(
   user: UserRow,
   size: number,
 ): Promise<void> {
-  const quota = effectiveQuota(ctx, user);
-  const used = getUsage(ctx.db, user.id);
-  if (quota !== null && used + size * QUOTA_OVERHEAD > quota) {
+  const quota = quotaCheck(ctx.db, user, size);
+  if (!quota.ok) {
     throw new AppError("QUOTA_EXCEEDED", "Quota exceeded", {
-      remainingBytes: Math.max(0, quota - used),
+      remainingBytes: quota.remainingBytes,
       admins: activeAdminNames(ctx.db).join(", "),
     });
   }

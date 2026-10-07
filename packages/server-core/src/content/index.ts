@@ -16,3 +16,4 @@ export * from "./processing";
 export * from "./trash";
 export * from "./lossless";
 export * from "./transfer";
+export * from "./bounce";

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
+  audioBounceHandler,
   audioIngestHandler,
   claimJob,
   blobGcHandler,
@@ -204,6 +205,7 @@ export async function runQueuedJobs(t: TestApp): Promise<string[]> {
   const storage = new LocalStorage(path.join(t.dataDir, "blobs"));
   const handlers = handlerRegistry([
     audioIngestHandler,
+    audioBounceHandler,
     imageIngestHandler,
     documentIngestHandler,
     blobGcHandler,
@@ -213,7 +215,7 @@ export async function runQueuedJobs(t: TestApp): Promise<string[]> {
     const job = claimJob(
       t.db,
       "test-worker",
-      ["audio.ingest", "image.ingest", "document.ingest", "blob.gc"],
+      ["audio.ingest", "audio.bounce", "image.ingest", "document.ingest", "blob.gc"],
       Date.now(),
     );
     if (!job) return statuses;

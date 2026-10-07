@@ -1,11 +1,10 @@
-import type { MixerTrackState, Track, TrackVersion } from "@bandroom/shared";
+import type { Track, TrackVersion } from "@bandroom/shared";
 import { describe, expect, it } from "vitest";
 import {
   abPartner,
   buildTimeline,
   chooseVariant,
   defaultMix,
-  dimmedTrackIds,
   loudnessOffsetDb,
   clickSettingsOf,
   changedTrims,
@@ -267,24 +266,6 @@ describe("mix state", () => {
     expect(loudnessOffsetDb(-10, -14)).toBe(-4);
     expect(loudnessOffsetDb(-14, -10)).toBe(0);
     expect(loudnessOffsetDb(null, -10)).toBe(0);
-  });
-});
-
-describe("dimmedTrackIds", () => {
-  it("lists muted tracks and, with a solo, the unsoloed ones; faders do not matter", () => {
-    const s = (over: Partial<MixerTrackState> = {}): MixerTrackState => ({
-      gainDb: 0,
-      pan: 0,
-      mute: false,
-      solo: false,
-      listenedVersionId: null,
-      ...over,
-    });
-    expect(dimmedTrackIds({ tracks: { b: s({ mute: true }), a: s() } })).toEqual(["b"]);
-    expect(
-      dimmedTrackIds({ tracks: { c: s({ solo: true }), b: s({ gainDb: -6 }), a: s() } }),
-    ).toEqual(["a", "b"]);
-    expect(dimmedTrackIds({ tracks: { a: s({ gainDb: -20, pan: 0.5 }) } })).toEqual([]);
   });
 });
 

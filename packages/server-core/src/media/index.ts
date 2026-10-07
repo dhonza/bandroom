@@ -11,5 +11,7 @@ export * from "./variants";
 export * from "./wav";
 export * from "./uploadSessions";
 export * from "./mixGraph";
+export * from "./bounce";
+export * from "./quota";
 export * from "./documentJobs";
 export * from "./ingestJobs";

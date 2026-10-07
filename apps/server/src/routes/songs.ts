@@ -1,6 +1,10 @@
 import {
+  createBounce,
   getUserById,
+  planBounce,
   projectImageHash,
+  resolveProjectAccess,
+  resolveSongAccess,
   removeSongGrantRow,
   setSongGrantRow,
   setSongLockRow,
@@ -8,9 +12,12 @@ import {
   softDeleteSong,
   songGrantRows,
   toSong,
+  toSongSummary,
   updateSongRow,
 } from "@bandroom/server-core";
 import {
+  bounceSong,
+  canBounce,
   deleteSong,
   getSong,
   listSongGrants,
@@ -26,7 +33,8 @@ import type { AppContext } from "../context";
 import { audit } from "../http/audit";
 import { registerContract } from "../http/contracts";
 import { AppError } from "../http/errors";
-import { notifyGranted } from "../notify";
+import { notifyGranted, notifyNewSong } from "../notify";
+import { checkQuotaAndDisk } from "../quota";
 
 export function registerSongRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { db } = ctx;
@@ -48,7 +56,47 @@ export function registerSongRoutes(app: FastifyInstance, ctx: AppContext): void 
     });
   };
 
-  registerContract(app, getSong, ({ access }) => ({ song: dto(access) }));
+  registerContract(app, getSong, ({ user, access }) => {
+    const projectRole = resolveProjectAccess(db, user, access.project.id)?.role ?? "none";
+    return { song: { ...dto(access), canBounce: canBounce(access.role, projectRole) } };
+  });
+
+  // Bounce (SPEC §5.5): the route's auth checks `stream` here and `song.create` on the project.
+  registerContract(app, bounceSong, async ({ body, user, access }, request) => {
+    const plan = planBounce(db, access.song.id, body);
+    if (!plan.ok) {
+      throw plan.reason === "silent"
+        ? new AppError("BOUNCE_SILENT", "Every track of the mix is silent")
+        : new AppError("BOUNCE_INVALID", "A track or version is not in the song or not ready");
+    }
+    await checkQuotaAndDisk(ctx, user, plan.estimateBytes);
+    const created = createBounce(db, {
+      source: access.song,
+      title: body.title,
+      userId: user.id,
+      inputs: plan.inputs,
+      request: body,
+      event: {
+        sessionId: request.session?.id ?? null,
+        ip: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      },
+    });
+    const { song } = created;
+    notifyNewSong(ctx, { actor: user, project: access.project, song });
+    ctx.hub.publish({
+      type: "song.created",
+      projectId: song.projectId,
+      songId: song.id,
+      data: { songId: song.id, trackVersionId: created.version.id },
+    });
+    const role = resolveSongAccess(db, user, song.id)?.role ?? access.role;
+    return {
+      song: toSongSummary(song, role),
+      trackId: created.track.id,
+      versionId: created.version.id,
+    };
+  });
 
   // Song lock (SPEC §25.12): idempotent; an event and SSE only on a real change.
   for (const [contract, locked] of [

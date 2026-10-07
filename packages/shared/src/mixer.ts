@@ -63,3 +63,18 @@ export const MixerSnapshotSchema = z.object({
   createdAt: z.number(),
 });
 export type MixerSnapshot = z.infer<typeof MixerSnapshotSchema>;
+
+/**
+ * Tracks the mix leaves silent (SPEC §6.6): muted, or not soloed while another track is. The
+ * engine applies the same rule to its tracks, the timeline draws these lanes faintly, and the
+ * bounce leaves them out (SPEC §5.5). Sorted, so it works as a cheap change key (fader moves do
+ * not change it).
+ */
+export function dimmedTrackIds(mix: Pick<MixerState, "tracks">): string[] {
+  const tracks = Object.entries(mix.tracks);
+  const anySolo = tracks.some(([, s]) => s.solo);
+  return tracks
+    .filter(([, s]) => s.mute || (anySolo && !s.solo))
+    .map(([id]) => id)
+    .sort();
+}

@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import {
+  audioBounceHandler,
   audioIngestHandler,
   blobGcHandler,
   claimJob,
@@ -28,6 +29,7 @@ const IDLE_POLL_MS = 1000;
 const HEARTBEAT_MS = 30_000;
 const HANDLERS = handlerRegistry([
   audioIngestHandler,
+  audioBounceHandler,
   imageIngestHandler,
   documentIngestHandler,
   blobGcHandler,

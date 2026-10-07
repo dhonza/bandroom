@@ -53,6 +53,11 @@ export type RouteAuth =
        * without this.
        */
       readonly lockFields?: readonly string[];
+      /**
+       * A capability also needed on the scope's project, with the project role (song grants do
+       * not count): e.g. a bounce reads the song and creates a song in its project (SPEC §5.5).
+       */
+      readonly projectCapability?: Capability;
     };
 
 /**

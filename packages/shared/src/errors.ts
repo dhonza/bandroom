@@ -44,6 +44,8 @@ export const ERROR_CODES = [
   "FORBIDDEN_ITEMS",
   "TRASH_PARENT_DELETED",
   "LOSSLESS_REMOVED",
+  "BOUNCE_INVALID",
+  "BOUNCE_SILENT",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -112,6 +114,13 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
   TRASH_PARENT_DELETED: 409,
   /** The version's full-quality files were removed (SPEC §26.4): no FLAC, WAV or original. */
   LOSSLESS_REMOVED: 410,
+  /**
+   * A bounce names a track or version that is not in the song, or a version that is not ready
+   * (SPEC §5.5).
+   */
+  BOUNCE_INVALID: 400,
+  /** Every track of the bounce is muted, silenced by a solo or at the fader bottom (SPEC §5.5). */
+  BOUNCE_SILENT: 400,
 };
 
 export const FieldErrorSchema = z.object({

@@ -213,19 +213,6 @@ export function toggleMyInstrument(mix: MixerState, ids: readonly string[]): Mix
  * Loudness match for A/B (SPEC §6.9): the louder version is turned down to the quieter one's
  * integrated loudness; nothing is boosted.
  */
-/**
- * Tracks drawn faintly on the timeline: muted, or not soloed while another track is. Sorted, so
- * it works as a cheap change key (fader moves do not change it).
- */
-export function dimmedTrackIds(mix: MixerState): string[] {
-  const tracks = Object.entries(mix.tracks);
-  const anySolo = tracks.some(([, s]) => s.solo);
-  return tracks
-    .filter(([, s]) => s.mute || (anySolo && !s.solo))
-    .map(([id]) => id)
-    .sort();
-}
-
 export function loudnessOffsetDb(playing: number | null, other: number | null): number {
   if (playing === null || other === null) return 0;
   return Math.min(0, other - playing);

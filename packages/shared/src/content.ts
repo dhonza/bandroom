@@ -117,6 +117,11 @@ export const SongSchema = SongSummarySchema.extend({
   locked: SongLockSchema.nullable(),
   downloadPolicy: SongDownloadPolicySchema,
   createdAt: z.number(),
+  /**
+   * Whether the user may bounce this song's mix into a new song (SPEC §5.5: `stream` here and
+   * `song.create` on the project, {@link canBounce}). Absent for link visitors.
+   */
+  canBounce: z.boolean().optional(),
   project: z.object({
     id: z.string(),
     name: z.string(),
