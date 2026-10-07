@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { makeTempDir } from "../testing/tempDir";
 import { measureLoudness } from "./analysis";
 import { mixChannels, mixdownFilter, mixGain, panLaw, renderMix, type MixInput } from "./mixGraph";
+import { probeAudio } from "./probe";
 import { DEFAULT_TOOLS, ffmpegArgs, runTool } from "./tools";
 
 let tmp: ReturnType<typeof makeTempDir>;
@@ -19,10 +20,10 @@ afterAll(() => {
 });
 
 /** A fresh temp dir per render (renderMix writes fixed file names). */
-async function render(inputs: MixInput[]) {
+async function render(inputs: MixInput[], codec?: "pcm_f32le" | "pcm_s24le") {
   const dir = `${tmp.dir}/r${run++}`;
   await fs.mkdir(dir, { recursive: true });
-  return renderMix({ tools: DEFAULT_TOOLS, tmpDir: dir }, inputs);
+  return renderMix({ tools: DEFAULT_TOOLS, tmpDir: dir, ...(codec && { codec }) }, inputs);
 }
 
 /** Interleaved stereo float samples of a file. */
@@ -193,5 +194,44 @@ describe("renderMix (SPEC §5.5)", () => {
     ]);
     expect(r.limited).toBe(true);
     expect(r.loudness.truePeakDbtp ?? 0).toBeLessThanOrEqual(-0.9);
+  });
+
+  it("keeps the timing and length when the limiter runs", { timeout: 120_000 }, async () => {
+    // A 0.9 impulse is above −1 dBTP; at 1 s it must stay exactly at 1.5 s.
+    const r = await render([
+      input({
+        path: fixture("imp_48000_s16_mono"),
+        channels: 1,
+        law: "stereo",
+        offsetSamples: 48_000,
+      }),
+    ]);
+    expect(r.limited).toBe(true);
+    const pcm = await decodeStereo(r.path);
+    expect(pcm.length / 2).toBe(7 * 48_000);
+    let best = 0;
+    let at = 0;
+    for (let i = 0; i < pcm.length / 2; i++) {
+      const a = Math.abs(pcm[2 * i] ?? 0);
+      if (a > best) {
+        best = a;
+        at = i;
+      }
+    }
+    expect([1.5 * 48_000, 4 * 48_000, 6.5 * 48_000]).toContain(at);
+    expect(Math.abs(pcm[2 * 1.5 * 48_000] ?? 0)).toBeGreaterThan(0.8);
+  });
+
+  it("writes 24-bit PCM when asked, with or without the limiter", { timeout: 120_000 }, async () => {
+    const codecOf = async (file: string) => (await probeAudio(file)).bitDepth;
+    const quiet = await render([input({ path: TONE_FILE(), gain: mixGain(-12, 0) })], "pcm_s24le");
+    expect(quiet.limited).toBe(false);
+    expect(await codecOf(quiet.path)).toBe(24);
+    const loud = await render(
+      [input({ path: TONE_FILE(), gain: mixGain(6, 0) }), input({ path: TONE_FILE(), gain: 2 })],
+      "pcm_s24le",
+    );
+    expect(loud.limited).toBe(true);
+    expect(await codecOf(loud.path)).toBe(24);
   });
 });

@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { dbToGain, panGains } from "@bandroom/shared";
 import { measureLoudness, type Loudness } from "./analysis";
@@ -77,7 +78,7 @@ export function mixdownFilter(inputs: readonly MixInput[], resample: string): st
 }
 
 export interface RenderedMix {
-  /** 48 kHz stereo float WAV in `tmpDir`. */
+  /** 48 kHz stereo WAV in `tmpDir` (float, or the requested `codec`). */
   path: string;
   /** Whether the limiter ran (the sum's true peak was above −1 dBTP). */
   limited: boolean;
@@ -85,15 +86,23 @@ export interface RenderedMix {
 }
 
 /**
- * Renders the inputs into one 48 kHz stereo WAV (one streaming ffmpeg run), then applies a
- * limiter only when the sum clips (true peak above −1 dBTP).
+ * Renders the inputs into one 48 kHz stereo WAV (one streaming ffmpeg run, in float so nothing
+ * clips on the way), then applies a limiter only when the sum clips (true peak above −1 dBTP).
+ * `codec` is the sample format of the result: a bounce asks for 24-bit integer PCM, which the
+ * ingest stores as verified-lossless FLAC (a float WAV would be kept as a second full copy).
  */
 export async function renderMix(
-  ctx: { tools: ToolPaths; tmpDir: string; signal?: AbortSignal },
+  ctx: {
+    tools: ToolPaths;
+    tmpDir: string;
+    signal?: AbortSignal;
+    codec?: "pcm_f32le" | "pcm_s24le";
+  },
   inputs: readonly MixInput[],
 ): Promise<RenderedMix> {
   if (inputs.length === 0) throw new Error("renderMix needs at least one input");
   const { tools, signal } = ctx;
+  const codec = ctx.codec ?? "pcm_f32le";
   const wav = path.join(ctx.tmpDir, "mix.wav");
   await runTool(
     tools.ffmpeg,
@@ -112,22 +121,29 @@ export async function renderMix(
     { signal },
   );
   const loudness = await measureLoudness(wav, tools, signal);
-  if (loudness.truePeakDbtp === null || loudness.truePeakDbtp <= MIX_TRUE_PEAK_LIMIT_DB)
-    return { path: wav, limited: false, loudness };
+  if (loudness.truePeakDbtp === null || loudness.truePeakDbtp <= MIX_TRUE_PEAK_LIMIT_DB) {
+    if (codec === "pcm_f32le") return { path: wav, limited: false, loudness };
+    const out = path.join(ctx.tmpDir, "mix-out.wav");
+    await runTool(tools.ffmpeg, ffmpegArgs("-i", wav, "-c:a", codec, out), { signal });
+    await fs.rm(wav, { force: true });
+    return { path: out, limited: false, loudness };
+  }
   const out = path.join(ctx.tmpDir, "mix-limited.wav");
   // alimiter works on sample peaks: aim at −1.5 dBFS to keep inter-sample peaks under −1 dBTP.
+  // `latency=1` removes its lookahead delay, so the limited mix keeps the offsets sample-exact.
   await runTool(
     tools.ffmpeg,
     ffmpegArgs(
       "-i",
       wav,
       "-af",
-      "alimiter=limit=0.841:level=false:attack=5:release=50",
+      "alimiter=limit=0.841:level=false:attack=5:release=50:latency=1",
       "-c:a",
-      "pcm_f32le",
+      codec,
       out,
     ),
     { signal },
   );
+  if (codec !== "pcm_f32le") await fs.rm(wav, { force: true });
   return { path: out, limited: true, loudness: await measureLoudness(out, tools, signal) };
 }
