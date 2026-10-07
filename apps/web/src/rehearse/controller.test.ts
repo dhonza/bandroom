@@ -192,6 +192,9 @@ let song = 0;
 const nextSong = () => `song-${++song}`;
 
 beforeEach(() => {
+  // Each test starts with no song in the mini-player (a paused one would keep the engine).
+  controller.stopPlayer();
+  useRehearse.setState({ previewSongId: null });
   const e = fake.FakeEngine.instance;
   if (e) {
     e.loads = [];
@@ -497,18 +500,29 @@ describe("song lifecycle and queue (SPEC §6.10)", () => {
     detach();
   });
 
-  it("a song opened on its page while nothing plays joins the queue that holds it", async () => {
+  it("a song paused in the mini-player keeps the engine; the opened page shows a preview", async () => {
     const { loader } = loaderFor();
     controller.startQueue([entry("f1"), entry("f2")], source, loader);
     await vi.waitFor(() => {
       expect(engine().state).toBe("playing");
     });
     controller.pause();
-    await openSong("f2", [track("f2-t")], null, {}, "", { ...info("f2"), projectId: "p" });
-    expect(useRehearse.getState().songId).toBe("f2");
+    engine().loads = [];
+    const detach = controller.attachPage("f3");
+    await openSong("f3", [track("f3-t")], null, {}, "", { ...info("f3"), projectId: "p" });
+    expect(engine().loads).toHaveLength(0);
+    expect(useRehearse.getState().songId).toBe("f1");
+    expect(useRehearse.getState().open).toBe(true);
+    expect(useRehearse.getState().previewSongId).toBe("f3");
+    expect(controller.pageState().songId).toBe("f3");
+    // Play on the page switches the engine to it.
+    controller.togglePagePlay();
+    await vi.waitFor(() => {
+      expect(useRehearse.getState().songId).toBe("f3");
+    });
     expect(useRehearse.getState().previewSongId).toBeNull();
-    expect(useRehearse.getState().queue?.index).toBe(1);
-    expect(useRehearse.getState().queue?.entries).toHaveLength(2);
+    expect(engine().loads).toHaveLength(1);
+    detach();
   });
 });
 

@@ -7,7 +7,8 @@ import { isMobile, loginAsNewUser, uniqueUsername } from "./helpers";
  * The engine queue and the mini-player (SPEC §6.10, §27.4): "Play all" moves on to the next song
  * at the end, the song keeps playing across in-app navigation, the song page reattaches without a
  * reload, deleting the playing song stops it, a song row's play button starts the queue there,
- * another song's page does not stop what plays until its Play is pressed, and a project link's
+ * another song's page does not take over what plays (or is paused in the mini-player) until its
+ * Play is pressed, and a project link's
  * song rows and "Play all" use the same queue.
  */
 
@@ -232,6 +233,24 @@ test("A song row plays from there; another song's page leaves it playing until P
   const before = d?.position ?? 0;
   await expect.poll(async () => (await debug(page))?.position ?? 0).toBeGreaterThan(before);
   if (isMobile(testInfo)) await noHorizontalOverflow(page);
+
+  // Paused in the mini-player, the long song still keeps the engine: opening the other song's
+  // page again shows a preview (owner decision 2026-10-07).
+  await page.goBack();
+  await expect(rows.first()).toBeVisible();
+  await mini.getByTestId("mini-play").click();
+  await expect(mini.getByTestId("mini-play")).toHaveAccessibleName("Play");
+  await expect.poll(async () => (await debug(page))?.status).toBe("stopped");
+  await rows.filter({ hasText: short.title }).getByTestId("song-row-link").click();
+  await expect(page.getByTestId("song-title")).toHaveText(short.title);
+  await expect(overview).toHaveAttribute("aria-valuemax", "6", { timeout: 30_000 });
+  await expect(mini.getByTestId("mini-title")).toHaveText(long.title);
+  await expect(mini.getByTestId("mini-play")).toHaveAccessibleName("Play");
+  d = await debug(page);
+  expect(d?.songId).toBe(long.songId);
+  expect(d?.open).toBe(true);
+  expect(d?.previewSongId).toBe(short.songId);
+  expect(d?.status).toBe("stopped");
 
   // Play on this page switches the engine to its song and ends the queue.
   await page.getByTestId("rehearse-play").click();

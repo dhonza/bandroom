@@ -401,8 +401,8 @@ function songView(
 /**
  * The song page shows a song (on mount and whenever its tracks change). Usually it loads (or
  * refreshes) the song in the engine. While another song plays (or is about to), the page shows
- * the song without the engine (SPEC §6.10, a preview) until Play, the end of what plays, or ✕ in
- * the mini-player.
+ * the song without the engine (SPEC §6.10, a preview), also while that song is paused in the
+ * mini-player, until Play, the end of what plays, or ✕ in the mini-player.
  */
 export async function openSong(...args: OpenArgs): Promise<void> {
   const songId = args[0];
@@ -414,10 +414,14 @@ export async function openSong(...args: OpenArgs): Promise<void> {
   await loadIntoEngine(args, takePreview(songId));
 }
 
-/** Another song plays (or is about to): a page opening `songId` shows a preview. */
+/**
+ * Another song is loaded in the engine (playing, about to, or paused in the mini-player): a page
+ * opening `songId` shows a preview. The loaded song keeps the engine until Play on the page
+ * (SPEC §6.10, owner decision 2026-10-07).
+ */
 function playsOtherSong(songId: string): boolean {
   const s = useRehearse.getState();
-  return s.open && s.songId !== songId && (isPlaying() || pendingPlay !== null);
+  return s.open && s.songId !== songId;
 }
 
 /** Builds (or refreshes) the preview of the page's song; the engine is not touched. */
