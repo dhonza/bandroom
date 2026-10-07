@@ -36,7 +36,12 @@ export function MarkerToolbar({ song }: { song: Song }) {
             >
               {t("markers.addMarker")}
             </Button>
-            <Tooltip label={t("markers.addSectionHint")} disabled={locked || isLoopable(selection)}>
+            <Tooltip
+              label={t("markers.addSectionHint")}
+              disabled={locked || isLoopable(selection)}
+              multiline
+              maw={260}
+            >
               <Button
                 {...BTN}
                 variant="default"
