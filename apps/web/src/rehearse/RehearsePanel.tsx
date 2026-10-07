@@ -37,18 +37,20 @@ import {
   attachPage,
   dismissLockHint,
   durationSec,
-  isPlaying,
   openSong,
+  pageIsPlaying,
+  pageState,
   positionSec,
   seekSec,
   selectTrack,
   songInfoOf,
   setLoopSec,
   setTrack,
-  togglePlay,
   toggleAB,
   toggleClick,
   toggleCountIn,
+  togglePagePlay,
+  usePlayerView,
   useRehearse,
 } from "./controller";
 import { CountInCountdown } from "./ClickControls";
@@ -116,12 +118,13 @@ export function RehearsePanel({
   }, [saved, versionsReady, tracks]);
 
   const ready = !mixerQuery.isPending && versionsReady;
+  // Leaving the page keeps a playing song (the mini-player takes over, SPEC §6.10). Attached
+  // before the song opens: while another song plays, the page shows this one as a preview.
+  useEffect(() => attachPage(song.id), [song.id]);
   useEffect(() => {
     if (!ready) return;
     void openSong(song.id, tracks, saved, listened, instrumentTag, songInfoOf(song));
   }, [ready, song, tracks, saved, listened, instrumentTag]);
-  // Leaving the page keeps a playing song (the mini-player takes over, SPEC §6.10).
-  useEffect(() => attachPage(song.id), [song.id]);
   useFollowQueue(song.id, songPath);
 
   useEffect(
@@ -132,20 +135,22 @@ export function RehearsePanel({
         duration: durationSec,
         seek: seekSec,
         setLoop: setLoopSec,
-        togglePlay,
-        isPlaying,
+        togglePlay: togglePagePlay,
+        isPlaying: pageIsPlaying,
       }),
     [],
   );
   useRehearseKeys(song);
 
-  const playing = useRehearse((s) => s.tracks);
+  // The engine's state, or the preview while another song plays on (SPEC §6.10).
+  const shownSongId = usePlayerView((s) => s.songId);
+  const playing = usePlayerView((s) => s.tracks);
   // Only mute/solo matter to the lanes: a fader move must not rebuild them (and redraw the
   // waveforms).
-  const dimmedKey = useRehearse((s) => dimmedTrackIds(s.mix).join("\n"));
-  const status = useRehearse((s) => s.status);
-  const lengthSec = useRehearse((s) => s.lengthSec);
-  const lockHint = useRehearse((s) => s.lockHint);
+  const dimmedKey = usePlayerView((s) => dimmedTrackIds(s.mix).join("\n"));
+  const status = usePlayerView((s) => s.status);
+  const lengthSec = usePlayerView((s) => s.lengthSec);
+  const lockHint = usePlayerView((s) => s.lockHint);
   // Bounce (SPEC §5.5): offered when the user may create songs in the project.
   const [bounceOpen, setBounceOpen] = useState(false);
   const onBounce = song.canBounce
@@ -189,7 +194,8 @@ export function RehearsePanel({
     trackLaneHeight,
   );
 
-  if (!ready) return <Loader size="sm" />;
+  // Another song's state (before this one opens, or the queue moving the page on).
+  if (!ready || shownSongId !== song.id) return <Loader size="sm" />;
 
   const snapshots = mixerQuery.data?.snapshots ?? [];
   const canSetDefaults = song.access.capabilities.includes("edit.any");
@@ -311,7 +317,7 @@ function useFollowQueue(songId: string, songPath?: (songId: string) => string) {
 function useRehearseKeys(song: Song) {
   const qc = useQueryClient();
   const onAB = useCallback(() => {
-    const s = useRehearse.getState();
+    const s = pageState();
     const trackId =
       s.selectedTrackId && s.ab[s.selectedTrackId] ? s.selectedTrackId : Object.keys(s.ab).at(-1);
     if (!trackId) return;
@@ -321,7 +327,7 @@ function useRehearseKeys(song: Song) {
     toggleAB(trackId, versions);
   }, [qc, song.id]);
   const onTrack = useCallback((index: number, op: "select" | "mute" | "solo") => {
-    const s = useRehearse.getState();
+    const s = pageState();
     const p = s.tracks[index];
     if (!p) return;
     selectTrack(index);

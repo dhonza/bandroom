@@ -36,8 +36,9 @@ import {
   hasMyInstrument,
   muteMyInstrument,
   resetMix,
+  pageState,
   setLoudnessMatch,
-  useRehearse,
+  usePlayerView,
 } from "./controller";
 import { isLinkMode } from "../links/linkMode";
 
@@ -61,8 +62,8 @@ export function MixerTools({
   const { t } = useTranslation();
   const qc = useQueryClient();
   const apiError = useApiError();
-  const loudnessMatch = useRehearse((s) => s.loudnessMatch);
-  const anyAB = useRehearse((s) => Object.keys(s.ab).length > 0);
+  const loudnessMatch = usePlayerView((s) => s.loudnessMatch);
+  const anyAB = usePlayerView((s) => Object.keys(s.ab).length > 0);
   const [name, setName] = useState("");
   const [saveOpen, setSaveOpen] = useState(false);
   const refresh = () => {
@@ -73,7 +74,7 @@ export function MixerTools({
     mutationFn: () =>
       api(createMixerSnapshot, {
         params: { id: songId },
-        body: { name: name.trim(), state: useRehearse.getState().mix },
+        body: { name: name.trim(), state: pageState().mix },
       }),
     onSuccess: () => {
       setName("");
@@ -91,7 +92,7 @@ export function MixerTools({
   const saveDefaults = useMutation({
     mutationFn: () =>
       Promise.all(
-        Object.entries(useRehearse.getState().mix.tracks).map(([id, s]) =>
+        Object.entries(pageState().mix.tracks).map(([id, s]) =>
           api(updateTrack, {
             params: { id },
             body: {
@@ -247,13 +248,11 @@ export function MixerTools({
           checked={loudnessMatch}
           onChange={(e) => {
             const byTrack = Object.fromEntries(
-              useRehearse
-                .getState()
-                .tracks.map((p) => [
-                  p.track.id,
-                  qc.getQueryData<{ versions: never[] }>(songKeys.versions(songId, p.track.id))
-                    ?.versions ?? [],
-                ]),
+              pageState().tracks.map((p) => [
+                p.track.id,
+                qc.getQueryData<{ versions: never[] }>(songKeys.versions(songId, p.track.id))
+                  ?.versions ?? [],
+              ]),
             );
             setLoudnessMatch(e.currentTarget.checked, byTrack);
           }}

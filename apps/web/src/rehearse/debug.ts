@@ -9,6 +9,7 @@ export function debugSnapshot(engine: Engine | null, s: RehearseState, hasTempo:
   return {
     songId: s.songId,
     open: s.open,
+    previewSongId: s.previewSongId,
     queue: s.queue ? { songIds: s.queue.entries.map((e) => e.songId), index: s.queue.index } : null,
     status: s.status,
     position: engine ? engine.getPositionFrames() : 0,

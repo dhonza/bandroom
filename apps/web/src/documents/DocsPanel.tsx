@@ -23,7 +23,7 @@ import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
 import { setPanelOpen, useCommentsUi } from "../comments/store";
 import { activePlayer, goNext, goPrev, playPause } from "../markers/store";
-import { useRehearse } from "../rehearse/controller";
+import { usePlayerView } from "../rehearse/controller";
 import { DESKTOP_QUERY } from "../shell/mediaQueries";
 import { DocumentList, DocumentToolbar } from "./DocumentList";
 import { DocumentPane } from "./DocumentPane";
@@ -199,7 +199,7 @@ export function DocsPanel({ song }: { song: Song }) {
  */
 function SheetTransport() {
   const { t } = useTranslation();
-  const playing = useRehearse((s) => s.status === "playing" || s.status === "buffering");
+  const playing = usePlayerView((s) => s.status === "playing" || s.status === "buffering");
   if (!activePlayer()) return null;
   return (
     <Group gap={4} wrap="nowrap" data-testid="docs-sheet-transport">

@@ -39,7 +39,7 @@ import {
 } from "./ClickControls";
 import { LoopButton, SectionReadout } from "../markers/SongMarkers";
 import { goNext, goPrev, playPause, setHelpOpen, setSnap, useTimelineUi } from "../markers/store";
-import { positionSec, retryAudio, seekSec, setPrefs, skip, useRehearse } from "./controller";
+import { positionSec, retryAudio, seekSec, setPrefs, skip, usePlayerView } from "./controller";
 import type { QualityPref } from "./model";
 
 const QUALITIES: QualityPref[] = ["auto", "lossless", "high", "low"];
@@ -90,8 +90,8 @@ export function PositionText({
 /** Loading/struggling badges (shown next to the readout). */
 export function TransportState() {
   const { t } = useTranslation();
-  const status = useRehearse((s) => s.status);
-  const struggling = useRehearse((s) => s.struggling);
+  const status = usePlayerView((s) => s.status);
+  const struggling = usePlayerView((s) => s.struggling);
   return (
     <Group gap={6} wrap="nowrap">
       {(status === "loading" || status === "buffering") && <Loader size="xs" />}
@@ -132,14 +132,14 @@ export function Transport({
   onBounce?: (() => void) | undefined;
 }) {
   const { t } = useTranslation();
-  const status = useRehearse((s) => s.status);
-  const quality = useRehearse((s) => s.quality);
-  const prefs = useRehearse((s) => s.prefs);
-  const fallback = useRehearse(
+  const status = usePlayerView((s) => s.status);
+  const quality = usePlayerView((s) => s.quality);
+  const prefs = usePlayerView((s) => s.prefs);
+  const fallback = usePlayerView(
     (s) => s.quality === "lossless" && s.tracks.some((p) => p.chosen.quality !== "lossless"),
   );
   const playing = status === "playing" || status === "buffering";
-  const duration = useRehearse((s) => s.lengthSec);
+  const duration = usePlayerView((s) => s.lengthSec);
 
   const snap = useTimelineUi((s) => s.snap);
   const hasTempo = useTempoUi((s) => s.grid !== null);

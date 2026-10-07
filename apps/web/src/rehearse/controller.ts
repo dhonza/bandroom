@@ -12,6 +12,7 @@ import {
 import workerUrl from "@bandroom/audio-engine/worker?worker&url";
 import workletUrl from "@bandroom/audio-engine/worklet?worker&url";
 import {
+  compileTempo,
   putSongMixer,
   type ClickSettings,
   type MixerState,
@@ -21,7 +22,7 @@ import {
   type Track,
   type TrackVersion,
 } from "@bandroom/shared";
-import { create } from "zustand";
+import { create, useStore } from "zustand";
 import { api } from "../api/client";
 import { blobUrl } from "../lib/media";
 import {
@@ -108,6 +109,11 @@ export interface RehearseState {
   open: boolean;
   /** The play queue (SPEC §6.10); a song opened on its page is a queue of its own. */
   queue: PlayQueue | null;
+  /**
+   * The song page shows this song without the engine while another song plays on (SPEC §6.10):
+   * its Player reads {@link usePreview} until Play switches the engine to it.
+   */
+  previewSongId: string | null;
   status: EngineState;
   mix: MixerState;
   tracks: PlayableTrack[];
@@ -130,11 +136,12 @@ export interface RehearseState {
   selectedTrackId: string | null;
 }
 
-export const useRehearse = create<RehearseState>(() => ({
+const initialState = (): RehearseState => ({
   songId: null,
   info: null,
   open: false,
   queue: null,
+  previewSongId: null,
   status: "idle",
   mix: { tracks: {} },
   tracks: [],
@@ -149,14 +156,51 @@ export const useRehearse = create<RehearseState>(() => ({
   ended: false,
   lengthSec: 0,
   selectedTrackId: null,
-}));
+});
+
+/** The engine's song: what plays (or is paused) and what the mini-player shows. */
+export const useRehearse = create<RehearseState>(initialState);
+
+/**
+ * The song page's song while another song plays on (SPEC §6.10): the same shape as the engine's
+ * state, built from the same data, but nothing is loaded; Play on the page moves it into the
+ * engine.
+ */
+export const usePreview = create<RehearseState>(() => ({ ...initialState(), status: "stopped" }));
+
+type SongStore = typeof useRehearse;
+
+/** The store the song page's Player shows: the preview while another song plays on. */
+function view(): SongStore {
+  return useRehearse.getState().previewSongId !== null ? usePreview : useRehearse;
+}
+
+function previewing(): boolean {
+  return useRehearse.getState().previewSongId !== null;
+}
+
+/** The engine when it holds the page's song (null while the page shows a preview). */
+function pageEngine(): Engine | null {
+  return previewing() ? null : engine;
+}
+
+/** The state the song page's Player shows (engine or preview), for non-React code. */
+export function pageState(): RehearseState {
+  return view().getState();
+}
+
+/** Selects from the state the song page's Player shows (engine or preview). */
+export function usePlayerView<T>(selector: (s: RehearseState) => T): T {
+  const preview = useRehearse((s) => s.previewSongId !== null);
+  return useStore(preview ? usePreview : useRehearse, selector);
+}
 
 let engine: Engine | null = null;
 let wake: WakeLockController | null = null;
 let loadKey = "";
 /** Play once the loading song is in: after a tap (with the count-in) or the queue (without). */
 let pendingPlay: "countIn" | "plain" | null = null;
-let saveTimer: ReturnType<typeof setTimeout> | null = null;
+const saveTimers = new Map<SongStore, ReturnType<typeof setTimeout>>();
 let struggleTimer: ReturnType<typeof setTimeout> | null = null;
 let allTracks: Track[] = [];
 let userTag = "";
@@ -169,6 +213,34 @@ let attachedSongId: string | null = null;
 let queueLoader: QueueLoader | null = null;
 /** Bumped by every queue load: a superseded load does not touch the engine. */
 let queueLoad = 0;
+/** The song page's last `openSong` (SPEC §6.10: loaded on Play while it shows a preview). */
+let pageArgs: OpenArgs | null = null;
+/** The preview's tracks, instrument tag, start position and loop (applied when it loads). */
+let previewTracks: Track[] = [];
+let previewTag = "";
+let previewPos = 0;
+let previewLoop: { start: number; end: number } | null = null;
+/**
+ * The engine song's tempo grid, kept while the page shows another song's tempo (a preview): the
+ * click and count-in follow the song that plays.
+ */
+let engineTempo: { songId: string; grid: TempoGrid | null } | null = null;
+
+type OpenArgs = [
+  songId: string,
+  tracks: Track[],
+  saved: MixerState | null,
+  listenedVersions: Record<string, TrackVersion | undefined>,
+  instrumentTag: string,
+  info: SongInfo,
+];
+
+/** A preview moving into the engine: its mix, A/B pairs and, after Play, position and loop. */
+interface Carry {
+  state: RehearseState;
+  startSec?: number;
+  loop?: { start: number; end: number } | null;
+}
 
 function getEngine(): Engine {
   if (engine) return engine;
@@ -198,7 +270,10 @@ function getEngine(): Engine {
     previous: previousSong,
     next: nextSong,
   });
-  useTempoUi.subscribe(() => {
+  useTempoUi.subscribe((t) => {
+    if (t.songId !== null && t.songId === useRehearse.getState().songId) {
+      engineTempo = { songId: t.songId, grid: t.grid };
+    }
     syncClick();
   });
   wake = new WakeLockController(useRehearse.getState().prefs.wakeLock);
@@ -267,12 +342,22 @@ export function subscribeMeters(cb: (m: EngineEvents["meters"]) => void): () => 
   return getEngine().on("meters", cb);
 }
 
-export function positionSec(): number {
+/** The engine song's position (the mini-player; the song page uses {@link positionSec}). */
+export function playingPositionSec(): number {
   return engine ? engine.getPositionFrames() / SAMPLE_RATE : 0;
 }
 
-export function durationSec(): number {
+export function playingDurationSec(): number {
   return engine ? engine.lengthFrames / SAMPLE_RATE : 0;
+}
+
+/** The song page's position: the engine's, or where Play will start a preview. */
+export function positionSec(): number {
+  return previewing() ? previewPos : playingPositionSec();
+}
+
+export function durationSec(): number {
+  return previewing() ? usePreview.getState().lengthSec : playingDurationSec();
 }
 
 function currentQuality(songId: string | null, tracks: readonly Track[], mix: MixerState): Quality {
@@ -288,29 +373,14 @@ function currentQuality(songId: string | null, tracks: readonly Track[], mix: Mi
 }
 
 /**
- * Loads (or refreshes) a song in the engine. Called when the Rehearse panel mounts and whenever
- * the song's tracks change; reloads only when the audio itself changed, keeping the position.
+ * The mix, quality and playable tracks of a song. `prev`: the state it had (the same song
+ * refreshed, or a preview moving into the engine), whose mix and listened versions win.
  */
-export async function openSong(
-  songId: string,
-  tracks: Track[],
-  saved: MixerState | null,
-  listenedVersions: Record<string, TrackVersion | undefined>,
-  instrumentTag: string,
-  info: SongInfo,
-): Promise<void> {
-  lastOpen = [songId, tracks, saved, listenedVersions, instrumentTag, info];
-  allTracks = tracks;
-  userTag = instrumentTag;
-  const e = getEngine();
-  const s = useRehearse.getState();
-  const sameSong = s.songId === songId;
-  if (!sameSong) {
-    // The previous song's mix is saved under its own id; its loop does not carry over.
-    flushSave();
-    loopSec = null;
-  }
-  const mix = mergeMix(tracks, sameSong ? s.mix : saved);
+function songView(
+  [songId, tracks, saved, listenedVersions]: OpenArgs,
+  prev: RehearseState | null,
+): { mix: MixerState; quality: Quality; playable: PlayableTrack[] } {
+  const mix = mergeMix(tracks, prev ? prev.mix : saved);
   const quality = currentQuality(songId, tracks, mix);
   // Listened versions follow the local mix (A/B choices not saved yet included): the saved mix
   // and its version data lag behind by the save debounce and a refetch.
@@ -320,14 +390,117 @@ export async function openSong(
     if (!id) continue;
     const v =
       (listenedVersions[t.id]?.id === id ? listenedVersions[t.id] : undefined) ??
-      (sameSong
-        ? s.tracks.find((p) => p.track.id === t.id && p.version.id === id)?.version
-        : undefined);
+      prev?.tracks.find((p) => p.track.id === t.id && p.version.id === id)?.version;
     // Offline without that version on the device: the current version plays (the mix keeps it).
     const file = v && chooseVariant(v, quality, blobUrl);
     listened[t.id] = file && playableOffline(songId, file.variant.hash) ? v : undefined;
   }
-  const playable = playableTracks(tracks, listened, quality, blobUrl);
+  return { mix, quality, playable: playableTracks(tracks, listened, quality, blobUrl) };
+}
+
+/**
+ * The song page shows a song (on mount and whenever its tracks change). Usually it loads (or
+ * refreshes) the song in the engine. While another song plays (or is about to), the page shows
+ * the song without the engine (SPEC §6.10, a preview) until Play, the end of what plays, or ✕ in
+ * the mini-player.
+ */
+export async function openSong(...args: OpenArgs): Promise<void> {
+  const songId = args[0];
+  pageArgs = args;
+  if (useRehearse.getState().previewSongId === songId || playsOtherSong(songId)) {
+    showPreview(args);
+    return;
+  }
+  await loadIntoEngine(args, takePreview(songId));
+}
+
+/** Another song plays (or is about to): a page opening `songId` shows a preview. */
+function playsOtherSong(songId: string): boolean {
+  const s = useRehearse.getState();
+  return s.open && s.songId !== songId && (isPlaying() || pendingPlay !== null);
+}
+
+/** Builds (or refreshes) the preview of the page's song; the engine is not touched. */
+function showPreview(args: OpenArgs): void {
+  const [songId, tracks, , , instrumentTag, info] = args;
+  const p = usePreview.getState();
+  const same = p.songId === songId;
+  if (!same) clearPreview();
+  previewTracks = tracks;
+  previewTag = instrumentTag;
+  const v = songView(args, same ? p : null);
+  const engineState = useRehearse.getState();
+  usePreview.setState({
+    songId,
+    info,
+    open: false,
+    queue: null,
+    status: "stopped",
+    mix: v.mix,
+    tracks: v.playable,
+    quality: v.quality,
+    prefs: engineState.prefs,
+    lengthSec: buildTimeline(v.playable, v.mix).lengthFrames / SAMPLE_RATE,
+    ...(same
+      ? {}
+      : {
+          ab: {},
+          errors: {},
+          buffer: {},
+          struggling: false,
+          lockHint: false,
+          ended: false,
+          selectedTrackId: null,
+          loudnessMatch: engineState.loudnessMatch,
+        }),
+  });
+  if (engineState.previewSongId !== songId) useRehearse.setState({ previewSongId: songId });
+}
+
+/** Ends the preview of `songId` and hands its state over to the engine load. */
+function takePreview(songId: string): Carry | null {
+  const p = usePreview.getState();
+  if (p.songId !== songId) return null;
+  const carry: Carry = { state: p, startSec: previewPos, loop: previewLoop };
+  clearPreview();
+  return carry;
+}
+
+/** Saves and forgets the preview; the page shows the engine's state again. */
+function clearPreview(): void {
+  flushSave(usePreview);
+  if (usePreview.getState().songId !== null) {
+    usePreview.setState({ songId: null, info: null, tracks: [], mix: { tracks: {} }, ab: {} });
+  }
+  previewTracks = [];
+  previewPos = 0;
+  previewLoop = null;
+  if (useRehearse.getState().previewSongId !== null) useRehearse.setState({ previewSongId: null });
+}
+
+/**
+ * Loads (or refreshes) a song in the engine; reloads only when the audio itself changed, keeping
+ * the position. `carry`: the page's preview of this song (mix, A/B, start position, loop).
+ */
+async function loadIntoEngine(args: OpenArgs, carry: Carry | null = null): Promise<void> {
+  const [songId, tracks, , , instrumentTag, info] = args;
+  lastOpen = args;
+  allTracks = tracks;
+  userTag = instrumentTag;
+  const e = getEngine();
+  // The queue reached the song the page previews: the page shows the engine again.
+  if (!carry && useRehearse.getState().previewSongId === songId) {
+    const c = takePreview(songId);
+    carry = c && { state: c.state };
+  }
+  const s = useRehearse.getState();
+  const sameSong = s.songId === songId;
+  if (!sameSong) {
+    // The previous song's mix is saved under its own id; its loop does not carry over.
+    flushSave();
+    loopSec = carry?.loop ?? null;
+  }
+  const { mix, quality, playable } = songView(args, sameSong ? s : (carry?.state ?? null));
   const key = loadKeyOf(songId, playable);
   const trims = sameSong ? changedTrims(s.tracks, playable) : [];
   const entry: QueueEntry = { songId, title: info.title, subtitle: info.subtitle, ready: true };
@@ -341,8 +514,16 @@ export async function openSong(
     quality,
     ...(sameSong
       ? {}
-      : { ab: {}, errors: {}, ended: false, lockHint: false, selectedTrackId: null }),
+      : {
+          ab: carry?.state.ab ?? {},
+          errors: {},
+          ended: false,
+          lockHint: false,
+          selectedTrackId: carry?.state.selectedTrackId ?? null,
+          ...(carry && { loudnessMatch: carry.state.loudnessMatch }),
+        }),
   });
+  if (carry) scheduleSave();
   wake?.setSongOpen(true);
   setMediaInfo(info);
   if (key === loadKey) {
@@ -352,7 +533,7 @@ export async function openSong(
   }
   loadKey = key;
   const wasPlaying = sameSong && (e.state === "playing" || e.state === "buffering");
-  const kept = sameSong ? e.getPositionFrames() : 0;
+  const kept = sameSong ? e.getPositionFrames() : Math.round((carry?.startSec ?? 0) * SAMPLE_RATE);
   const timeline = buildTimeline(playable, mix);
   useRehearse.setState({ lengthSec: timeline.lengthFrames / SAMPLE_RATE });
   try {
@@ -372,6 +553,22 @@ export async function openSong(
     pendingPlay = null;
     e.play({ countIn });
   }
+}
+
+/**
+ * Play on a page that shows a preview (SPEC §6.10): the engine switches to the page's song
+ * (inside the tap, for iOS) and plays it from the preview's position; the queue ends.
+ */
+function takeOver(): void {
+  const args = pageArgs;
+  if (!args || usePreview.getState().songId !== args[0]) return;
+  const e = getEngine();
+  unlockAudio(e);
+  queueLoad++;
+  e.pause();
+  pendingPlay = "countIn";
+  useRehearse.setState({ queue: null, lockHint: false });
+  void loadIntoEngine(args, takePreview(args[0]));
 }
 
 /**
@@ -400,7 +597,7 @@ export function retryAudio(): void {
   useRehearse.setState({ lockHint: false });
   pendingPlay = "countIn";
   loadKey = "";
-  if (lastOpen) void openSong(...lastOpen);
+  if (lastOpen) void loadIntoEngine(lastOpen);
 }
 
 function queueSourceOf(info: SongInfo): QueueSource {
@@ -414,9 +611,21 @@ function queueSourceOf(info: SongInfo): QueueSource {
 
 /**
  * Stops and saves; the mini-player goes and the queue ends. The engine keeps the song's audio,
- * so opening its page again continues where it stood.
+ * so opening its page again continues where it stood. A page that showed a preview meanwhile
+ * gets its song loaded (stopped).
  */
 export function closeSong(): void {
+  const page = useRehearse.getState().previewSongId;
+  stopPlayer();
+  if (page === null) return;
+  const args = pageArgs;
+  if (args?.[0] === page) void loadIntoEngine(args, takePreview(page));
+  // Its data has not arrived yet: the page's openSong loads it.
+  else clearPreview();
+}
+
+/** Stops and saves without loading anything else (logout, leaving a public link). */
+export function stopPlayer(): void {
   queueLoad++;
   pendingPlay = null;
   engine?.pause();
@@ -431,12 +640,17 @@ export function closeSong(): void {
 
 /**
  * The song page shows the Player for `songId`. Leaving the page keeps a playing song (the
- * mini-player takes over, SPEC §6.10); a stopped one closes.
+ * mini-player takes over, SPEC §6.10); a stopped one closes. A preview of it ends.
  */
 export function attachPage(songId: string): () => void {
   attachedSongId = songId;
+  // Decided before the song's data arrives: the page's first loop/seek calls hit the preview.
+  if (playsOtherSong(songId)) useRehearse.setState({ previewSongId: songId });
   return () => {
     if (attachedSongId === songId) attachedSongId = null;
+    if (pageArgs?.[0] === songId) pageArgs = null;
+    if (useRehearse.getState().previewSongId === songId || usePreview.getState().songId === songId)
+      clearPreview();
     const s = useRehearse.getState();
     if (s.songId === songId && !isPlaying() && pendingPlay === null) closeSong();
   };
@@ -474,7 +688,7 @@ function playQueueIndex(index: number): void {
   useRehearse.setState({ queue: { ...q, index }, ended: false });
   if (s.songId === entry.songId && s.open && loadKey !== "") {
     // Already in the engine: from the start.
-    seekSec(0);
+    engineSeek(0);
     engine?.play();
     return;
   }
@@ -486,8 +700,17 @@ function playQueueIndex(index: number): void {
     .load(entry.songId)
     .then(async (d) => {
       if (token !== queueLoad) return;
-      setSongTempo(d.song.id, d.tempo);
-      await openSong(d.song.id, d.tracks, d.saved, d.listened, userTag, songInfoOf(d.song));
+      engineTempo = {
+        songId: d.song.id,
+        grid: d.tempo
+          ? compileTempo({ map: d.tempo.map, bar1OffsetSec: d.tempo.bar1OffsetSec })
+          : null,
+      };
+      // A page showing another song keeps that song's tempo map.
+      if (!previewing() || useRehearse.getState().previewSongId === d.song.id) {
+        setSongTempo(d.song.id, d.tempo);
+      }
+      await loadIntoEngine([d.song.id, d.tracks, d.saved, d.listened, userTag, songInfoOf(d.song)]);
     })
     .catch(() => {
       if (token !== queueLoad) return;
@@ -513,7 +736,7 @@ export function nextSong(): void {
 export function previousSong(): void {
   const q = useRehearse.getState().queue;
   const prev = q ? nextReadyIndex(q.entries, q.index, -1) : null;
-  if (positionSec() > 3 || prev === null) seekSec(0);
+  if (playingPositionSec() > 3 || prev === null) engineSeek(0);
   else playQueueIndex(prev);
 }
 
@@ -538,7 +761,13 @@ export function dropSongs(gone: GoneSongs): "stopped" | "removed" | "none" {
   const { result, queue } = dropGone(s.queue, gone);
   if (loadedGone || result === "stopped") {
     const noticed = isPlaying() || s.songId !== attachedSongId;
-    closeSong();
+    // A page previewing a song that is gone as well does not load it.
+    const preview = usePreview.getState().info;
+    const pageGone =
+      s.previewSongId !== null &&
+      ((gone.songIds ?? []).includes(s.previewSongId) || gone.projectId === preview?.projectId);
+    if (pageGone) stopPlayer();
+    else closeSong();
     return noticed ? "stopped" : "removed";
   }
   if (result === "removed") useRehearse.setState({ queue });
@@ -569,15 +798,38 @@ export function togglePlay(): void {
   e.play({ countIn: countInForPlay() });
 }
 
+/**
+ * Play/pause on the song page: a preview switches the engine to the page's song and plays it
+ * (SPEC §6.10); otherwise {@link togglePlay}.
+ */
+export function togglePagePlay(): void {
+  if (previewing()) takeOver();
+  else togglePlay();
+}
+
+/** Whether the page's song plays (never while the page shows a preview). */
+export function pageIsPlaying(): boolean {
+  return !previewing() && isPlaying();
+}
+
 export function pause(): void {
   engine?.pause();
 }
 
-export function seekSec(sec: number): void {
+function engineSeek(sec: number): void {
   const e = engine;
   if (!e) return;
-  e.seek(Math.max(0, Math.min(sec, durationSec())) * SAMPLE_RATE);
+  e.seek(Math.max(0, Math.min(sec, playingDurationSec())) * SAMPLE_RATE);
   useRehearse.setState({ ended: false });
+}
+
+/** Seeks the page's song; on a preview it sets where Play starts. */
+export function seekSec(sec: number): void {
+  if (previewing()) {
+    previewPos = Math.max(0, Math.min(sec, usePreview.getState().lengthSec));
+    return;
+  }
+  engineSeek(sec);
 }
 
 export function skip(deltaSec: number): void {
@@ -592,6 +844,11 @@ function applyLoop() {
 
 /** Frame-accurate loop (SPEC §7.6), applied while playing without a rebuffer. */
 export function setLoopSec(range: { start: number; end: number } | null): void {
+  if (previewing()) {
+    // Applied when Play loads the song.
+    previewLoop = range;
+    return;
+  }
   loopSec = range;
   applyLoop();
   syncRepeatCountIn();
@@ -599,15 +856,24 @@ export function setLoopSec(range: { start: number; end: number } | null): void {
 
 // ——— click and count-in (SPEC §6.7) ——————————————————————————————————————————————
 
-/** The open song's tempo grid (none: click and count-in are off). */
+/**
+ * The engine song's tempo grid (none: click and count-in are off): the page's (drafts included)
+ * when the page shows that song, else the one kept for it.
+ */
 function songGrid(): TempoGrid | null {
   const t = useTempoUi.getState();
   const songId = useRehearse.getState().songId;
-  return songId !== null && t.songId === songId ? t.grid : null;
+  if (songId === null) return null;
+  if (t.songId === songId) return t.grid;
+  return engineTempo?.songId === songId ? engineTempo.grid : null;
 }
 
+/** Whether the page's song has a tempo map (click and count-in can be switched). */
 export function hasTempo(): boolean {
-  return songGrid() !== null;
+  const preview = useRehearse.getState().previewSongId;
+  if (preview === null) return songGrid() !== null;
+  const t = useTempoUi.getState();
+  return t.songId === preview && t.grid !== null;
 }
 
 let clickKey: { grid: TempoGrid | null; length: number; sub: number; eighths: boolean } | null =
@@ -676,29 +942,30 @@ function countInForPlay(): CountInSpec | null {
 }
 
 export function setClickSettings(patch: Partial<ClickSettings>): void {
-  const { mix } = useRehearse.getState();
-  useRehearse.setState({ mix: { ...mix, click: { ...clickSettingsOf(mix), ...patch } } });
-  syncClick();
-  scheduleSave();
+  const store = view();
+  const { mix } = store.getState();
+  store.setState({ mix: { ...mix, click: { ...clickSettingsOf(mix), ...patch } } });
+  if (store === useRehearse) syncClick();
+  scheduleSave(store);
 }
 
 /** `C`: click on/off; false without a tempo map. */
 export function toggleClick(): boolean {
   if (!hasTempo()) return false;
-  setClickSettings({ enabled: !clickSettingsOf(useRehearse.getState().mix).enabled });
+  setClickSettings({ enabled: !clickSettingsOf(pageState().mix).enabled });
   return true;
 }
 
 /** `K`: count-in on/off; false without a tempo map. */
 export function toggleCountIn(): boolean {
   if (!hasTempo()) return false;
-  setClickSettings({ countIn: !clickSettingsOf(useRehearse.getState().mix).countIn });
+  setClickSettings({ countIn: !clickSettingsOf(pageState().mix).countIn });
   return true;
 }
 
 /** The count-in being played ("2… 3… 4…"), or null. */
 export function countInNow(): { beat: number; clicks: number } | null {
-  return engine?.getCountIn() ?? null;
+  return pageEngine()?.getCountIn() ?? null;
 }
 
 export function isPlaying(): boolean {
@@ -707,21 +974,32 @@ export function isPlaying(): boolean {
 }
 
 export function selectTrack(index: number): void {
-  const p = useRehearse.getState().tracks[index];
-  if (p) useRehearse.setState({ selectedTrackId: p.track.id });
+  const store = view();
+  const p = store.getState().tracks[index];
+  if (p) store.setState({ selectedTrackId: p.track.id });
 }
 
 // ——— mixer ———————————————————————————————————————————————————————————————————————
 
-function scheduleSave() {
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(flushSave, 1500);
+/** Saves the personal mix of the store's song (engine or preview) after a pause. */
+function scheduleSave(store: SongStore = useRehearse) {
+  const timer = saveTimers.get(store);
+  if (timer) clearTimeout(timer);
+  saveTimers.set(
+    store,
+    setTimeout(() => {
+      flushSave(store);
+    }, 1500),
+  );
 }
 
-function flushSave() {
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = null;
-  const { songId, mix } = useRehearse.getState();
+function flushSave(store: SongStore = useRehearse) {
+  const timer = saveTimers.get(store);
+  if (timer) clearTimeout(timer);
+  saveTimers.delete(store);
+  // A preview saves only changes; the engine's song is saved whenever it is left or closed.
+  if (!timer && store !== useRehearse) return;
+  const { songId, mix } = store.getState();
   if (!songId || Object.keys(mix.tracks).length === 0) return;
   if (isLinkMode()) saveLocalMix(songId, mix);
   else
@@ -733,45 +1011,59 @@ function flushSave() {
     );
 }
 
-function applyMix(mix: MixerState) {
-  useRehearse.setState({ mix });
-  syncClick();
-  for (const [id, s] of Object.entries(mix.tracks)) {
-    engine?.setTrackState(id, { gainDb: s.gainDb, pan: s.pan, mute: s.mute, solo: s.solo });
-  }
-  scheduleSave();
+/** The page's song's tracks and the user's instrument tag ("mute my instrument"). */
+function pageTracks(): { tracks: Track[]; tag: string } {
+  return previewing()
+    ? { tracks: previewTracks, tag: previewTag }
+    : { tracks: allTracks, tag: userTag };
 }
 
+function applyMix(mix: MixerState) {
+  const store = view();
+  store.setState({ mix });
+  if (store === useRehearse) {
+    syncClick();
+    for (const [id, s] of Object.entries(mix.tracks)) {
+      engine?.setTrackState(id, { gainDb: s.gainDb, pan: s.pan, mute: s.mute, solo: s.solo });
+    }
+  }
+  scheduleSave(store);
+}
+
+/** A personal mixer change on the page's song (saved for that song, also on a preview). */
 export function setTrack(trackId: string, patch: Partial<MixerTrackState>): void {
-  const { mix } = useRehearse.getState();
+  const store = view();
+  const { mix } = store.getState();
   const cur = mix.tracks[trackId];
   if (!cur) return;
   const next = { ...cur, ...patch };
-  useRehearse.setState({ mix: { ...mix, tracks: { ...mix.tracks, [trackId]: next } } });
-  engine?.setTrackState(trackId, {
+  store.setState({ mix: { ...mix, tracks: { ...mix.tracks, [trackId]: next } } });
+  pageEngine()?.setTrackState(trackId, {
     gainDb: next.gainDb,
     pan: next.pan,
     mute: next.mute,
     solo: next.solo,
   });
-  scheduleSave();
+  scheduleSave(store);
 }
 
 export function resetMix(): void {
-  applyMix(resetMixState(allTracks, useRehearse.getState().mix));
+  applyMix(resetMixState(pageTracks().tracks, pageState().mix));
 }
 
 export function hasMyInstrument(): boolean {
-  return myInstrumentTracks(allTracks, userTag).length > 0;
+  const { tracks, tag } = pageTracks();
+  return myInstrumentTracks(tracks, tag).length > 0;
 }
 
 export function muteMyInstrument(): void {
-  applyMix(toggleMyInstrument(useRehearse.getState().mix, myInstrumentTracks(allTracks, userTag)));
+  const { tracks, tag } = pageTracks();
+  applyMix(toggleMyInstrument(pageState().mix, myInstrumentTracks(tracks, tag)));
 }
 
 /** Applies a snapshot's gain/pan/mute/solo (listened versions stay as they are). */
 export function applySnapshot(state: MixerState): void {
-  applyMix(mergeSnapshot(useRehearse.getState().mix, state));
+  applyMix(mergeSnapshot(pageState().mix, state));
 }
 
 // ——— versions, A/B, quality ——————————————————————————————————————————————————————
@@ -781,7 +1073,7 @@ function offsetFor(
   version: TrackVersion,
   versions: readonly TrackVersion[],
 ): number {
-  const s = useRehearse.getState();
+  const s = pageState();
   const pair = s.ab[trackId];
   if (!s.loudnessMatch || !pair) return 0;
   const otherId = abPartner(pair, version.id);
@@ -798,7 +1090,8 @@ export function listenToVersion(
   version: TrackVersion,
   versions: readonly TrackVersion[] = [],
 ): void {
-  const s = useRehearse.getState();
+  const store = view();
+  const s = store.getState();
   const idx = s.tracks.findIndex((p) => p.track.id === trackId);
   const p = s.tracks[idx];
   if (!p) return;
@@ -817,7 +1110,9 @@ export function listenToVersion(
         },
       }
     : s.mix;
-  useRehearse.setState({ tracks, mix });
+  store.setState({ tracks, mix });
+  scheduleSave(store);
+  if (store !== useRehearse) return;
   // Switched in place: the engine now holds this, so openSong need not reload it.
   if (s.songId) loadKey = loadKeyOf(s.songId, tracks);
   engine?.switchSource(
@@ -826,7 +1121,6 @@ export function listenToVersion(
     offsetFor(trackId, version, versions),
     version.gainDb,
   );
-  scheduleSave();
 }
 
 /** Starts comparing the playing version with `other` and switches to it (SPEC §6.9). */
@@ -835,15 +1129,16 @@ export function startAB(
   other: TrackVersion,
   versions: readonly TrackVersion[],
 ): void {
-  const p = useRehearse.getState().tracks.find((x) => x.track.id === trackId);
+  const store = view();
+  const p = store.getState().tracks.find((x) => x.track.id === trackId);
   if (!p || p.version.id === other.id) return;
-  useRehearse.setState((s) => ({ ab: { ...s.ab, [trackId]: { a: p.version.id, b: other.id } } }));
+  store.setState((s) => ({ ab: { ...s.ab, [trackId]: { a: p.version.id, b: other.id } } }));
   listenToVersion(trackId, other, versions);
 }
 
 /** Flips between the two versions of the track's A/B pair. */
 export function toggleAB(trackId: string, versions: readonly TrackVersion[]): void {
-  const s = useRehearse.getState();
+  const s = pageState();
   const pair = s.ab[trackId];
   const p = s.tracks.find((x) => x.track.id === trackId);
   if (!pair || !p) return;
@@ -857,33 +1152,38 @@ export function toggleAB(trackId: string, versions: readonly TrackVersion[]): vo
  * saved; the next track refresh confirms or reverts it.
  */
 export function setVersionGain(trackId: string, versionId: string, gainDb: number): void {
-  const s = useRehearse.getState();
-  const tracks = s.tracks.map((p) =>
-    p.track.id === trackId && p.version.id === versionId
-      ? { ...p, version: { ...p.version, gainDb } }
-      : p,
-  );
-  useRehearse.setState({ tracks });
+  const store = view();
+  const tracks = store
+    .getState()
+    .tracks.map((p) =>
+      p.track.id === trackId && p.version.id === versionId
+        ? { ...p, version: { ...p.version, gainDb } }
+        : p,
+    );
+  store.setState({ tracks });
   if (tracks.some((p) => p.track.id === trackId && p.version.id === versionId))
-    engine?.setTrackState(trackId, { trimDb: gainDb });
+    pageEngine()?.setTrackState(trackId, { trimDb: gainDb });
 }
 
 export function stopAB(trackId: string): void {
-  useRehearse.setState((s) => ({
+  view().setState((s) => ({
     ab: Object.fromEntries(Object.entries(s.ab).filter(([id]) => id !== trackId)),
   }));
-  engine?.setTrackState(trackId, { offsetDb: 0 });
+  pageEngine()?.setTrackState(trackId, { offsetDb: 0 });
 }
 
 export function setLoudnessMatch(
   on: boolean,
   versionsByTrack: Record<string, readonly TrackVersion[]>,
 ): void {
-  useRehearse.setState({ loudnessMatch: on });
-  for (const p of useRehearse.getState().tracks) {
-    if (!useRehearse.getState().ab[p.track.id]) continue;
+  const store = view();
+  store.setState({ loudnessMatch: on });
+  const e = pageEngine();
+  if (!e) return;
+  for (const p of store.getState().tracks) {
+    if (!store.getState().ab[p.track.id]) continue;
     const offsetDb = offsetFor(p.track.id, p.version, versionsByTrack[p.track.id] ?? []);
-    engine?.setTrackState(p.track.id, { offsetDb });
+    e.setTrackState(p.track.id, { offsetDb });
   }
 }
 
@@ -891,6 +1191,7 @@ export function setPrefs(patch: Partial<RehearsePrefs>): void {
   const prefs = { ...useRehearse.getState().prefs, ...patch };
   savePrefs(prefs);
   useRehearse.setState({ prefs });
+  usePreview.setState({ prefs });
   if (patch.wakeLock) wake?.setMode(patch.wakeLock);
   if (patch.quality !== undefined || patch.preferLossless !== undefined) applyQuality();
 }

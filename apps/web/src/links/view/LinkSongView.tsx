@@ -1,5 +1,16 @@
 import { listTrackVersions, type Song, type Track, type TrackVersion } from "@bandroom/shared";
-import { ActionIcon, Alert, Center, Group, Loader, Menu, Stack, Text, Title } from "@mantine/core";
+import {
+  ActionIcon,
+  Alert,
+  Center,
+  Group,
+  Loader,
+  Menu,
+  Paper,
+  Stack,
+  Text,
+  Title,
+} from "@mantine/core";
 import { IconDownload } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -9,7 +20,9 @@ import { songKeys, useSong, useSongTracks } from "../../features/library/queries
 import { MixerButton } from "../../features/song/MixerButton";
 import { useMixerToggle } from "../../features/song/useMixerToggle";
 import { downloadUrl, formatDuration } from "../../lib/media";
+import { useRehearse } from "../../rehearse/controller";
 import { RehearsePanel } from "../../rehearse/RehearsePanel";
+import { MiniPlayer } from "../../shell/MiniPlayer";
 import { SongTempoSummary } from "../../tempo/TempoDialog";
 import { useLinkMode } from "../linkMode";
 import { errorMessage } from "../../api/errorMessage";
@@ -26,6 +39,8 @@ export function LinkSongView({ songId, token }: { songId: string; token: string 
   const tracksQ = useSongTracks(songId);
   // Every visitor may open the Mixer (SPEC §27); it starts closed and is not remembered.
   const mixer = useMixerToggle(false);
+  // Another song of the project plays on while this page shows its song (SPEC §6.10).
+  const elsewhere = useRehearse((s) => s.open && s.songId !== songId);
 
   if (q.isPending || tracksQ.isPending || !view) {
     return (
@@ -82,6 +97,11 @@ export function LinkSongView({ songId, token }: { songId: string; token: string 
       )}
       {song.access.capabilities.includes("download") && tracks.length > 0 && (
         <LinkDownloads song={song} tracks={tracks} allVersions={view.versions === "all"} />
+      )}
+      {elsewhere && view.songId === null && (
+        <Paper withBorder radius="md" style={{ position: "sticky", bottom: 8 }}>
+          <MiniPlayer songPath={(id) => `/l/${token}/songs/${id}`} />
+        </Paper>
       )}
     </Stack>
   );

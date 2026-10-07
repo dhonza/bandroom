@@ -19,18 +19,18 @@ import { IconCheck, IconMetronome, IconSettings } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useTempoUi } from "../tempo/store";
-import { countInNow, setClickSettings, useRehearse } from "./controller";
+import { countInNow, setClickSettings, usePlayerView } from "./controller";
 import { clickSettingsOf } from "./model";
 
 /** Click and count-in settings of the open song (personal, saved with the mixer state). */
 export function useClickSettings(): ClickSettings {
   // Select the stored object (stable reference) and merge the defaults outside the selector.
-  const click = useRehearse((s) => s.mix.click);
+  const click = usePlayerView((s) => s.mix.click);
   return useMemo(() => clickSettingsOf({ tracks: {}, click }), [click]);
 }
 
 function useHasTempo(): boolean {
-  const songId = useRehearse((s) => s.songId);
+  const songId = usePlayerView((s) => s.songId);
   return useTempoUi((s) => s.grid !== null && s.songId === songId);
 }
 

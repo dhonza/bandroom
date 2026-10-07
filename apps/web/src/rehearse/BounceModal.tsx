@@ -8,11 +8,11 @@ import { useNavigate } from "react-router";
 import { api } from "../api/client";
 import { useApiError } from "../api/useApiError";
 import { projectKeys } from "../features/library/queries";
-import { useRehearse } from "./controller";
+import { pageState } from "./controller";
 
 /** What the Player plays right now: the personal mix and each track's loaded version. */
 export function bounceRequestBody(title: string) {
-  const s = useRehearse.getState();
+  const s = pageState();
   return {
     title: title.trim(),
     mix: s.mix,

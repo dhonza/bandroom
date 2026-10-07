@@ -3,7 +3,7 @@ import { Checkbox, Group, Paper, Select, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { VisitorName, useVisitorName } from "../links/VisitorName";
 import { formatClock } from "../player/format";
-import { useRehearse } from "../rehearse/controller";
+import { pageState } from "../rehearse/controller";
 import { CommentEditor } from "./CommentEditor";
 import { composerPayload } from "./model";
 import { useCommentActions } from "./queries";
@@ -84,7 +84,7 @@ export function Composer({ song, tracks }: { song: Song; tracks: readonly Track[
 
 /** Versions playing in Rehearse mode (the server fills in current versions for the rest). */
 function currentLoadedVersions(songId: string, tracks: readonly Track[]): Record<string, string> {
-  const s = useRehearse.getState();
+  const s = pageState();
   const out: Record<string, string> = {};
   if (s.songId === songId) for (const p of s.tracks) out[p.track.id] = p.version.id;
   else for (const tr of tracks) if (tr.current) out[tr.id] = tr.current.id;

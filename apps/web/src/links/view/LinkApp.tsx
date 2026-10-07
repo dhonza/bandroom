@@ -29,7 +29,7 @@ import { useApiError } from "../../api/useApiError";
 import { ProjectImage } from "../../components/ProjectImage";
 import { BrandLogo } from "../../branding/BrandLogo";
 import { useClientConfig } from "../../config/ClientConfigContext";
-import { closeSong } from "../../rehearse/controller";
+import { stopPlayer } from "../../rehearse/controller";
 import { ColorSchemeToggle } from "../../shell/ColorSchemeToggle";
 import { LanguageSwitcher } from "../../shell/LanguageSwitcher";
 import { enterLinkMode, leaveLinkMode, setLinkView, useLinkMode } from "../linkMode";
@@ -58,7 +58,7 @@ export function LinkApp() {
   useLayoutEffect(() => {
     enterLinkMode(token);
     return () => {
-      closeSong();
+      stopPlayer();
       leaveLinkMode();
     };
   }, [token]);
@@ -109,7 +109,7 @@ function LinkShell({ token }: { token: string }) {
   const locked = gone || open.data?.state === "password";
   // Revoked, deactivated, expired or session over: stop whatever was playing.
   useEffect(() => {
-    if (locked) closeSong();
+    if (locked) stopPlayer();
   }, [locked]);
 
   let body: ReactNode;

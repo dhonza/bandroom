@@ -12,11 +12,11 @@ import { Link, useLocation } from "react-router";
 import { ProjectImage } from "../components/ProjectImage";
 import {
   closeSong,
-  durationSec,
   hasNextSong,
   hasPreviousSong,
   nextSong,
-  positionSec,
+  playingDurationSec,
+  playingPositionSec,
   previousSong,
   togglePlay,
   useRehearse,
@@ -24,7 +24,10 @@ import {
 
 export const MINI_PLAYER_HEIGHT = 60;
 
-/** Whether the mini-player shows: a song session is open and the user is not on its page. */
+/**
+ * Whether the mini-player shows: a song session is open and the user is not on its page (another
+ * song's page shows that song without taking the engine, SPEC §6.10).
+ */
 export function useMiniPlayerVisible(): boolean {
   const location = useLocation();
   const songId = useRehearse((s) => (s.open ? s.songId : null));
@@ -36,8 +39,8 @@ function useProgress(): number {
   const [value, setValue] = useState(0);
   useEffect(() => {
     const tick = () => {
-      const d = durationSec();
-      setValue(d > 0 ? Math.min(100, (positionSec() / d) * 100) : 0);
+      const d = playingDurationSec();
+      setValue(d > 0 ? Math.min(100, (playingPositionSec() / d) * 100) : 0);
     };
     tick();
     const id = setInterval(tick, 500);
@@ -147,7 +150,9 @@ export function MiniPlayer({
             size={44}
             variant="subtle"
             color="gray"
-            onClick={closeSong}
+            onClick={() => {
+              closeSong();
+            }}
             aria-label={t("listen.stop")}
             data-testid="mini-close"
           >

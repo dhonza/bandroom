@@ -71,8 +71,14 @@ const fake = vi.hoisted(() => {
       this.suspended++;
       this.pause();
     }
-    seek() {}
-    setLoop() {}
+    seeks: number[] = [];
+    seek(frames: number) {
+      this.seeks.push(frames);
+    }
+    loops: unknown[] = [];
+    setLoop(range: unknown) {
+      this.loops.push(range);
+    }
     setClick() {}
     setClickTrack() {}
     setRepeatCountIn() {}
@@ -192,6 +198,8 @@ beforeEach(() => {
     e.switches = [];
     e.trims = [];
     e.gains = [];
+    e.seeks = [];
+    e.loops = [];
     e.plays = 0;
     e.inits = 0;
     e.suspended = 0;
@@ -489,14 +497,213 @@ describe("song lifecycle and queue (SPEC §6.10)", () => {
     detach();
   });
 
-  it("a song opened on its page joins the queue that holds it", async () => {
+  it("a song opened on its page while nothing plays joins the queue that holds it", async () => {
     const { loader } = loaderFor();
     controller.startQueue([entry("f1"), entry("f2")], source, loader);
     await vi.waitFor(() => {
-      expect(useRehearse.getState().songId).toBe("f1");
+      expect(engine().state).toBe("playing");
     });
+    controller.pause();
     await openSong("f2", [track("f2-t")], null, {}, "", { ...info("f2"), projectId: "p" });
+    expect(useRehearse.getState().songId).toBe("f2");
+    expect(useRehearse.getState().previewSongId).toBeNull();
     expect(useRehearse.getState().queue?.index).toBe(1);
     expect(useRehearse.getState().queue?.entries).toHaveLength(2);
+  });
+});
+
+describe("another song's page while a song plays (SPEC §6.10)", () => {
+  const songOf = (id: string) =>
+    ({
+      id,
+      title: `Title ${id}`,
+      subtitle: "",
+      project: { id: "p", name: "P", color: "blue", imageHash: null },
+    }) as unknown as Song;
+  const loader: QueueLoader = {
+    entries: () => Promise.resolve([]),
+    load: (id) =>
+      Promise.resolve({
+        song: songOf(id),
+        tracks: [track(`${id}-t`)],
+        saved: null,
+        listened: {},
+        tempo: null,
+      }),
+  };
+  const entry = (songId: string) => ({ songId, title: songId, subtitle: "", ready: true });
+  const source = { kind: "project" as const, projectId: "p", projectName: "P", imageHash: null };
+
+  /** A queue of `ids` playing its first song. */
+  async function playing(ids: string[]) {
+    controller.startQueue(ids.map(entry), source, loader);
+    await vi.waitFor(() => {
+      expect(useRehearse.getState().songId).toBe(ids[0]);
+    });
+    await vi.waitFor(() => {
+      expect(engine().state).toBe("playing");
+    });
+    engine().loads = [];
+    engine().loops = [];
+    engine().plays = 0;
+  }
+
+  /** The page of `id` opens (attach, then its data arrives). */
+  async function openPage(id: string, tracks = [track(`${id}-t`)]) {
+    const detach = controller.attachPage(id);
+    await openSong(id, tracks, null, {}, "", info(id));
+    return detach;
+  }
+
+  it("shows the opened song without loading it; the playing song and queue go on", async () => {
+    await playing(["p1", "p2"]);
+    const detach = await openPage("p3", [track("x"), track("y")]);
+    expect(engine().loads).toHaveLength(0);
+    expect(engine().state).toBe("playing");
+    const s = useRehearse.getState();
+    expect(s.songId).toBe("p1");
+    expect(s.open).toBe(true);
+    expect(s.previewSongId).toBe("p3");
+    expect(s.queue?.entries.map((e) => e.songId)).toEqual(["p1", "p2"]);
+    const preview = controller.usePreview.getState();
+    expect(preview.songId).toBe("p3");
+    expect(preview.tracks.map((p) => p.track.id)).toEqual(["x", "y"]);
+    expect(preview.status).toBe("stopped");
+    expect(preview.lengthSec).toBe(10);
+    expect(controller.pageState().songId).toBe("p3");
+    expect(controller.pageIsPlaying()).toBe(false);
+    // The queue moving on keeps the preview.
+    engine().setState("stopped");
+    engine().emit("ended", undefined);
+    await vi.waitFor(() => {
+      expect(useRehearse.getState().songId).toBe("p2");
+    });
+    expect(useRehearse.getState().previewSongId).toBe("p3");
+    detach();
+    expect(useRehearse.getState().previewSongId).toBeNull();
+    expect(controller.usePreview.getState().songId).toBeNull();
+    expect(useRehearse.getState().open).toBe(true);
+  });
+
+  it("mixer edits on the preview save for its song and leave the engine alone", async () => {
+    await playing(["m1"]);
+    const detach = await openPage("m2", [track("a")]);
+    apiMock.mockClear();
+    engine().gains = [];
+    controller.setTrack("a", { gainDb: -6 });
+    expect(controller.usePreview.getState().mix.tracks.a?.gainDb).toBe(-6);
+    expect(engine().gains).toEqual([]);
+    controller.listenToVersion("a", version("a-v2", "a2"));
+    expect(engine().switches).toEqual([]);
+    expect(controller.usePreview.getState().tracks[0]?.version.id).toBe("a-v2");
+    detach(); // leaving the page saves the preview's mix
+    expect(apiMock).toHaveBeenCalledTimes(1);
+    expect(apiMock.mock.calls[0]).toMatchObject([
+      expect.anything(),
+      {
+        params: { id: "m2" },
+        body: { state: { tracks: { a: { gainDb: -6, listenedVersionId: "a-v2" } } } },
+      },
+    ]);
+  });
+
+  it("Play switches the engine to the page's song from its position and ends the queue", async () => {
+    await playing(["s1", "s2"]);
+    const detach = await openPage("s3", [track("a")]);
+    controller.seekSec(4);
+    expect(controller.positionSec()).toBe(4);
+    expect(engine().seeks).toEqual([]);
+    controller.setLoopSec({ start: 2, end: 6 });
+    controller.setTrack("a", { mute: true });
+    controller.togglePagePlay();
+    expect(useRehearse.getState().songId).toBe("s3");
+    expect(useRehearse.getState().previewSongId).toBeNull();
+    expect(useRehearse.getState().queue?.entries.map((e) => e.songId)).toEqual(["s3"]);
+    await vi.waitFor(() => {
+      expect(engine().plays).toBe(1);
+    });
+    expect(engine().loads).toHaveLength(1);
+    expect(engine().seeks).toEqual([4 * 48_000]);
+    expect(useRehearse.getState().mix.tracks.a?.mute).toBe(true);
+    expect(controller.pageIsPlaying()).toBe(true);
+    expect(controller.usePreview.getState().songId).toBeNull();
+    // From now on the page is the normal Player: a refresh does not reload.
+    await openSong("s3", [track("a")], null, {}, "", info("s3"));
+    expect(engine().loads).toHaveLength(1);
+    detach();
+  });
+
+  it("the page loads its song (stopped) when the playing song is closed", async () => {
+    await playing(["c1"]);
+    const detach = await openPage("c2");
+    controller.pause(); // paused in the mini-player: the preview stays
+    await openSong("c2", [track("c2-t")], null, {}, "", info("c2"));
+    expect(useRehearse.getState().previewSongId).toBe("c2");
+    expect(engine().loads).toHaveLength(0);
+    controller.closeSong(); // ✕ in the mini-player
+    expect(useRehearse.getState().songId).toBe("c2");
+    expect(useRehearse.getState().open).toBe(true);
+    expect(useRehearse.getState().previewSongId).toBeNull();
+    await vi.waitFor(() => {
+      expect(engine().loads).toHaveLength(1);
+    });
+    expect(engine().plays).toBe(0);
+    detach();
+  });
+
+  it("the page loads its song when the queue ends elsewhere", async () => {
+    await playing(["e1"]);
+    const detach = await openPage("e2");
+    engine().setState("stopped");
+    engine().emit("ended", undefined);
+    expect(useRehearse.getState().songId).toBe("e2");
+    await vi.waitFor(() => {
+      expect(engine().loads).toHaveLength(1);
+    });
+    expect(engine().plays).toBe(0);
+    detach();
+  });
+
+  it("the queue reaching the previewed song makes the page the Player again", async () => {
+    await playing(["r1", "r2"]);
+    const detach = await openPage("r2");
+    expect(useRehearse.getState().previewSongId).toBe("r2");
+    engine().setState("stopped");
+    engine().emit("ended", undefined);
+    await vi.waitFor(() => {
+      expect(useRehearse.getState().songId).toBe("r2");
+    });
+    expect(useRehearse.getState().previewSongId).toBeNull();
+    await vi.waitFor(() => {
+      expect(engine().state).toBe("playing");
+    });
+    expect(useRehearse.getState().queue?.index).toBe(1);
+    detach();
+  });
+
+  it("decides on attaching: the page's first calls before its data do not touch the engine", async () => {
+    await playing(["a1"]);
+    const detach = controller.attachPage("a2");
+    expect(useRehearse.getState().previewSongId).toBe("a2");
+    expect(controller.pageState().songId).not.toBe("a2"); // the Player shows a loader
+    controller.setLoopSec(null); // the timeline resets for the new song
+    expect(engine().loops).toEqual([]);
+    // ✕ before the data arrived: the page's openSong then loads its song.
+    controller.closeSong();
+    expect(useRehearse.getState().previewSongId).toBeNull();
+    await openSong("a2", [track("a2-t")], null, {}, "", info("a2"));
+    expect(useRehearse.getState().songId).toBe("a2");
+    expect(engine().loads).toHaveLength(1);
+    detach();
+  });
+
+  it("stopPlayer (logout) does not load the previewed song", async () => {
+    await playing(["l1"]);
+    const detach = await openPage("l2");
+    controller.stopPlayer();
+    expect(useRehearse.getState().open).toBe(false);
+    expect(useRehearse.getState().songId).toBe("l1");
+    detach();
+    expect(engine().loads).toHaveLength(0);
   });
 });

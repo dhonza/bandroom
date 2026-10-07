@@ -28,7 +28,7 @@ import { api } from "../api/client";
 import { useOptionalUser } from "../auth/session";
 import { songKeys } from "../features/library/queries";
 import { VersionStackModal } from "../features/song/VersionStackModal";
-import { listenToVersion, setTrack, startAB, toggleAB, useRehearse } from "./controller";
+import { listenToVersion, setTrack, startAB, toggleAB, usePlayerView } from "./controller";
 import { headerButtonSize, headerTier } from "./headerTier";
 import { Meter, SHOW_METERS } from "./Meter";
 import type { PlayableTrack } from "./model";
@@ -71,11 +71,11 @@ export function TrackStrip({
 }) {
   const { t } = useTranslation();
   const { track, version } = playable;
-  const state = useRehearse((s) => s.mix.tracks[track.id]);
-  const anySolo = useRehearse((s) => Object.values(s.mix.tracks).some((x) => x.solo));
-  const buffered = useRehearse((s) => s.buffer[track.id] ?? 0);
-  const pair = useRehearse((s) => s.ab[track.id]);
-  const error = useRehearse((s) => s.errors[track.id]);
+  const state = usePlayerView((s) => s.mix.tracks[track.id]);
+  const anySolo = usePlayerView((s) => Object.values(s.mix.tracks).some((x) => x.solo));
+  const buffered = usePlayerView((s) => s.buffer[track.id] ?? 0);
+  const pair = usePlayerView((s) => s.ab[track.id]);
+  const error = usePlayerView((s) => s.errors[track.id]);
   const [versionsOpen, versionsModal] = useDisclosure(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const userId = useOptionalUser()?.id ?? null;

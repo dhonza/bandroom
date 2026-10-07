@@ -6,13 +6,13 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api/client";
 import { songKeys } from "../features/library/queries";
-import { listenToVersion, useRehearse } from "../rehearse/controller";
+import { listenToVersion, usePlayerView } from "../rehearse/controller";
 import { contextDiff } from "./model";
 
 /** Versions loaded now: the Rehearse engine's, else every track's current version (Listen). */
 export function useLoadedVersions(songId: string, tracks: readonly Track[]) {
-  const rehearseSong = useRehearse((s) => s.songId);
-  const playing = useRehearse((s) => s.tracks);
+  const rehearseSong = usePlayerView((s) => s.songId);
+  const playing = usePlayerView((s) => s.tracks);
   return useMemo(() => {
     const rehearse = rehearseSong === songId && playing.length > 0;
     const out: Record<string, string> = {};
