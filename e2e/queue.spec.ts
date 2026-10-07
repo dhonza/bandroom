@@ -6,8 +6,9 @@ import { isMobile, loginAsNewUser, uniqueUsername } from "./helpers";
 /**
  * The engine queue and the mini-player (SPEC §6.10, §27.4): "Play all" moves on to the next song
  * at the end, the song keeps playing across in-app navigation, the song page reattaches without a
- * reload, deleting the playing song stops it, and a project link's song rows and "Play all" use
- * the same queue.
+ * reload, deleting the playing song stops it, a song row's play button starts the queue there,
+ * another song's page does not stop what plays until its Play is pressed, and a project link's
+ * song rows and "Play all" use the same queue.
  */
 
 test.beforeAll(async () => {
@@ -20,6 +21,7 @@ const FILES = ["imp_48000_s16_stereo", "imp_44100_s16_stereo"];
 interface DebugState {
   songId: string | null;
   open: boolean;
+  previewSongId: string | null;
   queue: { songIds: string[]; index: number } | null;
   status: string;
   position: number;
@@ -53,8 +55,8 @@ async function noHorizontalOverflow(page: Page) {
     .toBeLessThanOrEqual(0);
 }
 
-/** A project with two short songs from a folder drop, both processed; returns the queue order. */
-async function projectWithTwoSongs(page: Page, name: string) {
+/** A project with two songs from a folder drop, both processed; returns the queue order. */
+async function projectWithTwoSongs(page: Page, name: string, files = FILES) {
   await page.goto("library");
   await page.getByTestId("new-project").click();
   await page.getByLabel("Name").fill(name);
@@ -64,7 +66,7 @@ async function projectWithTwoSongs(page: Page, name: string) {
   await page
     .getByTestId("folder-dropzone")
     .locator('input[type="file"]')
-    .setInputFiles(FILES.map((f) => path.join(FIXTURES_DIR, `${f}.wav`)));
+    .setInputFiles(files.map((f) => path.join(FIXTURES_DIR, `${f}.wav`)));
   await expect(page.getByTestId("song-row")).toHaveCount(2, { timeout: 30_000 });
   // One worker processes every test's uploads on this server.
   let items: { songId: string; title: string; ready: boolean }[] = [];
@@ -121,7 +123,11 @@ test("Play all advances, the mini-player plays on across pages, the song page re
   await expect(page.getByTestId("rehearse-play")).toHaveAccessibleName("Pause");
   expect((await debug(page))?.songId).toBe(second.songId);
 
-  // Back on the first song's page: it opens in the engine (another song opens: the queue moves).
+  // It ends on its page (the last song: it stays there, stopped). Left stopped, it closes; the
+  // first song's page then opens it in the engine (a queue of its own).
+  await expect(page.getByTestId("rehearse-play")).toHaveAccessibleName("Play", {
+    timeout: 30_000,
+  });
   await page.getByRole("link", { name: /^←/ }).click();
   await page
     .getByTestId("song-row")
@@ -158,6 +164,86 @@ test("Play all advances, the mini-player plays on across pages, the song page re
   await expect(page.getByText("The song was deleted, so playback stopped.")).toBeVisible();
   await expect(mini).toBeHidden();
   expect((await debug(page))?.status).not.toBe("playing");
+});
+
+test("A song row plays from there; another song's page leaves it playing until Play", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(600_000);
+  await loginAsNewUser(page, request, testInfo, "member");
+  // A 61 s song keeps playing while the other song's page is open.
+  const { items } = await projectWithTwoSongs(page, `Rows ${uniqueUsername(testInfo)}`, [
+    "long_44100_s24_stereo",
+    "imp_48000_s16_stereo",
+  ]);
+  const long = items.find((i) => /^long/i.test(i.title));
+  const short = items.find((i) => /^imp/i.test(i.title));
+  if (!long || !short) throw new Error("two songs expected");
+  await page.getByRole("tab", { name: "Songs" }).click();
+  const rows = page.getByTestId("song-row");
+  const longRow = rows.filter({ hasText: long.title });
+  const longPlay = longRow.getByTestId("song-row-play");
+  await expect(longPlay).toBeEnabled({ timeout: 30_000 });
+
+  // 360 px: the rows keep their 44 px play buttons inside the screen, no sideways scroll.
+  const size = page.viewportSize();
+  await page.setViewportSize({ width: 360, height: 740 });
+  await noHorizontalOverflow(page);
+  for (const button of await page.getByTestId("song-row-play").all()) {
+    const b = await button.boundingBox();
+    expect(b?.width).toBeGreaterThanOrEqual(44);
+    expect(b?.height).toBeGreaterThanOrEqual(44);
+    expect((b?.x ?? 0) + (b?.width ?? 0)).toBeLessThanOrEqual(360);
+  }
+  if (size) await page.setViewportSize(size);
+
+  // The row's play button starts the project queue at that song; the row shows it playing.
+  await expect(longPlay).toHaveAccessibleName(`Play ${long.title}`);
+  await longPlay.click();
+  await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("playing");
+  let d = await debug(page);
+  expect(d?.songId).toBe(long.songId);
+  expect(d?.queue?.songIds).toEqual(items.map((i) => i.songId));
+  expect(d?.queue?.index).toBe(items.indexOf(long));
+  await expect(longPlay).toHaveAccessibleName(`Pause ${long.title}`);
+  await expect(longPlay).toHaveAttribute("data-playing", "true");
+  // Tapping it again pauses, and again resumes.
+  await longPlay.click();
+  await expect(longPlay).toHaveAccessibleName(`Play ${long.title}`);
+  await expect.poll(async () => (await debug(page))?.status).toBe("stopped");
+  await longPlay.click();
+  await expect(longPlay).toHaveAccessibleName(`Pause ${long.title}`);
+
+  // The other song's page: the long song plays on in the mini-player; the page shows its song.
+  await rows.filter({ hasText: short.title }).getByTestId("song-row-link").click();
+  await expect(page.getByTestId("song-title")).toHaveText(short.title);
+  const mini = page.getByTestId("mini-player");
+  await expect(mini.getByTestId("mini-title")).toHaveText(long.title);
+  await expect(mini.getByTestId("mini-play")).toHaveAccessibleName("Pause");
+  const overview = page.getByTestId("timeline-overview");
+  // Its own length (6 s), not the playing song's (61 s).
+  await expect(overview).toHaveAttribute("aria-valuemax", "6", { timeout: 30_000 });
+  await expect(page.getByTestId("rehearse-play")).toHaveAccessibleName("Play");
+  d = await debug(page);
+  expect(d?.songId).toBe(long.songId);
+  expect(d?.previewSongId).toBe(short.songId);
+  expect(d?.status).toBe("playing");
+  const before = d?.position ?? 0;
+  await expect.poll(async () => (await debug(page))?.position ?? 0).toBeGreaterThan(before);
+  if (isMobile(testInfo)) await noHorizontalOverflow(page);
+
+  // Play on this page switches the engine to its song and ends the queue.
+  await page.getByTestId("rehearse-play").click();
+  await expect
+    .poll(async () => (await debug(page))?.songId, { timeout: 30_000 })
+    .toBe(short.songId);
+  await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("playing");
+  d = await debug(page);
+  expect(d?.previewSongId).toBeNull();
+  expect(d?.queue?.songIds).toEqual([short.songId]);
+  await expect(mini).toBeHidden();
+  await expect(page.getByTestId("rehearse-play")).toHaveAccessibleName("Pause");
 });
 
 test("Project link: a song row plays from there and Play all from the top", async ({
