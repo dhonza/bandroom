@@ -61,6 +61,10 @@ test("a zip on a project makes a song per folder; a zip on a song goes through t
   await page.getByLabel("Name").fill(`Zip ${uniqueUsername(testInfo)}`);
   await page.getByTestId("create-project-submit").click();
   await page.getByTestId("project-settings-tab").waitFor();
+  // The folder picker is hidden on iOS, which can only pick files (SPEC §28.1).
+  await expect(page.getByTestId("project-upload-folder")).toHaveCount(
+    testInfo.project.name === "iphone" ? 0 : 1,
+  );
   // SPEC §28.1: one common top folder is stripped, each subfolder becomes a song.
   await page
     .getByTestId("folder-dropzone")
