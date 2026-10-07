@@ -1,4 +1,4 @@
-import { uuidv7 } from "@bandroom/shared";
+import { UploadOptionsSchema, uuidv7, type UploadOptions } from "@bandroom/shared";
 import { eq } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { assets } from "../db/schema";
@@ -16,6 +16,8 @@ export interface NewAsset {
   sizeBytes: number;
   originalHash: string;
   uploadedBy: string | null;
+  /** Upload options (SPEC §28.2); kept on the asset so retries and bounces keep them. */
+  ingestOptions?: UploadOptions | null;
 }
 
 export function createAsset(db: Db, input: NewAsset, now: number = Date.now()): AssetRow {
@@ -30,6 +32,7 @@ export function createAsset(db: Db, input: NewAsset, now: number = Date.now()): 
       originalHash: input.originalHash,
       status: "queued",
       uploadedBy: input.uploadedBy,
+      ingestOptions: input.ingestOptions ? JSON.stringify(input.ingestOptions) : null,
       createdAt: now,
     })
     .returning()
@@ -69,6 +72,18 @@ export function setAssetProbe(db: Db, id: string, probe: Probe): void {
     .set({ probe: JSON.stringify(probe) })
     .where(eq(assets.id, id))
     .run();
+}
+
+/** The asset's upload options (SPEC §28.2); defaults (keep full quality, standard) if unset. */
+export function assetIngestOptions(a: Pick<AssetRow, "ingestOptions">): UploadOptions {
+  let raw: unknown;
+  try {
+    raw = a.ingestOptions ? JSON.parse(a.ingestOptions) : {};
+  } catch {
+    raw = {};
+  }
+  const r = UploadOptionsSchema.safeParse(raw);
+  return r.success ? r.data : UploadOptionsSchema.parse({});
 }
 
 export function assetProbe(a: AssetRow): Probe | null {

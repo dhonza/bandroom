@@ -5,7 +5,12 @@ describe("lossy state (SPEC §26.4)", () => {
   it("a version is lossy when its source was or its full quality was removed", () => {
     expect(isLossyVersion({ media: { lossless: true }, archived: null })).toBe(false);
     expect(isLossyVersion({ media: { lossless: false }, archived: null })).toBe(true);
-    expect(isLossyVersion({ media: { lossless: true }, archived: { at: 1, by: null } })).toBe(true);
+    expect(
+      isLossyVersion({
+        media: { lossless: true },
+        archived: { at: 1, by: null, reason: "removed" },
+      }),
+    ).toBe(true);
     expect(isLossyVersion({ media: null, archived: null })).toBe(false);
   });
 

@@ -6,7 +6,6 @@ import { createProjectRow } from "../content/projects";
 import { createSongRow } from "../content/songs";
 import { listEvents } from "../events/record";
 import { enqueueJob } from "../jobs/queue";
-import { createAsset } from "../media/assets";
 import { getUsage, putVariant, SYSTEM_USAGE_ID } from "../media/variants";
 import { getSetting } from "../settings/registry";
 import { getBlob } from "../storage/blobs";
@@ -37,13 +36,16 @@ const all = <T>(sql: string, ...params: unknown[]) => db.$client.prepare(sql).al
 
 /** An asset (with an optional stored `opus` variant) uploaded by `uploadedBy`. */
 function asset(uploadedBy: string | null, blobBytes = 0): { id: string; hash: string | null } {
-  const a = createAsset(db, {
-    kind: "audio",
-    originalFilename: "x.wav",
-    sizeBytes: 1,
-    originalHash: uuidv7(),
+  // Raw SQL: the schema here predates later asset columns (e.g. 0018 ingest_options).
+  const a = { id: uuidv7() };
+  run(
+    `INSERT INTO assets (id, kind, original_filename, size_bytes, original_hash, status,
+       uploaded_by, created_at) VALUES (?, 'audio', 'x.wav', 1, ?, 'queued', ?, ?)`,
+    a.id,
+    uuidv7(),
     uploadedBy,
-  });
+    now,
+  );
   if (blobBytes === 0) return { id: a.id, hash: null };
   const hash = uuidv7().replaceAll("-", "");
   db.insert(blobs).values({ hash, sizeBytes: blobBytes, storageKey: hash, createdAt: 1 }).run();

@@ -52,7 +52,11 @@ describe("lossy badges (SPEC §26.4)", () => {
         <LossyBadge
           version={{
             media: media(true),
-            archived: { at: Date.UTC(2026, 9, 5), by: { id: "u", displayName: "Jana" } },
+            archived: {
+              at: Date.UTC(2026, 9, 5),
+              by: { id: "u", displayName: "Jana" },
+              reason: "removed",
+            },
           }}
         />
       </>,

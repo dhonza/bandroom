@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AudioQualitySchema, UploadOptionsSchema } from "./audioQuality";
 import { PaletteColorSchema } from "./content";
 import { VersionArchivedSchema } from "./lossless";
 
@@ -16,6 +17,8 @@ const OpusRefSchema = z.object({
   channels: z.number(),
   preSkip: z.number(),
   durationSamples48k: z.number(),
+  /** The preset it was encoded with (SPEC §28.2); `null` for older encodes or `opus_low`. */
+  quality: AudioQualitySchema.nullable().optional(),
 });
 
 /** What the player and UI need to know about one version's audio (SPEC §5.3 variants). */
@@ -109,8 +112,14 @@ export const UploadTargetSchema = z.discriminatedUnion("type", [
     type: z.literal("newTrack"),
     songId: z.string(),
     name: z.string().trim().min(1).max(120),
+    /** Lossy on upload and the Opus preset (SPEC §28.2); absent = keep full quality. */
+    options: UploadOptionsSchema.optional(),
   }),
-  z.object({ type: z.literal("newVersion"), trackId: z.string() }),
+  z.object({
+    type: z.literal("newVersion"),
+    trackId: z.string(),
+    options: UploadOptionsSchema.optional(),
+  }),
   z.object({ type: z.literal("projectImage"), projectId: z.string() }),
   /** A new document on the project (SPEC §10, §28.4). */
   z.object({

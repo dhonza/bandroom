@@ -59,10 +59,19 @@ export const RemoveLosslessResultSchema = BatchResultSchema.extend({
 });
 export type RemoveLosslessResult = z.infer<typeof RemoveLosslessResultSchema>;
 
+/**
+ * Why a version has no full-quality files: removed later, converted to lossy on upload, or
+ * removed after a re-encode to another quality (SPEC §28.2, §28.3).
+ */
+export const ARCHIVED_REASONS = ["removed", "upload", "reencode"] as const;
+export type ArchivedReason = (typeof ARCHIVED_REASONS)[number];
+export const ArchivedReasonSchema = z.enum(ARCHIVED_REASONS);
+
 /** When and by whom a version's full-quality files were removed. */
 export const VersionArchivedSchema = z.object({
   at: z.number(),
   by: z.object({ id: z.string(), displayName: z.string() }).nullable(),
+  reason: ArchivedReasonSchema,
 });
 export type VersionArchived = z.infer<typeof VersionArchivedSchema>;
 

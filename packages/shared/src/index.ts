@@ -1,5 +1,6 @@
 export * from "./api";
 export * from "./audio";
+export * from "./audioQuality";
 export * from "./auth";
 export * from "./basePath";
 export * from "./bounce";

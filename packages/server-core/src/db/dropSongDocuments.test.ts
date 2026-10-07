@@ -5,7 +5,6 @@ import { insertUser } from "../auth/users";
 import { createProjectRow } from "../content/projects";
 import { createSongRow } from "../content/songs";
 import { listEvents } from "../events/record";
-import { createAsset } from "../media/assets";
 import { getUsage, putVariant } from "../media/variants";
 import { getSetting } from "../settings/registry";
 import { getBlob } from "../storage/blobs";
@@ -51,13 +50,17 @@ function doc(
   hashes: string[],
   deleted = false,
 ): { id: string; assetId: string } {
-  const a = createAsset(db, {
-    kind: "document",
-    originalFilename: `${title}.pdf`,
-    sizeBytes: 1,
-    originalHash: uuidv7(),
+  // Raw SQL: the schema here predates later asset columns (0019 ingest_options).
+  const a = { id: uuidv7() };
+  run(
+    `INSERT INTO assets (id, kind, original_filename, size_bytes, original_hash, status,
+       uploaded_by, created_at) VALUES (?, 'document', ?, 1, ?, 'queued', ?, ?)`,
+    a.id,
+    `${title}.pdf`,
+    uuidv7(),
     uploadedBy,
-  });
+    now,
+  );
   hashes.forEach((h, i) => {
     putVariant(db, a.id, i === 0 ? "original" : `page${String(i)}`, h, {}, now);
   });

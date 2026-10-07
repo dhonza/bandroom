@@ -59,6 +59,8 @@ export const trackVersions = sqliteTable(
     archivedAt: integer("archived_at"),
     /** Who removed them (SPEC §26.4). */
     archivedBy: text("archived_by").references(() => users.id, { onDelete: "set null" }),
+    /** Why (SPEC §28.2–28.3): "removed", "upload" or "reencode"; null for older rows = removed. */
+    archivedReason: text("archived_reason", { enum: ["removed", "upload", "reencode"] }),
   },
   (t) => [
     index("track_versions_track_idx").on(t.trackId, t.number),

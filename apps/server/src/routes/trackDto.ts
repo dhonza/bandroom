@@ -1,5 +1,6 @@
 import type { TrackListItem, TrackListVersion } from "@bandroom/server-core";
 import {
+  AudioQualitySchema,
   PaletteColorSchema,
   type DownloadFormat,
   type Track,
@@ -41,6 +42,7 @@ export function toTrackVersion(
           channels: num(x.meta.channels, 2),
           preSkip: num(x.meta.preSkip),
           durationSamples48k: num(x.meta.durationSamples48k),
+          quality: AudioQualitySchema.safeParse(x.meta.quality).data ?? null,
         }
       : null;
   };
@@ -119,6 +121,7 @@ export function toTrackVersion(
             by: v.version.archivedBy
               ? { id: v.version.archivedBy, displayName: v.archiverName ?? "" }
               : null,
+            reason: v.version.archivedReason ?? "removed",
           },
     downloads,
   };

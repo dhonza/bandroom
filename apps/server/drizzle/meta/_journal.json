@@ -134,6 +134,13 @@
       "when": 1791403470567,
       "tag": "0018_drop_song_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1791405081993,
+      "tag": "0019_upload_quality",
+      "breakpoints": true
     }
   ]
 }

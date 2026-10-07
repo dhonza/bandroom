@@ -45,6 +45,8 @@ export const assets = sqliteTable(
     error: text("error"),
     /** JSON (SPEC §5.3), validated with Zod. */
     probe: text("probe"),
+    /** JSON upload options (SPEC §28.2: lossy only, Opus preset); null = defaults. */
+    ingestOptions: text("ingest_options"),
     uploadedBy: text("uploaded_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: integer("created_at").notNull(),
     deletedAt: integer("deleted_at"),
