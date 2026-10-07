@@ -16,8 +16,9 @@ import {
   drawViewportBox,
   drawWaveform,
   setupCanvas,
+  type Lane,
 } from "./render";
-import { OVERVIEW_H, PAUSED_POLL_MS, RULER_H, type TimelineProps } from "./types";
+import { detailLayout, OVERVIEW_H, PAUSED_POLL_MS, RULER_H, type TimelineProps } from "./types";
 import {
   centerOn,
   clampSec,
@@ -39,13 +40,15 @@ import { ZoomControls } from "./ZoomControls";
 import { onZoomRequest, onZoomToRangeRequest } from "./zoom";
 
 export type { TimelineMark, TimelineProps, TimeRange } from "./types";
-export { RULER_H } from "./types";
+
+const NO_LANES: Lane[] = [];
+export { detailLayout, RULER_H } from "./types";
 export { requestZoom, requestZoomToRange, ZOOM_EVENT } from "./zoom";
 
 /**
- * Canvas timeline (SPEC §11.6): overview strip (whole song, sections, viewport box; tap/drag =
- * seek) and a zoomable detail view with ruler, DOM lanes for sections and markers, and one
- * waveform lane per track. Layered canvases: waveforms are redrawn only on view changes, the
+ * Canvas timeline (SPEC §11.6): overview strip (whole song, sections, the audible lanes summed,
+ * viewport box; tap/drag = seek; always the full width) and a zoomable detail view with ruler,
+ * DOM lanes for sections and markers, and one waveform lane per track unless `hideLanes`. Layered canvases: waveforms are redrawn only on view changes, the
  * playhead every animation frame without React re-renders.
  */
 export function Timeline({
@@ -57,6 +60,9 @@ export function Timeline({
   laneHeight = 56,
   onLaneHeight,
   minLaneHeight = MIN_LANE_H,
+  hideLanes = false,
+  overviewHeight = OVERVIEW_H,
+  belowOverview,
   renderHeader,
   headerWidth = 0,
   topLanesHeight = 0,
@@ -74,7 +80,11 @@ export function Timeline({
 }: TimelineProps) {
   const { t } = useTranslation();
   const { ref: sizeRef, width: fullWidth } = useElementSize();
-  const headerW = renderHeader ? headerWidth : 0;
+  const headerW = renderHeader && !hideLanes ? headerWidth : 0;
+  // The overview spans the full width in both Mixer states, so opening the Mixer leaves it as it
+  // is (SPEC §11.3).
+  const overviewW = fullWidth;
+  const overviewH = overviewHeight;
   const width = Math.max(0, fullWidth - headerW);
   // The stored view is reconciled with the current width/length during render (no effect needed).
   const [rawView, setView] = useState<View | null>(null);
@@ -96,8 +106,13 @@ export function Timeline({
   const overviewRef = useRef<HTMLCanvasElement>(null);
   const staticRef = useRef<HTMLCanvasElement>(null);
   const dynamicRef = useRef<HTMLCanvasElement>(null);
-  const lanesTop = RULER_H + topLanesHeight;
-  const detailH = lanesTop + Math.max(1, lanes.length) * laneHeight;
+  const { lanesTop, height: detailH } = detailLayout({
+    laneCount: lanes.length,
+    laneHeight,
+    topLanesHeight,
+    hideLanes,
+  });
+  const lanesShown = hideLanes ? NO_LANES : lanes;
 
   // Canvas colors are resolved per draw (cached in cssColor); a theme switch redraws.
   const scheme = useComputedColorScheme("dark");
@@ -119,7 +134,7 @@ export function Timeline({
     if (!ctx) return;
     const pal = colors();
     ctx.clearRect(0, 0, view.widthPx, detailH);
-    lanes.forEach((lane, i) => {
+    lanesShown.forEach((lane, i) => {
       if (lane.tint) {
         const color = cssColor(`--mantine-color-${lane.color}-6`);
         drawLaneTint(ctx, view.widthPx, lanesTop + i * laneHeight, laneHeight, color);
@@ -127,7 +142,7 @@ export function Timeline({
     });
     if (grid) drawGrid(ctx, view, grid, RULER_H, detailH, pal);
     else drawRuler(ctx, view, RULER_H, pal);
-    lanes.forEach((lane, i) => {
+    lanesShown.forEach((lane, i) => {
       ctx.globalAlpha = lane.dimmed ? 0.3 : 1;
       drawWaveform(
         ctx,
@@ -139,33 +154,33 @@ export function Timeline({
       );
     });
     drawGuides(ctx, view, guides ?? [], lanesTop, detailH);
-  }, [view, lanes, detailH, laneHeight, colors, lanesTop, guides, grid, scheme]);
+  }, [view, lanesShown, detailH, laneHeight, colors, lanesTop, guides, grid, scheme]);
 
-  // Overview: sections, all lanes summed visually (max) and the loop are drawn once into an
-  // offscreen canvas; scrolling and zooming only copy it and draw the viewport box.
+  // Overview: sections, the audible lanes summed visually (max) and the loop are drawn once into
+  // an offscreen canvas; scrolling and zooming only copy it and draw the viewport box.
   const overviewBase = useRef<HTMLCanvasElement | null>(null);
-  const viewWidth = view?.widthPx ?? 0;
+  const hasView = view !== null;
   const paintOverview = useCallback(() => {
     const c = overviewRef.current;
     const base = overviewBase.current;
     const v = viewRef.current;
-    if (!c || !base || !v || v.widthPx !== viewWidth) return;
-    const ctx = setupCanvas(c, v.widthPx, OVERVIEW_H);
+    if (!c || !base || !v || overviewW <= 0) return;
+    const ctx = setupCanvas(c, overviewW, overviewH);
     if (!ctx) return;
-    ctx.clearRect(0, 0, v.widthPx, OVERVIEW_H);
-    ctx.drawImage(base, 0, 0, v.widthPx, OVERVIEW_H);
-    const { x0, x1 } = viewportOn(fitAll(durationSec, v.widthPx), v);
-    drawViewportBox(ctx, x0, x1, OVERVIEW_H);
-  }, [durationSec, viewWidth]);
+    ctx.clearRect(0, 0, overviewW, overviewH);
+    ctx.drawImage(base, 0, 0, overviewW, overviewH);
+    const { x0, x1 } = viewportOn(fitAll(durationSec, overviewW), v);
+    drawViewportBox(ctx, x0, x1, overviewH);
+  }, [durationSec, overviewW, overviewH]);
 
   useEffect(() => {
-    if (viewWidth <= 0) return;
+    if (overviewW <= 0 || !hasView) return;
     const base = overviewBase.current ?? document.createElement("canvas");
     overviewBase.current = base;
-    const ctx = setupCanvas(base, viewWidth, OVERVIEW_H);
+    const ctx = setupCanvas(base, overviewW, overviewH);
     if (!ctx) return;
-    ctx.clearRect(0, 0, viewWidth, OVERVIEW_H);
-    drawOverview(ctx, fitAll(durationSec, viewWidth), OVERVIEW_H, {
+    ctx.clearRect(0, 0, overviewW, overviewH);
+    drawOverview(ctx, fitAll(durationSec, overviewW), overviewH, {
       bands: bands ?? [],
       lanes,
       range: overviewRange,
@@ -173,7 +188,9 @@ export function Timeline({
     });
     paintOverview();
   }, [
-    viewWidth,
+    overviewW,
+    overviewH,
+    hasView,
     lanes,
     durationSec,
     bands,
@@ -395,7 +412,7 @@ export function Timeline({
   const overviewSeek = (e: React.PointerEvent) => {
     const v = viewRef.current;
     if (!v || (e.type === "pointermove" && e.buttons === 0)) return;
-    const sec = clampSec(xToSec(fitAll(durationSec, v.widthPx), localX(e)), durationSec);
+    const sec = clampSec(xToSec(fitAll(durationSec, overviewW), localX(e)), durationSec);
     onSeek(sec);
     setView(centerOn(v, sec));
     drawPlayhead.current?.();
@@ -439,12 +456,19 @@ export function Timeline({
   useEffect(() => onZoomToRangeRequest(zoomToRange), [zoomToRange]);
 
   return (
-    <Box ref={sizeRef} pos="relative" data-testid="timeline" data-lanes={lanes.length}>
+    <Box
+      ref={sizeRef}
+      pos="relative"
+      data-testid="timeline"
+      data-lanes={lanesShown.length}
+      data-overview-height={overviewH}
+    >
       <canvas
         ref={overviewRef}
         style={{
           display: "block",
-          marginLeft: headerW,
+          width: overviewW || "100%",
+          height: overviewH,
           cursor: "pointer",
           touchAction: "pan-y",
           borderRadius: 4,
@@ -458,9 +482,11 @@ export function Timeline({
         aria-valuemax={Math.round(durationSec)}
         // Kept current by the playhead loop below (no re-render per second).
         aria-valuenow={0}
+        data-testid="timeline-overview"
       />
+      {belowOverview && <Box mt={6}>{belowOverview}</Box>}
       <Box mt={6} style={{ display: "flex", alignItems: "flex-start" }}>
-        {renderHeader && (
+        {renderHeader && !hideLanes && (
           <Box
             w={headerW}
             style={{ flex: "none", paddingTop: RULER_H }}
@@ -471,7 +497,7 @@ export function Timeline({
                 {renderTopHeader?.()}
               </Box>
             )}
-            {lanes.map((lane, i) => (
+            {lanesShown.map((lane, i) => (
               <Box key={lane.id} h={laneHeight} style={{ overflow: "hidden" }}>
                 {renderHeader(i)}
               </Box>

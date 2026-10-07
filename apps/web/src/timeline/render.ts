@@ -243,7 +243,15 @@ export function drawGuides(
   ctx.globalAlpha = 1;
 }
 
-/** Overview strip content: section bands, all lanes' waveforms and the loop/selection range. */
+/**
+ * The lanes the overview sums (SPEC §11.3): the audible ones; muted lanes and lanes silenced by a
+ * solo are left out, so the overview shows the personal mix.
+ */
+export function overviewLanes<L extends Pick<Lane, "dimmed">>(lanes: readonly L[]): L[] {
+  return lanes.filter((l) => !l.dimmed);
+}
+
+/** Overview strip content: section bands, the audible lanes' waveforms and the loop range. */
 export function drawOverview(
   ctx: CanvasRenderingContext2D,
   all: View,
@@ -263,7 +271,7 @@ export function drawOverview(
     ctx.fillRect(x0, 0, Math.max(1, x1 - x0), h);
   }
   ctx.globalAlpha = 1;
-  for (const lane of content.lanes)
+  for (const lane of overviewLanes(content.lanes))
     drawWaveform(ctx, all, lane, 2, h - 4, cssColor(`--mantine-color-${lane.color}-5`));
   const range = content.range;
   if (range) {

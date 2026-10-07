@@ -1,0 +1,91 @@
+import { MantineProvider } from "@mantine/core";
+import { render, screen } from "@testing-library/react";
+import i18next from "i18next";
+import { I18nextProvider } from "react-i18next";
+import { beforeAll, describe, expect, it } from "vitest";
+import { initI18n } from "../i18n/i18n";
+import { overviewLanes, type Lane } from "./render";
+import { Timeline } from "./Timeline";
+import { detailLayout, OVERVIEW_H, RULER_H } from "./types";
+
+const i18n = i18next.createInstance();
+beforeAll(async () => {
+  await initI18n("en", i18n);
+});
+
+const lane = (id: string, dimmed = false): Lane => ({
+  id,
+  color: "blue",
+  offsetSamples: 0,
+  peaks: null,
+  dimmed,
+});
+
+describe("detail layout (SPEC §11.3)", () => {
+  it("stacks the ruler, the top lanes and one row per lane", () => {
+    expect(
+      detailLayout({ laneCount: 3, laneHeight: 50, topLanesHeight: 40, hideLanes: false }),
+    ).toEqual({ lanesTop: RULER_H + 40, shownLanes: 3, height: RULER_H + 40 + 150 });
+  });
+
+  it("keeps one row for a timeline without lanes", () => {
+    expect(
+      detailLayout({ laneCount: 0, laneHeight: 50, topLanesHeight: 0, hideLanes: false }),
+    ).toMatchObject({ shownLanes: 1, height: RULER_H + 50 });
+  });
+
+  it("has no lane rows when the lanes are hidden (Mixer closed)", () => {
+    expect(
+      detailLayout({ laneCount: 4, laneHeight: 80, topLanesHeight: 40, hideLanes: true }),
+    ).toEqual({ lanesTop: RULER_H + 40, shownLanes: 0, height: RULER_H + 40 });
+  });
+});
+
+describe("overview lanes", () => {
+  it("sums only the audible lanes (muted and solo-silenced lanes are dimmed)", () => {
+    const lanes = [lane("a"), lane("b", true), lane("c")];
+    expect(overviewLanes(lanes).map((l) => l.id)).toEqual(["a", "c"]);
+    expect(overviewLanes([lane("x", true)])).toEqual([]);
+  });
+});
+
+describe("Timeline props", () => {
+  const timeline = (props: { hideLanes?: boolean; overviewHeight?: number }) => (
+    <I18nextProvider i18n={i18n}>
+      <MantineProvider>
+        <Timeline
+          lanes={[lane("a"), lane("b")]}
+          durationSec={60}
+          getPosition={() => 0}
+          playing={false}
+          onSeek={() => undefined}
+          renderHeader={(i) => <span>{`header ${String(i)}`}</span>}
+          headerWidth={120}
+          belowOverview={<span>tools</span>}
+          {...props}
+        />
+      </MantineProvider>
+    </I18nextProvider>
+  );
+
+  it("shows the lanes with their headers by default", () => {
+    const view = render(timeline({}));
+    expect(screen.getByTestId("timeline").getAttribute("data-lanes")).toBe("2");
+    expect(screen.getByTestId("track-headers")).toBeTruthy();
+    expect(screen.getByText("header 1")).toBeTruthy();
+    expect(screen.getByTestId("timeline-overview").style.height).toBe(`${String(OVERVIEW_H)}px`);
+    view.unmount();
+  });
+
+  it("hides the lanes and their headers, keeping the overview at the given height", () => {
+    const view = render(timeline({ hideLanes: true, overviewHeight: 80 }));
+    expect(screen.getByTestId("timeline").getAttribute("data-lanes")).toBe("0");
+    expect(screen.queryByTestId("track-headers")).toBeNull();
+    expect(screen.queryByText("header 0")).toBeNull();
+    expect(screen.getByTestId("timeline").getAttribute("data-overview-height")).toBe("80");
+    expect(screen.getByTestId("timeline-overview").style.height).toBe("80px");
+    // The row below the overview (the Mixer tools) is the caller's choice.
+    expect(screen.getByText("tools")).toBeTruthy();
+    view.unmount();
+  });
+});

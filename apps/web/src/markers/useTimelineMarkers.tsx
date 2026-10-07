@@ -93,7 +93,8 @@ export function useTimelineMarkers(
     [actions],
   );
 
-  const detailHeight = RULER_H + layout.height + commentH + Math.max(1, laneCount) * laneHeight;
+  // `laneCount` 0: the waveform lanes are hidden (Mixer closed, SPEC §11.3).
+  const detailHeight = RULER_H + layout.height + commentH + laneCount * laneHeight;
   const props: TimelineMarkerProps = {
     grid,
     topLanesHeight: layout.height + commentH,

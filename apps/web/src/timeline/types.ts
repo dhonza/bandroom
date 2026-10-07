@@ -30,7 +30,16 @@ export interface TimelineProps {
   onLaneHeight?: (height: number) => void;
   /** The lowest lane height the zoom reaches (default 28 px; 44 in the touch Mixer). */
   minLaneHeight?: number;
-  /** Track headers left of the lanes (Rehearse mode, SPEC §11.3), one per lane. */
+  /**
+   * Hides the waveform lanes (Mixer closed, SPEC §11.3): the overview strip, then the ruler and
+   * the top lanes (sections, markers, comments) only.
+   */
+  hideLanes?: boolean;
+  /** Height of the overview strip (default 36 px; the Player follows the vertical zoom, §25.9). */
+  overviewHeight?: number;
+  /** A row between the overview strip and the detail view (the Mixer tools). */
+  belowOverview?: ReactNode;
+  /** Track headers left of the lanes (Mixer open, SPEC §11.3), one per lane. */
   renderHeader?: (index: number) => ReactNode;
   headerWidth?: number;
   /** DOM lanes between the ruler and the waveforms (sections, markers; SPEC §11.3). */
@@ -65,8 +74,23 @@ export interface TimelineProps {
 
 /** Height of the detail view's ruler (CSS px). */
 export const RULER_H = 28;
-/** Height of the overview strip (CSS px). */
+/** Default height of the overview strip (CSS px). */
 export const OVERVIEW_H = 36;
+
+/**
+ * Vertical layout of the detail view: the ruler, the top lanes, then the waveform lanes (none
+ * when hidden; at least one row otherwise, so an empty song still has a lane).
+ */
+export function detailLayout(f: {
+  laneCount: number;
+  laneHeight: number;
+  topLanesHeight: number;
+  hideLanes: boolean;
+}): { lanesTop: number; shownLanes: number; height: number } {
+  const lanesTop = RULER_H + f.topLanesHeight;
+  const shownLanes = f.hideLanes ? 0 : Math.max(1, f.laneCount);
+  return { lanesTop, shownLanes, height: lanesTop + shownLanes * f.laneHeight };
+}
 /** A pointer that moves less than this (CSS px) is a tap, not a drag. */
 export const TAP_SLOP = 6;
 /** While paused, how often the playhead is checked for a seek from elsewhere (keys, markers). */
