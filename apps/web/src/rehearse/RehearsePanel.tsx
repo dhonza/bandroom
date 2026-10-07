@@ -1,4 +1,6 @@
 import {
+  clickAudible,
+  clickSettingsOf,
   dbToGain,
   dimmedTrackIds,
   listTrackVersions,
@@ -58,7 +60,10 @@ import { BarBeatText } from "../tempo/readout";
 import { touchMinLaneHeight } from "./headerTier";
 import { BounceModal } from "./BounceModal";
 import { MixerTools } from "./MixerTools";
+import { CLICK_LANE_COLOR, ClickStrip } from "./ClickStrip";
 import { TrackStrip } from "./TrackStrip";
+import { useTempoUi } from "../tempo/store";
+import type { Lane } from "../timeline/render";
 import { Transport, TransportState } from "./Transport";
 
 const HEADER_W = 320;
@@ -161,7 +166,14 @@ export function RehearsePanel({
 
   const hashes = playing.map((p) => p.version.variants.peaks?.hash ?? null);
   const pyramids = usePeaks(hashes);
-  const lanes = useMemo(
+  // The click lane (SPEC §11.3, DECISIONS 2026-10-07): last, with the Mixer open and a tempo
+  // map; never in the overview.
+  const grid = useTempoUi((s) => (s.songId === song.id ? s.grid : null));
+  const clickKey = usePlayerView((s) => {
+    const c = clickSettingsOf(s.mix);
+    return [c.subdivision, c.compoundEighths, c.accent, clickAudible(s.mix)].join(":");
+  });
+  const trackLanes = useMemo(
     () =>
       playing.map((p, i) => ({
         id: p.track.id,
@@ -175,6 +187,25 @@ export function RehearsePanel({
       })),
     [playing, pyramids, dimmedKey],
   );
+  const lanes = useMemo((): Lane[] => {
+    if (!mixerOpen || !grid) return trackLanes;
+    const [sub, eighths, accent, audible] = clickKey.split(":");
+    const click: Lane = {
+      id: "click",
+      color: CLICK_LANE_COLOR,
+      offsetSamples: 0,
+      peaks: null,
+      dimmed: audible !== "true",
+      tint: true,
+      click: {
+        grid,
+        subdivision: sub === "4" ? 4 : sub === "2" ? 2 : 1,
+        compoundEighths: eighths === "true",
+        accent: accent === "true",
+      },
+    };
+    return [...trackLanes, click];
+  }, [trackLanes, mixerOpen, grid, clickKey]);
   const getPosition = useCallback(() => positionSec(), []);
   // Vertical zoom (SPEC §25.9), per device: the overview strip with the Mixer closed (it keeps
   // that height when the Mixer opens), the track lanes with it open. On touch screens the lanes
@@ -258,8 +289,12 @@ export function RehearsePanel({
                 headerWidth: isPhone ? HEADER_W_NARROW : HEADER_W,
                 renderHeader: (i: number) => {
                   const p = playing[i];
-                  return p ? (
-                    <TrackStrip playable={p} song={song} height={laneHeight} compact={isPhone} />
+                  if (p)
+                    return (
+                      <TrackStrip playable={p} song={song} height={laneHeight} compact={isPhone} />
+                    );
+                  return lanes[i]?.click ? (
+                    <ClickStrip height={laneHeight} compact={isPhone} />
                   ) : null;
                 },
               })}

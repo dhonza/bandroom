@@ -6,6 +6,7 @@ import {
   type GridResolution,
   type TempoGrid,
 } from "@bandroom/shared";
+import type { ClickLane } from "./clickLane";
 import { pickLevel, rangePeak, type Pyramid } from "./peaks";
 import type { TimelineMark, TimeRange } from "./types";
 import { formatRuler, rulerStep, secToX, xToSec, type View } from "./view";
@@ -22,6 +23,8 @@ export interface Lane {
   scale?: number;
   /** Lane background tinted with the lane color (track lanes, SPEC §25.10). */
   tint?: boolean;
+  /** The click lane (SPEC §11.3): ticks from the tempo map instead of a waveform. */
+  click?: ClickLane;
 }
 
 const colorCache = new Map<string, string>();
@@ -245,10 +248,10 @@ export function drawGuides(
 
 /**
  * The lanes the overview sums (SPEC §11.3): the audible ones; muted lanes and lanes silenced by a
- * solo are left out, so the overview shows the personal mix.
+ * solo are left out, so the overview shows the personal mix. The click lane is never in it.
  */
-export function overviewLanes<L extends Pick<Lane, "dimmed">>(lanes: readonly L[]): L[] {
-  return lanes.filter((l) => !l.dimmed);
+export function overviewLanes<L extends Pick<Lane, "dimmed" | "click">>(lanes: readonly L[]): L[] {
+  return lanes.filter((l) => !l.dimmed && !l.click);
 }
 
 /** Overview strip content: section bands, the audible lanes' waveforms and the loop range. */

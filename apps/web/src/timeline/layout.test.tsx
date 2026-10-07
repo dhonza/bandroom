@@ -47,6 +47,11 @@ describe("overview lanes", () => {
     expect(overviewLanes(lanes).map((l) => l.id)).toEqual(["a", "c"]);
     expect(overviewLanes([lane("x", true)])).toEqual([]);
   });
+
+  it("never sums the click lane", () => {
+    const click = { ...lane("click"), click: {} as Lane["click"] };
+    expect(overviewLanes([lane("a"), click]).map((l) => l.id)).toEqual(["a"]);
+  });
 });
 
 describe("Timeline props", () => {

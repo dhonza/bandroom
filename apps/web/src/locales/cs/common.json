@@ -948,6 +948,7 @@
     "noTempo": "Pro zapnutí nastavte tempo",
     "settings": "Nastavení metronomu a předtaktí",
     "volume": "Hlasitost metronomu",
+    "mute": "Ztlumit metronom",
     "sound": "Zvuk",
     "sounds": {
       "woodblock": "Dřívko",

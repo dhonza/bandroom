@@ -924,6 +924,7 @@
     "noTempo": "Set tempo to enable",
     "settings": "Click and count-in settings",
     "volume": "Click volume",
+    "mute": "Mute the click",
     "sound": "Sound",
     "sounds": {
       "woodblock": "Woodblock",

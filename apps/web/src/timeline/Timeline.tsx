@@ -4,6 +4,7 @@ import { IconFocusCentered } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { LONG_PRESS_MS } from "../lib/gestures";
+import { drawClickLane } from "./clickLane";
 import { moveGesture, pastTapSlop, releaseAction, startGesture, type Gesture } from "./gesture";
 import {
   cssColor,
@@ -143,6 +144,18 @@ export function Timeline({
     if (grid) drawGrid(ctx, view, grid, RULER_H, detailH, pal);
     else drawRuler(ctx, view, RULER_H, pal);
     lanesShown.forEach((lane, i) => {
+      if (lane.click) {
+        drawClickLane(
+          ctx,
+          view,
+          lane.click,
+          lanesTop + i * laneHeight + 2,
+          laneHeight - 4,
+          cssColor(`--mantine-color-${lane.color}-4`),
+          lane.dimmed ? 0.3 : 1,
+        );
+        return;
+      }
       ctx.globalAlpha = lane.dimmed ? 0.3 : 1;
       drawWaveform(
         ctx,
