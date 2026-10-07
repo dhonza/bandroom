@@ -214,7 +214,6 @@ export function loudnessOffsetDb(playing: number | null, other: number | null): 
   return Math.min(0, other - playing);
 }
 
-/** What the engine holds: the song and each track's version and file (a change reloads). */
 /**
  * Version gains that changed between two sets of playing tracks (SPEC §25.6): applied in place,
  * without reloading the song.
@@ -229,10 +228,16 @@ export function changedTrims(
     .map((p) => ({ trackId: p.track.id, trimDb: p.version.gainDb }));
 }
 
+/**
+ * What the engine holds: the song and each track's version, file and offset. Independent of the
+ * track order: the engine addresses tracks by id, so a reorder only moves the lanes (SPEC §28.5).
+ */
 export function loadKeyOf(songId: string, playable: readonly PlayableTrack[]): string {
   return JSON.stringify([
     songId,
-    playable.map((p) => [p.track.id, p.version.id, p.chosen.variant.hash, p.version.offsetSamples]),
+    playable
+      .map((p) => [p.track.id, p.version.id, p.chosen.variant.hash, p.version.offsetSamples])
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
   ]);
 }
 

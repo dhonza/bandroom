@@ -1,8 +1,25 @@
 import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import {
   canCopyContent,
   canDeleteContent,
   canMoveContent,
   canRemoveLossless,
+  reorderSongTracks,
   type BatchItems,
   type Song,
   type Track,
@@ -18,7 +35,11 @@ import {
   IconUpload,
   IconWaveSine,
 } from "@tabler/icons-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { notifications } from "@mantine/notifications";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "../../api/client";
+import { setOptimistic } from "../../api/optimistic";
+import { useApiError } from "../../api/useApiError";
 import { useMediaQuery } from "@mantine/hooks";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -68,6 +89,30 @@ export function TracksSection({ song }: { song: Song }) {
 
   const list = tracks.data?.tracks ?? [];
   const user = useCurrentUser();
+  const apiError = useApiError();
+  // Drag-reorder like songs in a project (SPEC §28.5): handle, touch and keyboard.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const reorder = useMutation({
+    mutationFn: (trackIds: string[]) =>
+      api(reorderSongTracks, { params: { id: song.id }, body: { trackIds } }),
+    onError: (err) => {
+      notifications.show({ color: "red", message: apiError(err) });
+      void qc.invalidateQueries({ queryKey: songKeys.tracks(song.id) });
+    },
+  });
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id || !tracks.data) return;
+    const from = list.findIndex((tr) => tr.id === active.id);
+    const to = list.findIndex((tr) => tr.id === over.id);
+    if (from < 0 || to < 0) return;
+    const next = arrayMove(list, from, to);
+    // Optimistic UI (SPEC §11.1); the Mixer lanes follow without reloading the audio.
+    setOptimistic(qc, songKeys.tracks(song.id), { ...tracks.data, tracks: next });
+    reorder.mutate(next.map((tr) => tr.id));
+  };
   const finePointer = useMediaQuery(FINE_POINTER_QUERY, false);
   const selection = useSelection(
     trackSelection,
@@ -96,6 +141,8 @@ export function TracksSection({ song }: { song: Song }) {
     (tr) => canDeleteTrack(tr) || canRemoveTrack(tr) || canMoveTrack(tr) || canCopyContent(role),
   );
   const selected = list.filter((tr) => selection.ids.has(tr.id));
+  const canReorder =
+    song.access.capabilities.includes("edit.any") && !selection.active && list.length > 1;
   const deletable = selected.filter(canDeleteTrack);
   const removable = selected.filter(canRemoveTrack);
   const emptiesSong = selected.length === list.length && !canDeleteContent(role, "song", false);
@@ -219,25 +266,35 @@ export function TracksSection({ song }: { song: Song }) {
               </Button>
             </Group>
           )}
-          {list.map((track) => (
-            <TrackRow
-              key={track.id}
-              track={track}
-              song={song}
-              selection={
-                selectable
-                  ? {
-                      selecting: selection.active,
-                      selected: selection.ids.has(track.id),
-                      showCheckbox: selection.active || finePointer,
-                      onToggle: () => {
-                        selection.toggle(track.id);
-                      },
-                    }
-                  : undefined
-              }
-            />
-          ))}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis]}
+            onDragEnd={onDragEnd}
+          >
+            <SortableContext items={list.map((tr) => tr.id)} strategy={verticalListSortingStrategy}>
+              {list.map((track) => (
+                <TrackRow
+                  key={track.id}
+                  track={track}
+                  song={song}
+                  draggable={canReorder}
+                  selection={
+                    selectable
+                      ? {
+                          selecting: selection.active,
+                          selected: selection.ids.has(track.id),
+                          showCheckbox: selection.active || finePointer,
+                          onToggle: () => {
+                            selection.toggle(track.id);
+                          },
+                        }
+                      : undefined
+                  }
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
           {selection.active && (
             <SelectionBar
               testId="tracks-selection-bar"

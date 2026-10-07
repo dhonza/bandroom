@@ -280,6 +280,21 @@ describe("controller helpers", () => {
     expect(loadKeyOf("s", playableTracks([moved, track("b")], {}, "high", url))).not.toBe(key);
   });
 
+  it("does not reload the audio when only the track order changes (SPEC §28.5)", () => {
+    const key = loadKeyOf(
+      "s",
+      playableTracks([track("a"), track("b"), track("c")], {}, "high", url),
+    );
+    expect(
+      loadKeyOf("s", playableTracks([track("c"), track("a"), track("b")], {}, "high", url)),
+    ).toBe(key);
+    // A different version of a moved track still reloads.
+    const other = track("c", { current: version({ id: "c-v2" }) });
+    expect(
+      loadKeyOf("s", playableTracks([other, track("a"), track("b")], {}, "high", url)),
+    ).not.toBe(key);
+  });
+
   it("applies a snapshot's levels but keeps listened versions", () => {
     const mix = defaultMix([track("a"), track("b")]);
     const a = mix.tracks.a;

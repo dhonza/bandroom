@@ -198,6 +198,8 @@ export function usePlayerView<T>(selector: (s: RehearseState) => T): T {
 let engine: Engine | null = null;
 let wake: WakeLockController | null = null;
 let loadKey = "";
+/** Songs (re)loaded into the engine (e2e: a track reorder must not reload, SPEC §28.5). */
+let songLoads = 0;
 /** Play once the loading song is in: after a tap (with the count-in) or the queue (without). */
 let pendingPlay: "countIn" | "plain" | null = null;
 const saveTimers = new Map<SongStore, ReturnType<typeof setTimeout>>();
@@ -279,7 +281,10 @@ function getEngine(): Engine {
   wake = new WakeLockController(useRehearse.getState().prefs.wakeLock);
   document.addEventListener("visibilitychange", onVisibility);
   engine = e;
-  exposeDebug(() => debugSnapshot(engine, useRehearse.getState(), songGrid() !== null));
+  exposeDebug(() => ({
+    ...debugSnapshot(engine, useRehearse.getState(), songGrid() !== null),
+    loads: songLoads,
+  }));
   return e;
 }
 
@@ -536,6 +541,7 @@ async function loadIntoEngine(args: OpenArgs, carry: Carry | null = null): Promi
     return;
   }
   loadKey = key;
+  songLoads++;
   const wasPlaying = sameSong && (e.state === "playing" || e.state === "buffering");
   const kept = sameSong ? e.getPositionFrames() : Math.round((carry?.startSec ?? 0) * SAMPLE_RATE);
   const timeline = buildTimeline(playable, mix);

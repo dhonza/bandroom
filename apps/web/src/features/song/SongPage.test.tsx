@@ -138,6 +138,42 @@ describe("song page tracks", () => {
   });
 });
 
+describe("song page track reorder (SPEC §28.5)", () => {
+  const drums: Track = { ...track, id: "t2", name: "Drums", sortOrder: 1 };
+  const renderAs = async (caps: Song["access"]["capabilities"], role: Song["access"]["role"]) => {
+    mockApi({
+      "GET /auth/session": () => ({ body: { user: makeUser({ id: "u1", globalRole: "member" }) } }),
+      "GET /songs/s1": () => ({
+        body: { song: { ...song, access: { role, capabilities: caps } } },
+      }),
+      "GET /songs/s1/tracks": () => ({ body: { tracks: [track, drums] } }),
+    });
+    const i18n = i18next.createInstance();
+    await initI18n("en", i18n);
+    render(
+      <Providers config={config} i18n={i18n}>
+        <RouterProvider router={createMemoryRouter(routes, { initialEntries: ["/songs/s1"] })} />
+      </Providers>,
+    );
+    await screen.findAllByTestId("track-row");
+  };
+
+  it("shows a drag handle per track for editors, none in selection mode", async () => {
+    await renderAs([...song.access.capabilities, "edit.any", "delete.any"], "editor");
+    expect(screen.getByRole("button", { name: "Reorder Bass" })).toBeInTheDocument();
+    expect(screen.getAllByTestId("track-drag-handle")).toHaveLength(2);
+    await userEvent.click(screen.getByTestId("tracks-select"));
+    await waitFor(() => {
+      expect(screen.queryAllByTestId("track-drag-handle")).toHaveLength(0);
+    });
+  });
+
+  it("has no drag handle without edit.any", async () => {
+    await renderAs(song.access.capabilities, "contributor");
+    expect(screen.queryAllByTestId("track-drag-handle")).toHaveLength(0);
+  });
+});
+
 describe("song page delete", () => {
   it("leaves for the project without refetching the deleted song", async () => {
     let songGets = 0;

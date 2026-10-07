@@ -599,6 +599,7 @@
       "quota": "Not enough storage: {{remaining}} left. Ask {{admins}} for more."
     },
     "versionBadge": "v{{number}}",
+    "dragHandle": "Reorder {{name}}",
     "sampleRate": "{{khz}} kHz",
     "bitDepth": "{{bits}}-bit",
     "lufs": "{{lufs}} LUFS",

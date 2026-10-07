@@ -1,7 +1,19 @@
 import { deleteTrack, retryTrackVersion, type Song, type Track } from "@bandroom/shared";
-import { Box, Button, Center, Checkbox, Group, Paper, Stack, Text } from "@mantine/core";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  ActionIcon,
+  Box,
+  Button,
+  Center,
+  Checkbox,
+  Group,
+  Paper,
+  Stack,
+  Text,
+} from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconChevronDown } from "@tabler/icons-react";
+import { IconChevronDown, IconGripVertical } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -27,15 +39,20 @@ export interface TrackRowSelection {
   onToggle: () => void;
 }
 
-/** One track: name, version button, status/waveform, actions; drop a file for a new version. */
+/**
+ * One track: name, version button, status/waveform, actions; drop a file for a new version.
+ * `draggable`: a handle reorders the track (inside the list's sortable context, SPEC §28.5).
+ */
 export function TrackRow({
   track,
   song,
   selection,
+  draggable = false,
 }: {
   track: Track;
   song: Song;
   selection?: TrackRowSelection | undefined;
+  draggable?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const user = useCurrentUser();
@@ -61,6 +78,16 @@ export function TrackRow({
   const [editOpen, setEditOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const selecting = selection?.selecting === true;
+  // Only the handle starts a drag, so long-press selection and file drops keep working.
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: track.id, disabled: !draggable });
   const longPress = useLongPress(
     () => selection?.onToggle(),
     selection !== undefined && !selecting,
@@ -81,6 +108,7 @@ export function TrackRow({
 
   return (
     <Paper
+      ref={setNodeRef}
       withBorder
       radius="md"
       p={0}
@@ -103,6 +131,11 @@ export function TrackRow({
         WebkitTouchCallout: "none",
         overflow: "hidden",
         outline: dragOver ? "2px dashed var(--mantine-primary-color-filled)" : undefined,
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.6 : 1,
+        position: "relative",
+        zIndex: isDragging ? 1 : undefined,
       }}
       // Dropping a file onto a track row adds a new version (SPEC §5.1).
       onDragOver={(e) => {
@@ -125,6 +158,23 @@ export function TrackRow({
     >
       <Group gap={0} wrap="nowrap" align="stretch">
         <Box w={6} bg={`${track.color}.6`} aria-hidden />
+        {draggable && (
+          <Center style={{ flex: "none" }}>
+            <ActionIcon
+              ref={setActivatorNodeRef}
+              variant="subtle"
+              color="gray"
+              size={44}
+              aria-label={t("tracks.dragHandle", { name: track.name })}
+              style={{ cursor: "grab", touchAction: "none" }}
+              data-testid="track-drag-handle"
+              {...attributes}
+              {...listeners}
+            >
+              <IconGripVertical size={18} />
+            </ActionIcon>
+          </Center>
+        )}
         {selection?.showCheckbox && (
           <Center w={44} style={{ flex: "none" }}>
             <Checkbox

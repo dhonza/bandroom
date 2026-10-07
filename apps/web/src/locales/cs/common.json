@@ -613,6 +613,7 @@
       "quota": "Nedostatek místa: zbývá {{remaining}}. Požádejte o víc: {{admins}}."
     },
     "versionBadge": "v{{number}}",
+    "dragHandle": "Přesunout {{name}}",
     "sampleRate": "{{khz}} kHz",
     "bitDepth": "{{bits}} bitů",
     "lufs": "{{lufs}} LUFS",
