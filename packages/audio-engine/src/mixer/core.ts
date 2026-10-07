@@ -1,10 +1,10 @@
 import { dbToGain } from "@bandroom/shared/audio";
 import { SAMPLE_RATE } from "../constants";
 import {
+  clickSampleLevel,
   clickSamples,
   ClickVoices,
   firstAtOrAfter,
-  type ClickLevel,
   type ClickSampleSet,
   type CountInSpec,
 } from "./click";
@@ -173,8 +173,7 @@ export class MixerCore {
   }
 
   private clickSample(level: number): Float32Array {
-    const l = (level === 0 && !this.click.accent ? 1 : Math.min(2, level)) as ClickLevel;
-    return this.samples[l];
+    return this.samples[clickSampleLevel(level, this.click.accent)];
   }
 
   private startPreroll(spec: CountInSpec) {
