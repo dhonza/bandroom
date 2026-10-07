@@ -15,3 +15,4 @@ export * from "./bounce";
 export * from "./quota";
 export * from "./documentJobs";
 export * from "./ingestJobs";
+export * from "./zipStream";
