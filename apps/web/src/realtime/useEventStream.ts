@@ -72,7 +72,11 @@ export function useEventStream(
         return;
       }
       if (TRASH_EVENTS.has(e.type)) void qc.invalidateQueries({ queryKey: trashKeys.all });
-      if (e.type === "trash.changed") return;
+      if (e.type === "trash.changed") {
+        // A purge frees space: the project's size changes (SPEC §28.6).
+        if (e.projectId) void qc.invalidateQueries({ queryKey: projectKeys.all });
+        return;
+      }
       if (e.type === "song.deleted" && typeof e.data.songId === "string")
         onGone.current({ songIds: [e.data.songId] });
       if (e.type === "project.deleted") {

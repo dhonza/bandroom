@@ -58,6 +58,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useFormatters } from "../../i18n/format";
 import { Link } from "react-router";
 import { api } from "../../api/client";
 import { useApiError } from "../../api/useApiError";
@@ -389,6 +390,7 @@ function SongRow({
   onPlay: (songId: string) => void;
 }) {
   const { t } = useTranslation();
+  const fmt = useFormatters();
   // Long-press on touch starts selection with this song (SPEC §26.1).
   const longPress = useLongPress(onToggle, selectable && !selecting);
   const offline = useOffline((st) => offlineItemFor(song.id, st.items) !== undefined);
@@ -472,9 +474,11 @@ function SongRow({
               <Text fw={600} truncate>
                 {song.title}
               </Text>
-              {(song.subtitle || song.key) && (
-                <Text size="xs" c="dimmed" truncate>
-                  {[song.subtitle, song.key].filter(Boolean).join(" · ")}
+              {(song.subtitle || song.key || !!song.bytes) && (
+                <Text size="xs" c="dimmed" truncate data-testid="song-row-meta">
+                  {[song.subtitle, song.key, song.bytes ? fmt.bytes(song.bytes) : null]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </Text>
               )}
             </Stack>

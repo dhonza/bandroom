@@ -584,6 +584,10 @@
     "manager": "Správce projektu",
     "admin": "Správce"
   },
+  "storage": {
+    "trackTotal": "všechny verze {{size}}",
+    "stored": "uloženo {{size}}"
+  },
   "tracks": {
     "title": "Stopy",
     "dropHint": "Přetáhněte sem zvukové soubory nebo klepněte a vyberte",

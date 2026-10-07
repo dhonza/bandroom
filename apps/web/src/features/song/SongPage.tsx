@@ -26,6 +26,7 @@ import { IconPencil } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { useFormatters } from "../../i18n/format";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { LinksPanel } from "../../links/LinksPanel";
 import { api, ApiError } from "../../api/client";
@@ -53,6 +54,7 @@ import { SongLockBanner, SongLockButton } from "./songLock";
 /** Song page (SPEC §11.3): metadata, the Player (Mixer in the header), tracks, notes and access. */
 export function SongPage() {
   const { t } = useTranslation();
+  const fmt = useFormatters();
   const { songId = "" } = useParams();
   const query = useSong(songId);
   const tracks = useSongTracks(songId);
@@ -83,9 +85,13 @@ export function SongPage() {
           <Title order={2} style={{ overflowWrap: "break-word" }} data-testid="song-title">
             {song.title}
           </Title>
-          {(song.subtitle || song.key) && (
-            <Text c="dimmed">
-              {[song.subtitle, song.key && t("songs.keyLabel", { key: song.key })]
+          {(song.subtitle || song.key || !!song.bytes) && (
+            <Text c="dimmed" data-testid="song-meta">
+              {[
+                song.subtitle,
+                song.key && t("songs.keyLabel", { key: song.key }),
+                song.bytes ? fmt.bytes(song.bytes) : null,
+              ]
                 .filter(Boolean)
                 .join(" · ")}
             </Text>

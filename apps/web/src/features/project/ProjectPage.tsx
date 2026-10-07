@@ -24,6 +24,7 @@ import { useParams, useSearchParams } from "react-router";
 import { ApiError } from "../../api/client";
 import { ProjectImage } from "../../components/ProjectImage";
 import { NotFoundPage } from "../../pages/NotFoundPage";
+import { useFormatters } from "../../i18n/format";
 import { useProject } from "../library/queries";
 import { PlayAllButton } from "./PlayAllButton";
 import { ProjectSettings } from "./ProjectSettings";
@@ -39,6 +40,7 @@ import { useProjectTrash } from "../../trash/queries";
 /** Project page (SPEC §11.2): songs, documents, settings. The Activity tab arrives in M13. */
 export function ProjectPage() {
   const { t } = useTranslation();
+  const fmt = useFormatters();
   const { projectId = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const query = useProject(projectId);
@@ -102,6 +104,9 @@ export function ProjectPage() {
           )}
           <Text size="xs" c="dimmed">
             {t("counts.songs", { count: project.songCount })}
+            {project.bytes != null && (
+              <span data-testid="project-bytes"> · {fmt.bytes(project.bytes)}</span>
+            )}
             {project.ownerDisplayName
               ? ` · ${t("projects.ownedBy", { name: project.ownerDisplayName })}`
               : ""}

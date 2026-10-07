@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { formatBytes } from "../lib/media";
 
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["year", 365 * 24 * 3600_000],
@@ -21,6 +22,8 @@ export function makeFormatters(locale: string, now: () => number = Date.now) {
     date: (ms: number) => df.format(ms),
     /** A 0–1 fraction as a whole percent ("42 %" in cs, "42%" in en). */
     percent: (fraction: number) => pct.format(fraction),
+    /** A file size ("1.2 GB"). */
+    bytes: (n: number) => formatBytes(n, locale),
     relative: (ms: number) => {
       const diff = ms - now();
       for (const [unit, size] of UNITS) {

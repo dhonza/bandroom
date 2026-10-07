@@ -138,6 +138,33 @@ describe("song page tracks", () => {
   });
 });
 
+describe("song page sizes (SPEC §28.6)", () => {
+  it("shows the song's, the track's and the version's stored sizes", async () => {
+    const sized: Track = {
+      ...track,
+      bytes: 5 * 1024 * 1024,
+      current: track.current && { ...track.current, storedBytes: 2 * 1024 * 1024 },
+    };
+    mockApi({
+      "GET /auth/session": () => ({ body: { user: makeUser({ id: "u1", globalRole: "member" }) } }),
+      "GET /songs/s1": () => ({ body: { song: { ...song, bytes: 7 * 1024 * 1024 } } }),
+      "GET /songs/s1/tracks": () => ({ body: { tracks: [sized] } }),
+    });
+    const i18n = i18next.createInstance();
+    await initI18n("en", i18n);
+    render(
+      <Providers config={config} i18n={i18n}>
+        <RouterProvider router={createMemoryRouter(routes, { initialEntries: ["/songs/s1"] })} />
+      </Providers>,
+    );
+    expect(await screen.findByTestId("song-meta")).toHaveTextContent("7 MB");
+    const row = await screen.findByTestId("track-row");
+    expect(
+      within(row).getByText("3:07 · 48 kHz · 24-bit · 2 MB · all versions 5 MB · -14.2 LUFS"),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("song page track reorder (SPEC §28.5)", () => {
   const drums: Track = { ...track, id: "t2", name: "Drums", sortOrder: 1 };
   const renderAs = async (caps: Song["access"]["capabilities"], role: Song["access"]["role"]) => {

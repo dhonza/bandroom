@@ -570,6 +570,10 @@
     "manager": "Manager",
     "admin": "Admin"
   },
+  "storage": {
+    "trackTotal": "all versions {{size}}",
+    "stored": "{{size}} stored"
+  },
   "tracks": {
     "title": "Tracks",
     "dropHint": "Drop audio files here or tap to upload",

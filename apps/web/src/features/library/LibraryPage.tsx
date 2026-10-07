@@ -166,6 +166,9 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
         </Text>
         <Text size="sm" c="dimmed">
           {t("counts.songs", { count: project.songCount })} · {fmt.relative(project.updatedAt)}
+          {project.bytes != null && (
+            <span data-testid="project-bytes"> · {fmt.bytes(project.bytes)}</span>
+          )}
         </Text>
         {(project.visibility === "reduced" || project.archivedAt !== null || offline) && (
           <Group gap={6}>

@@ -10,8 +10,11 @@ export function VersionStatus({
   version: v,
   color,
   locale,
+  trackBytes,
 }: {
   version: TrackVersion;
+  /** The whole track's stored bytes, shown when it has more versions (SPEC §28.6). */
+  trackBytes?: number | undefined;
   color: string;
   locale: string;
 }) {
@@ -45,7 +48,10 @@ export function VersionStatus({
               formatDuration(m.durationSec),
               t("tracks.sampleRate", { khz: Math.round(m.sampleRate / 100) / 10 }),
               m.bitDepth ? t("tracks.bitDepth", { bits: m.bitDepth }) : null,
-              formatBytes(v.sizeBytes, locale),
+              formatBytes(v.storedBytes ?? v.sizeBytes, locale),
+              trackBytes !== undefined
+                ? t("storage.trackTotal", { size: formatBytes(trackBytes, locale) })
+                : null,
               m.integratedLufs !== null
                 ? t("tracks.lufs", { lufs: m.integratedLufs.toFixed(1) })
                 : null,

@@ -411,6 +411,9 @@ function VersionItem({
               fmt.dateTime(v.createdAt),
               v.media ? formatDuration(v.media.durationSec) : null,
               v.originalFilename,
+              v.storedBytes !== undefined
+                ? t("storage.stored", { size: fmt.bytes(v.storedBytes) })
+                : null,
             ]
               .filter(Boolean)
               .join(" · ")}

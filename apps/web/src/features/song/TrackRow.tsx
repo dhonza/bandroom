@@ -231,7 +231,12 @@ export function TrackRow({
             )}
           </Group>
           {v && (
-            <VersionStatus version={v} color={track.color} locale={i18n.resolvedLanguage ?? "en"} />
+            <VersionStatus
+              version={v}
+              color={track.color}
+              locale={i18n.resolvedLanguage ?? "en"}
+              trackBytes={track.versionCount > 1 ? track.bytes : undefined}
+            />
           )}
         </Stack>
       </Group>
