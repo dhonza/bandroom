@@ -386,7 +386,7 @@
         "artworkUnavailable": "This Samply project picture can’t be imported: the Samply API doesn’t provide it. After the import, upload it in the project’s settings."
       },
       "action": {
-        "songMix": "Song (mix)",
+        "songSingle": "Song (single track)",
         "songMultitrack": "Multitrack song",
         "trackOf": "Track of another song",
         "document": "Document",
@@ -572,8 +572,6 @@
     "empty": "No tracks yet.",
     "uploading": "Uploading {{percent}} % of {{size}}",
     "cancelUpload": "Cancel upload",
-    "mix": "mix",
-    "mixTrackName": "Mix",
     "failed": "Processing failed",
     "processing": "Processing… {{percent}} %",
     "dualMono": "dual mono",
@@ -596,14 +594,8 @@
     "edit": "Edit track",
     "fields": {
       "name": "Name",
-      "role": "Type",
-      "roleHint": "A mix track holds the full stereo mix; the player plays it instead of the automatic mix when the Mixer is closed.",
       "instrument": "Instrument",
       "instrumentHint": "e.g. bass — used by “Mute my instrument” in the Mixer."
-    },
-    "roles": {
-      "track": "Track (stem)",
-      "mix": "Mix"
     },
     "match": {
       "title": "Where should these files go?",
@@ -1193,14 +1185,6 @@
       "song": "This song",
       "versions": "Chosen versions"
     },
-    "content": {
-      "mix-only": "Mix only",
-      "all-tracks": "All tracks"
-    },
-    "contentHint": {
-      "mix-only": "Visitors hear the mix track, or the automatic mix when there is none. They get no Mixer.",
-      "all-tracks": "Visitors get every track in the Mixer (mute, solo, loop) and can close it to play the mix."
-    },
     "versions": {
       "current-only": "Current versions",
       "all": "All versions"
@@ -1224,7 +1208,6 @@
       "labelHint": "Only the band sees it, e.g. who the link is for.",
       "labelPlaceholder": "For the mastering engineer",
       "scope": "Share",
-      "content": "Tracks",
       "versions": "Versions",
       "pickVersions": "Versions to share",
       "password": "Require a password",
@@ -1417,8 +1400,7 @@
       "processing": "Processing",
       "processingPercent": "Processing {{percent}}",
       "queued_one": "{{count}} waiting",
-      "queued_other": "{{count}} waiting",
-      "mix": "Preparing mix"
+      "queued_other": "{{count}} waiting"
     },
     "tooltip": {
       "failed_one": "{{count}} file could not be processed; upload it again or open the song to retry.",
@@ -1426,9 +1408,7 @@
       "processing_one": "{{count}} file is being processed (waveform, streaming versions).",
       "processing_other": "{{count}} files are being processed (waveform, streaming versions).",
       "queued_one": "{{count}} file is waiting to be processed.",
-      "queued_other": "{{count}} files are waiting to be processed.",
-      "mix_queued": "The automatic mix will be made shortly.",
-      "mix_processing": "The automatic mix is being made."
+      "queued_other": "{{count}} files are waiting to be processed."
     }
   },
   "trash": {

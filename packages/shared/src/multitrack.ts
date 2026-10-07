@@ -68,24 +68,21 @@ export function lengthsDiffer(durations: readonly (number | null)[]): boolean {
 /** Longest track name (the same limit as {@link TrackNameSchema}). */
 const TRACK_NAME_MAX = 120;
 
-/** A source track of a multitrack song, as far as its name and role in the new song go. */
+/** A source track of a multitrack song, as far as its name in the new song goes. */
 export interface MultitrackTrackSource {
   name: string;
-  role: "track" | "mix";
   songId: string;
   songTitle: string;
 }
 
 /**
- * Name and role of each track in a new multitrack song (SPEC §26.5), in the order given. A source
- * song that brings exactly one track, a mix (a loose file dropped on a project becomes a song with
- * one "Mix" track), gives that track its song title as the name, and the track becomes a normal
- * track: audible, part of the automatic mix and not muted by default. Nothing changes when the new
- * song would hold one track only.
+ * Name of each track in a new multitrack song (SPEC §26.5), in the order given. A source song that
+ * brings exactly one track (a loose file dropped on a project becomes a one-track song) gives that
+ * track its song title as the name. Nothing changes when the new song would hold one track only.
  */
 export function multitrackTrackNames(
   sources: readonly MultitrackTrackSource[],
-): { name: string; role: "track" | "mix" }[] {
+): { name: string }[] {
   const perSong = new Map<string, number>();
   for (const s of sources) perSong.set(s.songId, (perSong.get(s.songId) ?? 0) + 1);
   return sources.map((s) => multitrackTrackName(s, perSong.get(s.songId) ?? 0, sources.length));
@@ -99,11 +96,10 @@ export function multitrackTrackName(
   s: MultitrackTrackSource,
   fromSong: number,
   total: number,
-): { name: string; role: "track" | "mix" } {
+): { name: string } {
   const title = s.songTitle.trim().slice(0, TRACK_NAME_MAX).trim();
-  if (total > 1 && fromSong === 1 && s.role === "mix" && title.length > 0)
-    return { name: title, role: "track" };
-  return { name: s.name, role: s.role };
+  if (total > 1 && fromSong === 1 && title.length > 0) return { name: title };
+  return { name: s.name };
 }
 
 const Id = z.string().min(1).max(64);

@@ -56,11 +56,11 @@ export function FolderDrop({ project }: { project: Project }) {
     for (const g of groups) {
       const groupFiles = g.indexes.flatMap((i) => (files[i] ? [files[i]] : []));
       const songs = g.folder
-        ? [{ title: g.folder, files: groupFiles, role: "track" as const }]
+        ? [{ title: g.folder, files: groupFiles, loose: false }]
         : groupFiles.map((f) => ({
             title: f.name.replace(/\.[^.]+$/, ""),
             files: [f],
-            role: "mix" as const,
+            loose: true,
           }));
       for (const s of songs) {
         let songId: string;
@@ -75,14 +75,14 @@ export function FolderDrop({ project }: { project: Project }) {
           continue;
         }
         created++;
-        const names =
-          s.role === "mix"
-            ? [t("tracks.mixTrackName")]
-            : trackNamesFromFiles(s.files.map((f) => f.name));
+        // A loose file is a one-track song; its track is named after the song (SPEC §5.1, M21).
+        const names = s.loose
+          ? [s.title.slice(0, 120)]
+          : trackNamesFromFiles(s.files.map((f) => f.name));
         s.files.forEach((file, i) => {
           startUpload(
             file,
-            { type: "newTrack", songId, name: names[i] ?? file.name, role: s.role },
+            { type: "newTrack", songId, name: names[i] ?? file.name },
             { songId, projectId: project.id },
           )
             .then(invalidate)

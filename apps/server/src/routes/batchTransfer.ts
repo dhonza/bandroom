@@ -7,7 +7,6 @@ import {
   moveSongTo,
   multitrackPreview,
   multitrackSources,
-  scheduleMixdown,
   type ProjectRow,
   type SongRow,
   type UserRow,
@@ -135,7 +134,7 @@ export function registerBatchTransferRoutes(app: FastifyInstance, ctx: AppContex
               ...(mode === "copy" && { fromTrackId: t.fromTrackId }),
             },
           });
-          // Renamed (named after its source song, or in the dialog) or turned into a track.
+          // Renamed (named after its source song, or in the dialog).
           if (t.changed)
             audit(db, request, {
               action: "track.updated",
@@ -145,12 +144,9 @@ export function registerBatchTransferRoutes(app: FastifyInstance, ctx: AppContex
               targetId: t.id,
               details: {
                 batchId,
-                changes: [
-                  ...(t.changed.name !== t.name ? ["name"] : []),
-                  ...(t.changed.role !== t.role ? ["role"] : []),
-                ],
+                changes: ["name"],
                 before: t.changed,
-                after: { name: t.name, role: t.role },
+                after: { name: t.name },
               },
             });
         }
@@ -164,11 +160,6 @@ export function registerBatchTransferRoutes(app: FastifyInstance, ctx: AppContex
             details: { batchId, title: s.title, emptied: true },
           });
         }
-        // The automatic mixes follow: the new song and the sources that keep tracks.
-        scheduleMixdown(db, r.song.id, now);
-        const gone = new Set(r.emptied.map((s) => s.id));
-        if (mode === "move")
-          for (const id of r.sourceSongIds) if (!gone.has(id)) scheduleMixdown(db, id, now);
         return { result: r, project };
       },
       { behavior: "immediate" },
@@ -242,7 +233,6 @@ export function registerBatchTransferRoutes(app: FastifyInstance, ctx: AppContex
               fromProjectId: from.projectId,
             },
           });
-          scheduleMixdown(db, song.id, now);
         }
         return { project, copies };
       },

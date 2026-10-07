@@ -79,7 +79,6 @@ beforeAll(async () => {
   const created = createTrackWithVersion(t.db, {
     songId,
     name: "Bass",
-    role: "track",
     assetId: asset.id,
     uploadedBy: eda.id,
   });

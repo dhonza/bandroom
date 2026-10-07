@@ -7,9 +7,9 @@ import {
   insertUser,
   isUsernameTaken,
   loadConfig,
+  migrateDatabase,
   openDb,
   pendingMigrationCount,
-  runMigrations,
   type Db,
 } from "@bandroom/server-core";
 import { DisplayNameSchema, PasswordSchema, UsernameSchema } from "@bandroom/shared";
@@ -40,7 +40,7 @@ function withDb<T>(env: Record<string, string | undefined>, fn: (db: Db, appUrl:
   const config = loadConfig(env);
   const db = openDb(config.dbPath);
   try {
-    runMigrations(db, MIGRATIONS_DIR);
+    migrateDatabase(db, MIGRATIONS_DIR);
     return fn(db, config.appUrl);
   } finally {
     db.$client.close();
@@ -115,8 +115,14 @@ export async function runCli(
         const config = loadConfig(env);
         const db = openDb(config.dbPath);
         const pending = pendingMigrationCount(db.$client, MIGRATIONS_DIR);
-        runMigrations(db, MIGRATIONS_DIR);
+        // M21: converts mix tracks before the migrations drop the old columns (SPEC §27.2).
+        const { conversion, purgedAutoMixes } = migrateDatabase(db, MIGRATIONS_DIR);
         db.$client.close();
+        if (conversion)
+          io.out(
+            `Converted mix tracks: ${conversion.movedTracks} moved to new songs, ` +
+              `${purgedAutoMixes} automatic mixes removed`,
+          );
         io.out(`Applied ${pending} migration(s) to ${config.dbPath}`);
         return 0;
       }

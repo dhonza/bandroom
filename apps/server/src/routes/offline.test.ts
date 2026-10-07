@@ -120,7 +120,7 @@ describe("offlineVariantNames", () => {
 });
 
 describe("song offline manifest (SPEC §13)", () => {
-  it("lists the current versions' Opus, seek index, peaks, the mix and documents with sizes", async () => {
+  it("lists the current versions' Opus, seek index, peaks and documents with sizes", async () => {
     const res = await songManifest();
     expect(res.statusCode).toBe(200);
     const m = res.json<{ song: OfflineSongManifest }>().song;
@@ -136,8 +136,10 @@ describe("song offline manifest (SPEC §13)", () => {
     expect(hashes).not.toContain(v?.variants.opusLow?.hash);
     expect(hashes).not.toContain(v?.variants.flac?.hash);
     expect(new Set(hashes).size).toBe(hashes.length);
-    // The automatic mix (Listen mode) adds its own files.
-    expect(m.blobs.length).toBeGreaterThan(3);
+    // Only the track's files: no Listen-mode mix since M21 (SPEC §13, §27).
+    expect(hashes.sort()).toEqual(
+      [v?.variants.opus?.hash, v?.variants.seekIndex.opus, v?.variants.peaks?.hash].sort(),
+    );
     expect(m.documents).toHaveLength(1);
 
     // Every file is readable by this user, and the sizes are right.

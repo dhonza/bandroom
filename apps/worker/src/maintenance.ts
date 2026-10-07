@@ -61,8 +61,7 @@ export function purgeExpiredTrash(db: Db, now: number): { purged: number; bytesF
   const batchId = uuidv7(now);
   return db.transaction(() => {
     const r = purgeTrashItems(db, ids, now);
-    const visible = r.purged.filter((p) => !p.system);
-    for (const p of visible) {
+    for (const p of r.purged) {
       recordEvent(db, {
         action: `${p.kind}.purged`,
         actorType: "system",
@@ -74,7 +73,7 @@ export function purgeExpiredTrash(db: Db, now: number): { purged: number; bytesF
         ts: now,
       });
     }
-    return { purged: visible.length, bytesFreed: r.bytesFreed };
+    return { purged: r.purged.length, bytesFreed: r.bytesFreed };
   });
 }
 

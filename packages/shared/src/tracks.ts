@@ -85,7 +85,6 @@ export const TrackSchema = z.object({
   id: z.string(),
   songId: z.string(),
   name: z.string(),
-  role: z.enum(["track", "mix"]),
   color: PaletteColorSchema,
   sortOrder: z.number(),
   instrumentTag: z.string(),
@@ -105,7 +104,6 @@ export const UploadTargetSchema = z.discriminatedUnion("type", [
     type: z.literal("newTrack"),
     songId: z.string(),
     name: z.string().trim().min(1).max(120),
-    role: z.enum(["track", "mix"]).default("track"),
   }),
   z.object({ type: z.literal("newVersion"), trackId: z.string() }),
   z.object({ type: z.literal("projectImage"), projectId: z.string() }),
@@ -147,23 +145,15 @@ export type StreamEvent = z.infer<typeof StreamEventSchema>;
 export const StackVersionSchema = TrackVersionSchema.extend({ isCurrent: z.boolean() });
 export type StackVersion = z.infer<typeof StackVersionSchema>;
 
-/** What Listen mode plays for a song (SPEC §6.10). */
-export const ListenSourceSchema = z.object({
-  trackVersionId: z.string(),
-  isAutoMix: z.boolean(),
-  status: AssetStatusSchema,
-  durationSec: z.number().nullable(),
-  opus: z.object({ hash: z.string(), bitrate: z.number() }).nullable(),
-  opusLow: z.object({ hash: z.string(), bitrate: z.number() }).nullable(),
-  peaks: z.object({ hash: z.string(), overview: z.array(z.number()) }).nullable(),
-});
-export type ListenSource = z.infer<typeof ListenSourceSchema>;
-
+/**
+ * A song of a project queue (SPEC §6.10, §18.3): `ready` when at least one live track has a
+ * current version that is ready to play. The engine queue skips songs that are not ready.
+ */
 export const QueueItemSchema = z.object({
   songId: z.string(),
   title: z.string(),
   subtitle: z.string(),
-  listen: ListenSourceSchema.nullable(),
+  ready: z.boolean(),
 });
 export type QueueItem = z.infer<typeof QueueItemSchema>;
 

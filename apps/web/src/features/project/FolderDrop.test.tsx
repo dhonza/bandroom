@@ -62,7 +62,7 @@ function upload(overrides: Partial<UploadItem>): UploadItem {
     id: "up1",
     filename: "bass.wav",
     size: 1024,
-    target: { type: "newTrack", songId: "s1", name: "Bass", role: "track" },
+    target: { type: "newTrack", songId: "s1", name: "Bass" },
     songId: "s1",
     projectId: "p1",
     progress: 0.5,
@@ -112,7 +112,8 @@ describe("FolderDrop (SPEC §5.1)", () => {
     expect(screen.getByText("take1.wav")).toBeInTheDocument();
     expect(startUpload).toHaveBeenCalledWith(
       expect.any(File),
-      { type: "newTrack", songId: "s1", name: "Mix", role: "mix" },
+      // A loose file: one track named after the song (SPEC §5.1, M21).
+      { type: "newTrack", songId: "s1", name: "take1" },
       { songId: "s1", projectId: "p1" },
     );
   });

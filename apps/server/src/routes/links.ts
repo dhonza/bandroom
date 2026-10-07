@@ -78,7 +78,6 @@ export function registerLinkRoutes(app: FastifyInstance, ctx: AppContext): void 
       songId: link.songId,
       songTitle: song?.title ?? null,
       versionIds: parseVersionIds(link.versionIds),
-      content: link.content,
       versions: link.versions,
       hasPassword: link.passwordHash !== null,
       expiresAt: link.expiresAt,
@@ -160,8 +159,7 @@ export function registerLinkRoutes(app: FastifyInstance, ctx: AppContext): void 
         projectId: project.id,
         songId: song?.id ?? null,
         versionIds,
-        // A versions link shows exactly its versions; content/versions do not apply.
-        content: body.scopeType === "versions" ? "all-tracks" : body.content,
+        // A versions link shows exactly its versions; `versions` does not apply.
         versions: body.scopeType === "versions" ? "all" : body.versions,
         passwordHash,
         expiresAt: body.expiresAt ?? null,
@@ -173,7 +171,6 @@ export function registerLinkRoutes(app: FastifyInstance, ctx: AppContext): void 
       });
       logged(request, row, "link.created", {
         scopeType: row.scopeType,
-        content: row.content,
         versions: row.versions,
         versionCount: versionIds.length,
         hasPassword: row.passwordHash !== null,
@@ -230,7 +227,6 @@ export function registerLinkRoutes(app: FastifyInstance, ctx: AppContext): void 
       if (body[k] !== undefined) (patch as Record<string, unknown>)[k] = body[k];
     }
     if (link.scopeType !== "versions") {
-      if (body.content !== undefined) patch.content = body.content;
       if (body.versions !== undefined) patch.versions = body.versions;
     }
     if (body.password !== undefined) {

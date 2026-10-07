@@ -251,9 +251,7 @@ export function songWhatsNew(db: Db, userId: string, songId: string): WhatsNew {
       and(
         eq(tracks.songId, songId),
         isNull(tracks.deletedAt),
-        eq(tracks.isSystem, false),
         isNull(trackVersions.deletedAt),
-        eq(trackVersions.isAutoMix, false),
         gt(trackVersions.createdAt, since),
         byOthers(trackVersions.uploadedBy),
       ),

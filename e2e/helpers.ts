@@ -62,18 +62,16 @@ export async function openMixer(page: Page): Promise<void> {
 }
 
 /**
- * Closes the Mixer so the song plays the mix, waiting until there is a mix to play (until then
- * the closed Mixer plays the default mix, SPEC §25.5).
+ * Closes the Mixer, waiting until a track is ready: the closed Mixer plays the tracks through the
+ * engine (no rendered mix since M21, SPEC §27; group C makes this the only player panel).
  */
 export async function closeMixer(page: Page, timeout = 120_000): Promise<void> {
   const toggle = page.getByTestId("mixer-toggle").first();
-  const listen = page.getByTestId("listen-panel");
-  // Until a track is ready there may be neither (nothing to play yet).
-  await expect(toggle.or(listen).first()).toBeVisible({ timeout });
-  if ((await toggle.count()) > 0 && (await toggle.getAttribute("aria-pressed")) === "true") {
-    await toggle.click();
-  }
-  await listen.waitFor({ timeout });
+  const closed = page.getByTestId("default-mix-panel");
+  // Until a track is ready there is nothing to play yet.
+  await expect(toggle.or(closed).first()).toBeVisible({ timeout });
+  if ((await toggle.getAttribute("aria-pressed")) === "true") await toggle.click();
+  await closed.waitFor({ timeout });
 }
 
 /**

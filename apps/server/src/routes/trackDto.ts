@@ -2,7 +2,6 @@ import type { TrackListItem, TrackListVersion } from "@bandroom/server-core";
 import {
   PaletteColorSchema,
   type DownloadFormat,
-  type ListenSource,
   type Track,
   type TrackVersion,
 } from "@bandroom/shared";
@@ -119,7 +118,6 @@ export function toTrack(item: TrackListItem, allowDownload: boolean): Track {
     id: item.track.id,
     songId: item.track.songId,
     name: item.track.name,
-    role: item.track.role,
     color: color.success ? color.data : "blue",
     sortOrder: item.track.sortOrder,
     instrumentTag: item.track.instrumentTag,
@@ -129,28 +127,5 @@ export function toTrack(item: TrackListItem, allowDownload: boolean): Track {
     versionCount: item.versionCount,
     createdBy: item.track.createdBy,
     current: item.current ? toTrackVersion(item.current, allowDownload) : null,
-  };
-}
-
-export function toListenSource(v: TrackListVersion, isAutoMix: boolean): ListenSource {
-  const vars = variantMap(v);
-  const ref = (name: string) => {
-    const x = vars.get(name);
-    return x ? { hash: x.hash, bitrate: num(x.meta.bitrate) } : null;
-  };
-  const peaks = vars.get("peaks");
-  return {
-    trackVersionId: v.version.id,
-    isAutoMix,
-    status: v.asset.status,
-    durationSec: v.probe?.durationSec ?? null,
-    opus: ref("opus"),
-    opusLow: ref("opus_low"),
-    peaks: peaks
-      ? {
-          hash: peaks.hash,
-          overview: Array.isArray(peaks.meta.overview) ? (peaks.meta.overview as number[]) : [],
-        }
-      : null,
   };
 }

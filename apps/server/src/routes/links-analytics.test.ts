@@ -103,7 +103,6 @@ describe("analytics and management", () => {
         body: {
           scopeType: "song",
           label: "",
-          content: "all-tracks",
           versions: "all",
           expiresAt: null,
           allowDownload: false,

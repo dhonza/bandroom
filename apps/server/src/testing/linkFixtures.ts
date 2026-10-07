@@ -89,7 +89,6 @@ export async function makeLink(
 ): Promise<PublicLink> {
   const full = {
     label: "For mastering",
-    content: "all-tracks",
     versions: "current-only",
     expiresAt: null,
     allowDownload: false,
@@ -175,7 +174,6 @@ export function setupLinkFixtures(): void {
       type: "newTrack",
       songId,
       name: "Mix",
-      role: "mix",
     });
     await tusUpload(t, admin, await file("imp_44100_s16_stereo"), "Drums.wav", {
       type: "newTrack",

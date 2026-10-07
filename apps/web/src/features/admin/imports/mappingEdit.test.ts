@@ -29,7 +29,7 @@ const node = (
     id,
     kind,
     name: id,
-    action: kind === "folder" ? "container" : "songMix",
+    action: kind === "folder" ? "container" : "songSingle",
     targetId: null,
     trackName: id,
     isAudio: kind !== "folder",
@@ -92,10 +92,10 @@ describe("mapping edits", () => {
   it("offers no folder grouping; multitrack appears only on grouped items", () => {
     const m = mapping();
     expect(actionsFor(project(m).nodes[0] as ImportNode)).toEqual(["container", "skip"]);
-    expect(actionsFor(kid(m, 0))).toEqual(["songMix", "trackOf", "skip"]);
+    expect(actionsFor(kid(m, 0))).toEqual(["songSingle", "trackOf", "skip"]);
     expect(actionsFor(kid(m, 3))).toEqual(["document", "skip"]);
     const g = groupAsMultitrack(m, "p", ["Tune - Bass", "Tune - Drums"], "Tune");
-    expect(actionsFor(kid(g, 0))).toEqual(["songMix", "songMultitrack", "trackOf", "skip"]);
+    expect(actionsFor(kid(g, 0))).toEqual(["songSingle", "songMultitrack", "trackOf", "skip"]);
   });
 
   it("groups audio items into one multitrack song, whatever their length", () => {
@@ -110,10 +110,7 @@ describe("mapping edits", () => {
     const g = groupAsMultitrack(m, "p", ["Tune - Bass", "Tune - Drums"], "Tune");
     const plan = planProject(project(g));
     const tune = plan.songs.find((s) => s.title === "Tune");
-    expect(tune?.tracks.map((t) => [t.name, t.role])).toEqual([
-      ["Bass", "track"],
-      ["Drums", "track"],
-    ]);
+    expect(tune?.tracks.map((t) => t.name)).toEqual(["Bass", "Drums"]);
     expect(computeTotals(g)).toMatchObject({ songs: 3, tracks: 4 });
     expect(validateMapping(g)).toEqual([]);
     // A group including a different-length item is fine; a lone item or a document is not.
@@ -132,7 +129,7 @@ describe("mapping edits", () => {
       "lyrics",
     ]);
     m = setNodeAction(m, "p", "Tune - Bass", "skip");
-    expect(kid(m, 1).action).toBe("songMix");
+    expect(kid(m, 1).action).toBe("songSingle");
     expect(kid(m, 3).targetId).toBeNull();
     plan = planProject(project(m));
     expect(plan.projectDocuments.map((d) => d.name)).toEqual(["lyrics"]);
@@ -156,7 +153,7 @@ describe("mapping edits", () => {
 
   it("ignores invalid actions, skips folders recursively, excludes projects", () => {
     const m0 = mapping();
-    expect(setNodeAction(m0, "p", "lyrics", "songMix")).toBe(m0);
+    expect(setNodeAction(m0, "p", "lyrics", "songSingle")).toBe(m0);
     expect(setDocumentTarget(m0, "p", "Single", "Tune - Bass")).toBe(m0);
     const skipped = setNodeAction(m0, "p", "Tune", "skip");
     expect(project(skipped).nodes[0]?.children.every((c) => c.action === "skip")).toBe(true);

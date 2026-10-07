@@ -3,7 +3,6 @@ import {
   linkCanDownload,
   linkCapabilities,
   linkHasCapability,
-  linkPlayerMode,
   linkRole,
   linkShowsComment,
   linkShowsVersion,
@@ -13,7 +12,6 @@ import {
 
 const base: LinkPolicy = {
   scopeType: "song",
-  content: "all-tracks",
   versions: "all",
   versionIds: [],
   allowDownload: false,
@@ -23,8 +21,6 @@ const base: LinkPolicy = {
 
 const v = (over: Partial<Parameters<typeof linkShowsVersion>[1]> = {}) => ({
   versionId: "v1",
-  trackRole: "track" as const,
-  trackIsSystem: false,
   isCurrent: true,
   ...over,
 });
@@ -74,9 +70,9 @@ describe("capabilities", () => {
 });
 
 describe("linkShowsVersion", () => {
-  it("all tracks, all versions: everything", () => {
+  it("all versions: everything", () => {
     expect(linkShowsVersion(base, v({ isCurrent: false }))).toBe(true);
-    expect(linkShowsVersion(base, v({ trackIsSystem: true }))).toBe(true);
+    expect(linkShowsVersion(base, v())).toBe(true);
   });
 
   it("current-only hides older versions", () => {
@@ -85,24 +81,10 @@ describe("linkShowsVersion", () => {
     expect(linkShowsVersion(l, v({ isCurrent: false }))).toBe(false);
   });
 
-  it("mix-only shows mix tracks and the automatic mix only", () => {
-    const l = { ...base, content: "mix-only" as const };
-    expect(linkShowsVersion(l, v())).toBe(false);
-    expect(linkShowsVersion(l, v({ trackRole: "mix" }))).toBe(true);
-    expect(linkShowsVersion(l, v({ trackIsSystem: true }))).toBe(true);
-    expect(
-      linkShowsVersion(
-        { ...l, versions: "current-only" },
-        v({ trackRole: "mix", isCurrent: false }),
-      ),
-    ).toBe(false);
-  });
-
   it("versions links show exactly the listed versions", () => {
     const l = { ...base, scopeType: "versions" as const, versionIds: ["v1"] };
     expect(linkShowsVersion(l, v({ isCurrent: false }))).toBe(true);
     expect(linkShowsVersion(l, v({ versionId: "v2" }))).toBe(false);
-    expect(linkShowsVersion(l, v({ versionId: "v2", trackIsSystem: true }))).toBe(false);
   });
 });
 
@@ -112,17 +94,5 @@ describe("linkShowsComment", () => {
     expect(linkShowsComment(base, "L1", { linkId: null })).toBe(false);
     expect(linkShowsComment(base, "L1", { linkId: "L2" })).toBe(false);
     expect(linkShowsComment({ showComments: true }, "L1", { linkId: null })).toBe(true);
-  });
-});
-
-describe("linkPlayerMode", () => {
-  it.each([
-    ["song", "mix-only", 3, "listen"],
-    ["project", "all-tracks", 1, "rehearse"],
-    ["song", "all-tracks", 4, "rehearse"],
-    ["versions", "all-tracks", 1, "listen"],
-    ["versions", "all-tracks", 2, "rehearse"],
-  ] as const)("%s %s with %d tracks → %s", (scopeType, content, n, mode) => {
-    expect(linkPlayerMode({ scopeType, content }, n)).toBe(mode);
   });
 });

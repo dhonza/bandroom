@@ -97,27 +97,21 @@ test("Song lock: frozen controls, refused changes, live for other tabs, unlock",
   await other.close();
 });
 
-test("Default mix: the closed Mixer plays the tracks until the mix is ready", async ({
+test("Closed Mixer: the engine plays the tracks (no automatic mix, SPEC §27)", async ({
   page,
 }, testInfo) => {
   test.setTimeout(720_000);
   await loginAsNewUser(page, page.request, testInfo, "member");
   await songWithTrack(page, testInfo);
 
-  // No mix yet (60 s debounce after the upload): the default mix plays in the closed Mixer.
   const panel = page.getByTestId("default-mix-panel");
   await expect(panel).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("default-mix-note")).toBeVisible();
   await expect(page.getByTestId("mixer-toggle")).toHaveAttribute("aria-pressed", "false");
   await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("stopped");
   await page.getByTestId("rehearse-play").click();
   await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("playing");
   await page.getByTestId("rehearse-play").click();
   await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("stopped");
-
-  // Once the automatic mix is rendered, the mix player takes over. One worker processes every
-  // test's uploads first (the mix queues behind them), so under full-suite load this takes minutes.
-  await expect(page.getByTestId("listen-panel")).toBeVisible({ timeout: 480_000 });
-  await expect(panel).toHaveCount(0);
-  await expect(page.getByTestId("listen-play")).toBeEnabled();
+  // No mix player takes over any more.
+  await expect(page.getByTestId("listen-panel")).toHaveCount(0);
 });

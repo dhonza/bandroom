@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import { generateFixtures, matrix, TONE_FILE } from "@bandroom/fixtures";
-import { getJob, listEvents } from "@bandroom/server-core";
+import { listEvents } from "@bandroom/server-core";
 import {
   ApiErrorSchema,
   createProject,
@@ -8,14 +8,11 @@ import {
   deleteTrack,
   deleteTrackVersion,
   getProjectQueue,
-  getSongListen,
   listSongTracks,
   listTrackVersions,
-  ListenSourceSchema,
   QueueItemSchema,
   reorderSongTracks,
   reorderTrackVersions,
-  retryTrackVersion,
   setCurrentTrackVersion,
   setProjectGrant,
   StackVersionSchema,
@@ -52,14 +49,11 @@ const tracksOf = async (cookie: string) =>
   z
     .object({ tracks: z.array(TrackSchema) })
     .parse((await call(t, listSongTracks, { params: { id: songId } }, cookie)).json()).tracks;
+/** No automatic mix any more (SPEC §27): nothing schedules `audio.mixdown`. */
 const mixdownJobs = () =>
-  t.db.$client
-    .prepare(
-      "SELECT id, status, run_after FROM jobs WHERE type = 'audio.mixdown' AND dedupe_key = ?",
-    )
-    .all(`mixdown:${songId}`) as { id: string; status: string; run_after: number }[];
+  t.db.$client.prepare("SELECT id FROM jobs WHERE type = 'audio.mixdown'").all();
 
-/** Runs queued jobs including the (normally delayed) mixdowns that ingests schedule. */
+/** Runs every queued job now. */
 async function runAllJobsNow() {
   for (let pass = 0; pass < 3; pass++) {
     t.db.$client.prepare("UPDATE jobs SET run_after = 0 WHERE status = 'queued'").run();
@@ -155,7 +149,7 @@ describe("version stack (SPEC §11.3)", () => {
       notes: "rough",
     });
     expect(listEvents(t.db, { action: "version.set_current" })).toHaveLength(1);
-    expect(mixdownJobs().filter((j) => j.status === "queued")).toHaveLength(1);
+    expect(mixdownJobs()).toEqual([]);
     expect(v2?.number).toBe(2);
   });
 
@@ -185,18 +179,15 @@ describe("version stack (SPEC §11.3)", () => {
 });
 
 describe("tracks", () => {
-  it("renames, recolors and reorders tracks; default gain changes reschedule the mixdown", async () => {
+  it("renames, recolors and reorders tracks; default gain changes schedule nothing", async () => {
     await call(
       t,
       updateTrack,
       { params: { id: trackId }, body: { name: "Bass DI", color: "green", instrumentTag: "bass" } },
       member,
     );
-    const before = mixdownJobs().find((j) => j.status === "queued")?.run_after ?? 0;
-    await new Promise((r) => setTimeout(r, 5));
     await call(t, updateTrack, { params: { id: trackId }, body: { defaultGainDb: -3 } }, member);
-    const after = mixdownJobs().find((j) => j.status === "queued")?.run_after ?? 0;
-    expect(after).toBeGreaterThan(before);
+    expect(mixdownJobs()).toEqual([]);
     const drums = (await tracksOf(member)).find((x) => x.name === "Drums");
     await call(
       t,
@@ -251,7 +242,7 @@ describe("tracks", () => {
 });
 
 describe("version gain (SPEC §25.6)", () => {
-  it("follows the track's edit rule, logs before/after and reschedules the mixdown", async () => {
+  it("follows the track's edit rule and logs before/after", async () => {
     await seedUser(t, "eva", "member");
     const eva = await loginAs(t, "eva");
     const drums = (await tracksOf(admin)).find((x) => x.name === "Drums");
@@ -274,7 +265,7 @@ describe("version gain (SPEC §25.6)", () => {
     expect((await patch(admin, current, { gainDb: "loud" })).statusCode).toBe(400);
     expect((await patch(admin, current, { gainDb: null })).statusCode).toBe(400);
 
-    // The track's creator (here an admin) sets any finite value; the mix follows the current one.
+    // The track's creator (here an admin) sets any finite value.
     await call(
       t,
       setCurrentTrackVersion,
@@ -284,12 +275,8 @@ describe("version gain (SPEC §25.6)", () => {
       },
       admin,
     );
-    const before = mixdownJobs().find((j) => j.status === "queued")?.run_after ?? 0;
-    await new Promise((r) => setTimeout(r, 5));
     expect((await patch(admin, current, { gainDb: 37.5 })).statusCode).toBe(200);
-    expect(mixdownJobs().find((j) => j.status === "queued")?.run_after ?? 0).toBeGreaterThan(
-      before,
-    );
+    expect(mixdownJobs()).toEqual([]);
     expect((await tracksOf(eva)).find((x) => x.name === "Drums")?.current?.gainDb).toBe(37.5);
     expect((await patch(admin, current, { gainDb: -4 })).statusCode).toBe(200);
     // The same value again changes nothing and logs nothing.
@@ -308,76 +295,18 @@ describe("version gain (SPEC §25.6)", () => {
   });
 });
 
-describe("Listen mode source and queue (SPEC §6.10)", () => {
-  it("serves the auto-mix after the mixdown runs, and prefers an uploaded mix track", async () => {
+describe("play queue (SPEC §6.10, §27)", () => {
+  it("has no Listen source any more", async () => {
     await runAllJobsNow();
-    const listen = ListenSourceSchema.nullable().parse(
-      (await call(t, getSongListen, { params: { id: songId } }, member)).json<{ listen: unknown }>()
-        .listen,
-    );
-    expect(listen).toMatchObject({ isAutoMix: true, status: "ready" });
-    expect(listen?.opus?.hash).toMatch(/^[0-9a-f]{64}$/);
-    // Auto-mix is hidden from the track list.
-    expect((await tracksOf(member)).map((x) => x.name)).toEqual(["Drums", "Bass DI"]);
-    const blob = await t.app.inject({
-      url: `/api/v1/blobs/${listen?.opus?.hash ?? ""}`,
+    const res = await t.app.inject({
+      url: `/api/v1/songs/${songId}/listen`,
       headers: { cookie: member },
     });
-    expect(blob.statusCode).toBe(200);
-
-    // The hidden system track can be read, but no route may change it (review M11).
-    const sys = t.db.$client
-      .prepare("SELECT id, current_version_id AS v FROM tracks WHERE song_id = ? AND is_system = 1")
-      .get(songId) as { id: string; v: string };
-    const code = (res: { statusCode: number; json: () => unknown }) =>
-      res.statusCode === 200 ? "ok" : ApiErrorSchema.parse(res.json()).code;
-    const sysTrack = { params: { id: sys.id } };
-    const sysVersion = { params: { id: sys.v } };
-    expect(code(await call(t, listTrackVersions, sysTrack, admin))).toBe("ok");
-    expect(
-      (
-        await t.app.inject({
-          url: `/api/v1/track-versions/${sys.v}/download?format=opus`,
-          headers: { cookie: admin },
-        })
-      ).statusCode,
-    ).toBe(200);
-    for (const res of [
-      await call(t, updateTrack, { ...sysTrack, body: { name: "Mine now" } }, admin),
-      await call(t, deleteTrack, sysTrack, admin),
-      await call(t, reorderTrackVersions, { ...sysTrack, body: { versionIds: [sys.v] } }, admin),
-      await call(t, setCurrentTrackVersion, { ...sysTrack, body: { versionId: sys.v } }, admin),
-      await call(t, updateTrackVersion, { ...sysVersion, body: { label: "x" } }, admin),
-      await call(t, deleteTrackVersion, sysVersion, admin),
-      await call(t, retryTrackVersion, sysVersion, admin),
-    ]) {
-      expect(code(res)).toBe("NOT_FOUND");
-    }
-    const upload = await tusUpload(t, member, await fs.readFile(TONE_FILE()), "sneak.wav", {
-      type: "newVersion",
-      trackId: sys.id,
-    });
-    expect(upload.createStatus).toBe(404);
-
-    await tusUpload(t, admin, await fs.readFile(TONE_FILE()), "master.wav", {
-      type: "newTrack",
-      songId,
-      name: "Master",
-      role: "mix",
-    });
-    await runAllJobsNow();
-    const own = ListenSourceSchema.parse(
-      (await call(t, getSongListen, { params: { id: songId } }, member)).json<{ listen: unknown }>()
-        .listen,
-    );
-    expect(own.isAutoMix).toBe(false);
-    const last = mixdownJobs().at(-1);
-    expect(JSON.parse(getJob(t.db, last?.id ?? "")?.result ?? "{}")).toMatchObject({
-      status: "removed",
-    });
+    expect(res.statusCode).toBe(404);
+    expect(mixdownJobs()).toEqual([]);
   }, 120_000);
 
-  it("returns the project queue in song order with listen sources", async () => {
+  it("returns the project queue in song order with a ready flag", async () => {
     const empty = (
       await call(
         t,
@@ -389,10 +318,10 @@ describe("Listen mode source and queue (SPEC §6.10)", () => {
     const items = z
       .object({ items: z.array(QueueItemSchema) })
       .parse((await call(t, getProjectQueue, { params: { id: projectId } }, member)).json()).items;
-    expect(items.map((i) => [i.title, i.listen !== null])).toEqual([
+    expect(items.map((i) => [i.title, i.ready])).toEqual([
       ["Song", true],
       ["No audio yet", false],
     ]);
-    expect(empty).toBeTruthy();
+    expect(items[1]?.songId).toBe(empty);
   });
 });

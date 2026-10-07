@@ -131,7 +131,7 @@ describe("anonymous comments", () => {
     expect(codeOf(blocked)).toBe("RATE_LIMITED");
   });
 
-  it("strip hidden tracks and versions from comment contexts on mix-only links", async () => {
+  it("strip hidden tracks and versions from comment contexts", async () => {
     const bassT = adminTracks.find((x) => x.name === "Bass");
     const mixT = adminTracks.find((x) => x.name === "Mix");
     if (!bassT || !mixT) throw new Error("tracks missing");
@@ -149,9 +149,10 @@ describe("anonymous comments", () => {
       { params: { id: songId }, body: { body: "Agreed", parentId: top.id } },
       admin,
     );
+    // A versions link that lists the mix only: the bass track is hidden from its visitors.
     const link = await makeLink({
-      scopeType: "song",
-      content: "mix-only",
+      scopeType: "versions",
+      versionIds: [mixV1],
       allowComments: true,
       showComments: true,
     });

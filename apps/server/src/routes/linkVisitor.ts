@@ -8,7 +8,6 @@ import {
   getSongRow,
   getTrackRow,
   linkCoversBlob,
-  linkListenSource,
   linkSong,
   linkSongs,
   linkTrack,
@@ -40,7 +39,6 @@ import {
   linkCanDownload,
   getProjectQueue,
   getSong,
-  getSongListen,
   getSongTempo,
   linkCapabilities,
   linkShowsComment,
@@ -77,7 +75,7 @@ import { AccessCache, CONTENT_TYPES, DOWNLOAD_RATE_LIMIT, sendBlob } from "../ht
 import { BoundedRecent } from "../http/boundedRecent";
 import { sendVersionDownload } from "../http/versionDownload";
 import { notifyLinkComment, notifyLinkPasswordFailed } from "../notify";
-import { toListenSource, toTrack, toTrackVersion } from "./trackDto";
+import { toTrack, toTrackVersion } from "./trackDto";
 
 /** One `link.played` per visitor and song within this window (bounded, in memory). */
 const PLAY_DEDUPE_MS = 10 * 60_000;
@@ -138,7 +136,6 @@ export function registerLinkVisitorRoutes(app: FastifyInstance, ctx: AppContext)
     const song = p.link.songId ? linkSong(db, p.link, p.link.songId) : undefined;
     return {
       scopeType: p.link.scopeType,
-      content: p.link.content,
       versions: p.link.versions,
       allowComments: p.link.allowComments,
       showComments: p.link.showComments,
@@ -279,15 +276,15 @@ export function registerLinkVisitorRoutes(app: FastifyInstance, ctx: AppContext)
   }));
 
   registerLinkContract(app, ctx, getProjectQueue, ({ access }) => ({
-    items: linkSongs(db, access.link).map((song) => {
-      const src = linkListenSource(db, access.link, song.id);
-      return {
-        songId: song.id,
-        title: song.title,
-        subtitle: song.subtitle,
-        listen: src ? toListenSource(src.details, src.isAutoMix) : null,
-      };
-    }),
+    // Ready: a track the link shows has a playable current version (SPEC §6.10, §18.3).
+    items: linkSongs(db, access.link).map((song) => ({
+      songId: song.id,
+      title: song.title,
+      subtitle: song.subtitle,
+      ready: linkVisibleTracks(db, access.link, song.id).some(
+        (t) => t.current?.asset.status === "ready",
+      ),
+    })),
   }));
 
   // ——— song ———————————————————————————————————————————————————————————————————————————
@@ -334,11 +331,6 @@ export function registerLinkVisitorRoutes(app: FastifyInstance, ctx: AppContext)
         isCurrent: v.version.id === current,
       })),
     };
-  });
-
-  registerLinkContract(app, ctx, getSongListen, ({ access }) => {
-    const src = linkListenSource(db, access.link, songOf(access).id);
-    return { listen: src ? toListenSource(src.details, src.isAutoMix) : null };
   });
 
   registerLinkContract(app, ctx, listSongMarkers, ({ access }) => ({

@@ -140,7 +140,6 @@ describe("deleted projects in Admin → Trash", () => {
     createTrackWithVersion(t.db, {
       songId,
       name: "Bass",
-      role: "track",
       assetId: audioAsset(ids.petr ?? ""),
       uploadedBy: ids.petr ?? "",
     });

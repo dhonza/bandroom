@@ -22,7 +22,6 @@ describe("uploadTargetFor", () => {
       type: "newTrack",
       songId: "s",
       name: "A",
-      role: "track",
     });
   });
 });

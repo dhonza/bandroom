@@ -138,13 +138,12 @@ export function useEventStream(
       }
       // Media work started, finished or failed (SPEC §25.3).
       void qc.invalidateQueries({ queryKey: processingKey });
-      // Tracks and versions changed: the song, its tracks, version stacks and Listen mix. Its
+      // Tracks and versions changed: the song, its tracks and version stacks. Its
       // comments, markers, tempo, grants and mixer settings are left alone.
       if (songId) {
         void qc.invalidateQueries({ queryKey: songKeys.detail(songId), exact: true });
         void qc.invalidateQueries({ queryKey: songKeys.tracks(songId) });
         void qc.invalidateQueries({ queryKey: songKeys.allVersions(songId) });
-        void qc.invalidateQueries({ queryKey: songKeys.listen(songId) });
       }
       // Project lists, details and song lists (counts, sizes), once per event.
       if (songId || e.projectId) void qc.invalidateQueries({ queryKey: projectKeys.all });

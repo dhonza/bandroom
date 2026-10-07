@@ -51,7 +51,13 @@ export function toSong(
 /** New songs go to the end of the project's list. */
 export function createSongRow(
   db: Db,
-  input: { projectId: string; title: string; subtitle?: string; key?: string; createdBy: string },
+  input: {
+    projectId: string;
+    title: string;
+    subtitle?: string;
+    key?: string;
+    createdBy: string | null;
+  },
   now: number = Date.now(),
 ): SongRow {
   const last = db

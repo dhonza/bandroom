@@ -2,8 +2,8 @@ import {
   createLogger,
   enqueueDocumentBackfill,
   loadConfig,
+  migrateDatabase,
   openDb,
-  runMigrations,
 } from "@bandroom/server-core";
 import { buildApp } from "./app";
 import { MIGRATIONS_DIR } from "./paths";
@@ -15,7 +15,9 @@ async function main(): Promise<void> {
   for (const w of config.warnings) logger.warn(w);
 
   const db = openDb(config.dbPath);
-  runMigrations(db, MIGRATIONS_DIR);
+  // M21: the mix-track conversion runs before the migrations drop the old columns (SPEC §27.2).
+  const { conversion, purgedAutoMixes } = migrateDatabase(db, MIGRATIONS_DIR);
+  if (conversion) logger.info({ ...conversion, purgedAutoMixes }, "converted mix tracks (M21)");
   logger.info({ dbPath: config.dbPath }, "database ready");
   const backfill = enqueueDocumentBackfill(db);
   if (backfill > 0) logger.info({ documents: backfill }, "queued document previews (backfill)");

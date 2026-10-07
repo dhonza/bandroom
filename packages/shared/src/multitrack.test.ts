@@ -72,46 +72,34 @@ describe("bodies", () => {
 });
 
 describe("multitrackTrackNames (SPEC §26.5)", () => {
-  const src = (name: string, role: "track" | "mix", songId: string, songTitle: string) => ({
-    name,
-    role,
-    songId,
-    songTitle,
-  });
+  const src = (name: string, songId: string, songTitle: string) => ({ name, songId, songTitle });
 
-  it("names a song's only mix track after the song and makes it a track", () => {
+  it("names a song's only track after the song", () => {
     expect(
       multitrackTrackNames([
-        src("Mix", "mix", "a", "Bass"),
-        src("Mix", "mix", "b", " Gtr 1 "),
-        src("Drums", "track", "c", "Band"),
-        src("Mix", "mix", "c", "Band"),
+        src("Mix", "a", "Bass"),
+        src("Track 1", "b", " Gtr 1 "),
+        src("Drums", "c", "Band"),
+        src("Keys", "c", "Band"),
       ]),
     ).toEqual([
-      { name: "Bass", role: "track" },
-      { name: "Gtr 1", role: "track" },
-      { name: "Drums", role: "track" },
-      { name: "Mix", role: "mix" }, // not the song's only track
+      { name: "Bass" },
+      { name: "Gtr 1" },
+      { name: "Drums" }, // not the song's only track
+      { name: "Keys" },
     ]);
   });
 
-  it("keeps a lone track, normal tracks and blank titles as they are", () => {
-    expect(multitrackTrackNames([src("Mix", "mix", "a", "Bass")])).toEqual([
-      { name: "Mix", role: "mix" },
-    ]);
-    expect(
-      multitrackTrackNames([src("Bass", "track", "a", "Song A"), src("Mix", "mix", "b", "  ")]),
-    ).toEqual([
-      { name: "Bass", role: "track" },
-      { name: "Mix", role: "mix" },
+  it("keeps a lone track and blank titles as they are", () => {
+    expect(multitrackTrackNames([src("Mix", "a", "Bass")])).toEqual([{ name: "Mix" }]);
+    expect(multitrackTrackNames([src("Bass", "a", "Song A"), src("Mix", "b", "  ")])).toEqual([
+      { name: "Song A" },
+      { name: "Mix" },
     ]);
   });
 
   it("cuts long song titles to the track name limit", () => {
-    const [first] = multitrackTrackNames([
-      src("Mix", "mix", "a", "x".repeat(300)),
-      src("Mix", "mix", "b", "y"),
-    ]);
+    const [first] = multitrackTrackNames([src("Mix", "a", "x".repeat(300)), src("Mix", "b", "y")]);
     expect(first?.name).toHaveLength(120);
   });
 });

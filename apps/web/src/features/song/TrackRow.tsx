@@ -1,5 +1,5 @@
 import { deleteTrack, retryTrackVersion, type Song, type Track } from "@bandroom/shared";
-import { Badge, Box, Button, Center, Checkbox, Group, Paper, Stack, Text } from "@mantine/core";
+import { Box, Button, Center, Checkbox, Group, Paper, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { IconChevronDown } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -157,11 +157,6 @@ export function TrackRow({
                   {t("tracks.versionBadge", { number: v.number })}
                   {track.versionCount > 1 ? ` / ${String(track.versionCount)}` : ""}
                 </Button>
-              )}
-              {track.role === "mix" && (
-                <Badge size="sm" variant="light">
-                  {t("tracks.mix")}
-                </Badge>
               )}
             </Group>
             {!selecting && (

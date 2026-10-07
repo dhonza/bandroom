@@ -281,16 +281,16 @@ describe("upload → ingest → tracks → download (SPEC §5)", () => {
       type: "newTrack",
       songId,
       name: "Mix",
-      role: "mix",
     });
     expect(res.status).toBe(200);
     await runQueuedJobs(t);
     const mix = (await tracksOf(admin)).find((x) => x.name === "Mix");
+    expect(mix).not.toHaveProperty("role");
     expect(mix).toMatchObject({
-      role: "mix",
       current: { media: { lossless: false }, downloads: ["original", "opus"] },
     });
-    expect(mix?.current?.variants.opus?.bitrate).toBe(128);
+    // One bitrate profile for every track (SPEC §5.3, M21).
+    expect(mix?.current?.variants.opus?.bitrate).toBe(96);
   }, 60_000);
 
   it("lets uploaders delete their own track; others need editor rights", async () => {

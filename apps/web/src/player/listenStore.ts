@@ -1,5 +1,20 @@
-import type { ListenSource } from "@bandroom/shared";
+import type { TrackVersion } from "@bandroom/shared";
 import { create } from "zustand";
+
+/**
+ * What the `<audio>` mix player plays. The server no longer sends Listen sources (SPEC §27, M21
+ * group B): queue entries carry none, so this player has nothing to play until group D moves the
+ * queue and the mini-player onto the engine and removes it.
+ */
+export interface ListenSource {
+  trackVersionId: string;
+  isAutoMix: boolean;
+  status: TrackVersion["status"];
+  durationSec: number | null;
+  opus: { hash: string; bitrate: number } | null;
+  opusLow: { hash: string; bitrate: number } | null;
+  peaks: { hash: string; overview: number[] } | null;
+}
 
 export interface QueueEntry {
   songId: string;

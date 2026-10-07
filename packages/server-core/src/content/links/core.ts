@@ -27,7 +27,6 @@ export function parseVersionIds(json: string): string[] {
 export function linkPolicyOf(row: LinkRow): LinkPolicy {
   return {
     scopeType: row.scopeType,
-    content: row.content,
     versions: row.versions,
     versionIds: parseVersionIds(row.versionIds),
     allowDownload: row.allowDownload,

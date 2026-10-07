@@ -50,7 +50,6 @@ const track: Track = {
   id: "t1",
   songId: "s1",
   name: "Bass",
-  role: "track",
   color: "blue",
   sortOrder: 0,
   instrumentTag: "bass",

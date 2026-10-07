@@ -326,7 +326,6 @@ async function importVersions(rc: RunContext, pc: ProjectContext): Promise<void>
         const created = createTrackWithVersion(db, {
           songId,
           name: track.name,
-          role: track.role,
           assetId: asset.id,
           uploadedBy: admin,
           source: "import",
@@ -352,7 +351,6 @@ async function importVersions(rc: RunContext, pc: ProjectContext): Promise<void>
       setAssetStatus(db, asset.id, "queued");
       enqueueAudioIngest(db, {
         assetId: asset.id,
-        role: track.role,
         projectId,
         songId,
         trackVersionId: versionId,
@@ -513,7 +511,7 @@ async function importVersionComments(rc: RunContext, pc: ProjectContext): Promis
         importComments(ctx, run.id, rep, list, {
           dry,
           songId,
-          trackId: track.role === "track" ? (local?.trackId ?? null) : null,
+          trackId: local?.trackId ?? null,
           context: local ? { trackVersions: { [local.trackId]: local.versionId } } : {},
           songTitle: song.title,
         });

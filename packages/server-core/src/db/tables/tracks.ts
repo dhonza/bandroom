@@ -13,9 +13,6 @@ export const tracks = sqliteTable(
       .notNull()
       .references(() => songs.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    role: text("role", { enum: ["track", "mix"] })
-      .notNull()
-      .default("track"),
     color: text("color").notNull().default("blue"),
     sortOrder: integer("sort_order").notNull().default(0),
     currentVersionId: text("current_version_id"),
@@ -24,8 +21,6 @@ export const tracks = sqliteTable(
     defaultMuted: integer("default_muted", { mode: "boolean" }).notNull().default(false),
     /** Free text, e.g. "bass"; used by "mute my instrument" (M5). */
     instrumentTag: text("instrument_tag").notNull().default(""),
-    /** Hidden system track holding the automatic mixdown (M4). */
-    isSystem: integer("is_system", { mode: "boolean" }).notNull().default(false),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: integer("created_at").notNull(),
     deletedAt: integer("deleted_at"),
@@ -55,7 +50,6 @@ export const trackVersions = sqliteTable(
     /** Gain of this version in dB, before the fader and pan (SPEC §25.6); any finite number. */
     gainDb: real("gain_db").notNull().default(0),
     source: text("source", { enum: ["upload", "recording", "import", "render"] }).notNull(),
-    isAutoMix: integer("is_auto_mix", { mode: "boolean" }).notNull().default(false),
     uploadedBy: text("uploaded_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: integer("created_at").notNull(),
     deletedAt: integer("deleted_at"),

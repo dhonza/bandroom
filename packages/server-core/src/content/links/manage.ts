@@ -1,4 +1,4 @@
-import { uuidv7, type LinkContent, type LinkScope, type LinkVersionMode } from "@bandroom/shared";
+import { uuidv7, type LinkScope, type LinkVersionMode } from "@bandroom/shared";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { openSecret, sealSecret } from "../../auth/secretBox";
 import type { Db } from "../../db/connection";
@@ -18,7 +18,6 @@ export interface NewLink {
   projectId: string;
   songId: string | null;
   versionIds: readonly string[];
-  content: LinkContent;
   versions: LinkVersionMode;
   passwordHash: string | null;
   expiresAt: number | null;
@@ -46,7 +45,6 @@ export function createLinkRow(
       projectId: input.projectId,
       songId: input.songId,
       versionIds: JSON.stringify([...new Set(input.versionIds)]),
-      content: input.content,
       versions: input.versions,
       passwordHash: input.passwordHash,
       expiresAt: input.expiresAt,
@@ -80,7 +78,6 @@ export type LinkPatch = Partial<
   Pick<
     LinkRow,
     | "label"
-    | "content"
     | "versions"
     | "passwordHash"
     | "expiresAt"

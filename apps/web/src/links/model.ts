@@ -21,16 +21,10 @@ export function defaultExpiry(now: number = Date.now()): string {
   return toDateInput(now + 14 * 24 * 3600_000);
 }
 
-/** i18n keys describing what a link shares, e.g. ["links.scope.song", "links.content.mix-only"]. */
-export function linkSummaryKeys(
-  link: Pick<PublicLink, "scopeType" | "content" | "versions">,
-): string[] {
+/** i18n keys describing what a link shares, e.g. ["links.scope.song", "links.versions.all"]. */
+export function linkSummaryKeys(link: Pick<PublicLink, "scopeType" | "versions">): string[] {
   if (link.scopeType === "versions") return ["links.scope.versions"];
-  return [
-    `links.scope.${link.scopeType}`,
-    `links.content.${link.content}`,
-    `links.versions.${link.versions}`,
-  ];
+  return [`links.scope.${link.scopeType}`, `links.versions.${link.versions}`];
 }
 
 /** Stats worth showing in a one-line summary (zeros left out, opens always). */

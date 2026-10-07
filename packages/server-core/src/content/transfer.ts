@@ -50,21 +50,20 @@ function liveUserTracks(db: Db, songId: string): TrackRow[] {
   return db
     .select()
     .from(tracks)
-    .where(and(eq(tracks.songId, songId), isNull(tracks.deletedAt), eq(tracks.isSystem, false)))
+    .where(and(eq(tracks.songId, songId), isNull(tracks.deletedAt)))
     .orderBy(asc(tracks.sortOrder), asc(tracks.createdAt))
     .all();
 }
 
 /**
  * The tracks a multitrack batch works on, in selection order: a song stands for all its live
- * tracks (in their order), then the selected tracks. Duplicates count once; the automatic mix is
- * never part of it.
+ * tracks (in their order), then the selected tracks. Duplicates count once.
  */
 export function multitrackSources(db: Db, items: readonly ResolvedItem[]): SourceTrack[] {
   const out: SourceTrack[] = [];
   const seen = new Set<string>();
   const add = (track: TrackRow, song: SongRow) => {
-    if (seen.has(track.id) || track.isSystem || track.deletedAt !== null) return;
+    if (seen.has(track.id) || track.deletedAt !== null) return;
     seen.add(track.id);
     out.push({ track, song });
   };
@@ -88,26 +87,25 @@ function groupBySong(sources: readonly SourceTrack[]): { song: SongRow; tracks: 
 }
 
 /**
- * Name and role of each source track in the new song (SPEC §26.5): the shared default
+ * Name of each source track in the new song (SPEC §26.5): the shared default
  * ({@link multitrackTrackNames}), with the names chosen in the dialog winning.
  */
 function finalTrackNames(
   sources: readonly SourceTrack[],
   names: Readonly<Record<string, string>> = {},
-): Map<string, { name: string; role: "track" | "mix" }> {
+): Map<string, { name: string }> {
   const defaults = multitrackTrackNames(
     sources.map(({ track, song }) => ({
       name: track.name,
-      role: track.role,
       songId: song.id,
       songTitle: song.title,
     })),
   );
-  const out = new Map<string, { name: string; role: "track" | "mix" }>();
+  const out = new Map<string, { name: string }>();
   sources.forEach(({ track }, i) => {
-    const d = defaults[i] ?? { name: track.name, role: track.role };
+    const d = defaults[i] ?? { name: track.name };
     const chosen = Object.hasOwn(names, track.id) ? names[track.id]?.trim() : undefined;
-    out.set(track.id, { name: chosen || d.name, role: d.role });
+    out.set(track.id, { name: chosen || d.name });
   });
   return out;
 }
@@ -193,20 +191,14 @@ function copyTrack(
   shiftSamples: number,
   maps: IdMaps,
   now: number,
-  override?: { name: string; role: "track" | "mix" },
+  override?: { name: string },
 ): string {
   const id = uuidv7(now);
   maps.tracks.set(track.id, id);
   const versions = db
     .select()
     .from(trackVersions)
-    .where(
-      and(
-        eq(trackVersions.trackId, track.id),
-        isNull(trackVersions.deletedAt),
-        eq(trackVersions.isAutoMix, false),
-      ),
-    )
+    .where(and(eq(trackVersions.trackId, track.id), isNull(trackVersions.deletedAt)))
     .orderBy(asc(trackVersions.number))
     .all();
   db.insert(tracks)
@@ -449,9 +441,8 @@ export interface TransferredTrack {
   fromTrackId: string;
   fromSongId: string;
   name: string;
-  role: "track" | "mix";
-  /** The name and role before, when the new song renamed the track or changed its role. */
-  changed: { name: string; role: "track" | "mix" } | null;
+  /** The name before, when the new song renamed the track. */
+  changed: { name: string } | null;
 }
 
 export interface MultitrackResult {
@@ -470,7 +461,7 @@ export interface MultitrackResult {
  * - `copy`: the tracks and their live versions are copied (same assets), with their comments.
  * Each source song's tracks shift so its earliest version starts at 0. Markers and sections of
  * every source are copied (later sources' get "from <song>" via `fromLabel`); the tempo map comes
- * from the first source. Tracks get their final names and roles ({@link multitrackTrackNames},
+ * from the first source. Tracks get their final names ({@link multitrackTrackNames},
  * then the dialog's `names`).
  */
 export function makeMultitrackSong(
@@ -505,12 +496,11 @@ export function makeMultitrackSong(
     const shiftSec = shift / SAMPLE_RATE;
     const maps = newMaps();
     for (const t of g.tracks) {
-      const f = final.get(t.id) ?? { name: t.name, role: t.role };
-      const changed =
-        f.name !== t.name || f.role !== t.role ? { name: t.name, role: t.role } : null;
+      const f = final.get(t.id) ?? { name: t.name };
+      const changed = f.name !== t.name ? { name: t.name } : null;
       if (input.mode === "move") {
         db.update(tracks)
-          .set({ songId: song.id, sortOrder: order++, name: f.name, role: f.role })
+          .set({ songId: song.id, sortOrder: order++, name: f.name })
           .where(eq(tracks.id, t.id))
           .run();
         if (shift !== 0) {
@@ -529,7 +519,6 @@ export function makeMultitrackSong(
           fromTrackId: t.id,
           fromSongId: g.song.id,
           name: f.name,
-          role: f.role,
           changed,
         });
       } else {
@@ -539,7 +528,6 @@ export function makeMultitrackSong(
           fromTrackId: t.id,
           fromSongId: g.song.id,
           name: f.name,
-          role: f.role,
           changed,
         });
       }

@@ -74,16 +74,14 @@ export type Project = z.infer<typeof ProjectSchema>;
 export const SongTitleSchema = z.string().trim().min(1).max(200);
 
 /**
- * Media work on a song (SPEC §25.3): its current track versions (incl. the automatic mix) whose
- * files are waiting, being processed or failed, the mean progress of those being processed, and
- * the automatic mix's own job (debounced after changes, SPEC §5.5).
+ * Media work on a song (SPEC §25.3): its current track versions whose files are waiting, being
+ * processed or failed, and the mean progress of those being processed.
  */
 export const ProcessingSchema = z.object({
   queued: z.number().int(),
   processing: z.number().int(),
   failed: z.number().int(),
   progress: z.number().nullable(),
-  mix: z.enum(["queued", "processing"]).nullable(),
 });
 export type Processing = z.infer<typeof ProcessingSchema>;
 
@@ -100,7 +98,7 @@ export const SongSummarySchema = z.object({
   processing: ProcessingSchema.optional(),
   /**
    * Only in project song lists (SPEC §26.4): whether the current versions of the song's tracks
-   * (not the automatic mix; ready ones only) are lossy — none, some or all.
+   * (ready ones only) are lossy — none, some or all.
    */
   lossy: SongLossySchema.optional(),
 });

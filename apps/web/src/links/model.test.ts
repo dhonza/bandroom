@@ -19,15 +19,14 @@ describe("link model", () => {
     expect(defaultExpiry(now)).toBe("2026-10-13");
   });
 
-  it("summarizes scope, content and versions", () => {
-    expect(linkSummaryKeys({ scopeType: "song", content: "mix-only", versions: "all" })).toEqual([
+  it("summarizes scope and versions", () => {
+    expect(linkSummaryKeys({ scopeType: "song", versions: "all" })).toEqual([
       "links.scope.song",
-      "links.content.mix-only",
       "links.versions.all",
     ]);
-    expect(
-      linkSummaryKeys({ scopeType: "versions", content: "all-tracks", versions: "all" }),
-    ).toEqual(["links.scope.versions"]);
+    expect(linkSummaryKeys({ scopeType: "versions", versions: "all" })).toEqual([
+      "links.scope.versions",
+    ]);
   });
 
   it("lists opens and the non-zero stats", () => {

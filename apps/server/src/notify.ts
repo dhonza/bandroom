@@ -123,7 +123,7 @@ export function notifyVersionUploaded(
   const version = getTrackVersionRow(ctx.db, a.versionId);
   const track = version && getTrackRow(ctx.db, version.trackId);
   followTarget(ctx.db, a.actor.id, "song", a.song.id);
-  if (!version || !track || track.isSystem) return;
+  if (!version || !track) return;
   notify(ctx, {
     type: "new_version",
     userIds: followerIds(ctx.db, "song", a.song.id),

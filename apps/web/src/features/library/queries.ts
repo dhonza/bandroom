@@ -21,7 +21,6 @@ export const songKeys = {
   detail: (id: string) => ["songs", id] as const,
   grants: (id: string) => ["songs", id, "grants"] as const,
   tracks: (id: string) => ["songs", id, "tracks"] as const,
-  listen: (id: string) => ["songs", id, "listen"] as const,
   allVersions: (songId: string) => ["songs", songId, "versions"] as const,
   versions: (songId: string, trackId: string) => ["songs", songId, "versions", trackId] as const,
   mixer: (id: string) => ["songs", id, "mixer"] as const,

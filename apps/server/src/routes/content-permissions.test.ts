@@ -112,7 +112,6 @@ type Endpoint = {
 const LINK_BODY = (scopeType: "project" | "song") => ({
   scopeType,
   label: "L",
-  content: "all-tracks",
   versions: "current-only",
   expiresAt: null,
   allowDownload: false,
@@ -323,7 +322,6 @@ beforeAll(async () => {
         projectId: project.id,
         songId,
         versionIds: [],
-        content: "all-tracks",
         versions: "current-only",
         passwordHash: null,
         expiresAt: null,

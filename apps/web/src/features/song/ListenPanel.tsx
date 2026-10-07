@@ -1,5 +1,5 @@
-import { getSongListen, type Song, type Track } from "@bandroom/shared";
-import { ActionIcon, Badge, Group, Loader, Menu, Stack, Text } from "@mantine/core";
+import type { Song, Track } from "@bandroom/shared";
+import { ActionIcon, Badge, Group, Menu, Stack, Text } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import {
   IconPlayerPauseFilled,
@@ -7,10 +7,8 @@ import {
   IconPlayerTrackNextFilled,
   IconPlayerTrackPrevFilled,
 } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { api } from "../../api/client";
 import { Section } from "../../components/Section";
 import { formatClock } from "../../player/format";
 import {
@@ -27,14 +25,13 @@ import { ShortcutHelp, useSongShortcuts } from "../../markers/shortcuts";
 import { SongComments } from "../../comments/CommentsPanel";
 import { goNext, goPrev, playPause, registerPlayer } from "../../markers/store";
 import { currentTime, seek, setListenLoop, togglePlay } from "../../player/listenEngine";
-import { useListen } from "../../player/listenStore";
+import { useListen, type ListenSource } from "../../player/listenStore";
 import { useProjectQueue } from "../../player/useProjectQueue";
 import { PHONE_QUERY } from "../../shell/mediaQueries";
 import { BarBeatText } from "../../tempo/readout";
 import { Timeline } from "../../timeline/Timeline";
 import { useLaneHeight } from "../../timeline/laneHeight";
 import { usePeaks } from "../../timeline/usePeaks";
-import { songKeys } from "../library/queries";
 import { ListenOptions } from "./ListenOptions";
 import { MixerButton } from "./MixerButton";
 import { startMix } from "./playerHandoff";
@@ -59,15 +56,12 @@ export function ListenPanel({
   const { t } = useTranslation();
   const queue = useProjectQueue(song.project);
   const isPhone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
-  const listen = useQuery({
-    queryKey: songKeys.listen(song.id),
-    queryFn: ({ signal }) => api(getSongListen, { params: { id: song.id } }, { signal }),
-  });
   const isCurrent = useListen((s) => s.queue[s.index]?.songId === song.id);
   const status = useListen((s) => (s.queue[s.index]?.songId === song.id ? s.status : "idle"));
   const position = useListen((s) => (s.queue[s.index]?.songId === song.id ? s.position : 0));
 
-  const src = listen.data?.listen ?? null;
+  // The server sends no Listen source since M21 (SPEC §27); this panel goes in group C.
+  const src = null as ListenSource | null;
   const ready = src?.status === "ready" && src.opus !== null;
   const readyTracks = tracks.filter(
     (tr) => tr.current?.status === "ready" && tr.current.variants.peaks,
@@ -150,7 +144,6 @@ export function ListenPanel({
     };
   }, [song.id, getPosition]);
 
-  if (listen.isPending) return <Loader size="sm" />;
   if (!src && readyTracks.length === 0) return null;
 
   return (

@@ -1,6 +1,6 @@
 import { schema, type Db, type JobContext } from "@bandroom/server-core";
 import type { ImportMapping, ImportNode, ImportProject } from "@bandroom/shared";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { SamplyClient } from "./api";
 import { proposeProject, walkNodes } from "./mapping";
@@ -86,7 +86,13 @@ export function restorePreviousGrouping(db: Db, project: ImportProject): void {
       if (!track) return;
       const anchor = songAnchor(track.songId);
       if (anchor === n.id) {
-        if (track.role === "track") {
+        // A song that holds more than this one track was grouped (SPEC §17.1, M21: no roles).
+        const trackCount = db
+          .select({ id: schema.tracks.id })
+          .from(schema.tracks)
+          .where(and(eq(schema.tracks.songId, track.songId), isNull(schema.tracks.deletedAt)))
+          .all().length;
+        if (trackCount > 1) {
           n.action = "songMultitrack";
           n.songTitle = songTitle(track.songId) ?? n.name;
           n.trackName = track.name;

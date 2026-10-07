@@ -159,7 +159,6 @@ function track(id: string, current = version(`${id}-v1`, `${id}1`)): Track {
     id,
     songId: "s",
     name: id,
-    role: "track",
     color: "blue",
     sortOrder: 0,
     instrumentTag: "",

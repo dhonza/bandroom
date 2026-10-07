@@ -124,7 +124,7 @@ export function playableTracks(
 
 export function buildTimeline(tracks: readonly PlayableTrack[], mix: MixerState): SongTimeline {
   const engineTracks = tracks.map((p) => {
-    const s = mix.tracks[p.track.id] ?? defaultTrackState(p.track, tracks.length);
+    const s = mix.tracks[p.track.id] ?? defaultTrackState(p.track);
     return {
       id: p.track.id,
       clips: [clipFor(p.version, p.chosen)],
@@ -142,15 +142,12 @@ export function buildTimeline(tracks: readonly PlayableTrack[], mix: MixerState)
   return { tracks: engineTracks, lengthFrames };
 }
 
-/**
- * Track defaults (SPEC §11.3). A full-mix track starts muted next to other tracks, so it does not
- * double the stems.
- */
-export function defaultTrackState(track: Track, trackCount: number): MixerTrackState {
+/** Track defaults (SPEC §11.3). */
+export function defaultTrackState(track: Track): MixerTrackState {
   return {
     gainDb: track.defaultGainDb,
     pan: track.defaultPan,
-    mute: track.defaultMuted || (track.role === "mix" && trackCount > 1),
+    mute: track.defaultMuted,
     solo: false,
     listenedVersionId: null,
   };
@@ -158,7 +155,7 @@ export function defaultTrackState(track: Track, trackCount: number): MixerTrackS
 
 export function defaultMix(tracks: readonly Track[]): MixerState {
   return {
-    tracks: Object.fromEntries(tracks.map((t) => [t.id, defaultTrackState(t, tracks.length)])),
+    tracks: Object.fromEntries(tracks.map((t) => [t.id, defaultTrackState(t)])),
   };
 }
 

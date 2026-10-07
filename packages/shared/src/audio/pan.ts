@@ -1,5 +1,5 @@
 /**
- * Equal-power pan law (SPEC §6.6), shared by the server mixdown and the browser engine (M5) so
+ * Equal-power pan law (SPEC §6.6), shared by the server mix (bounce) and the browser engine (M5) so
  * both produce the same balance.
  *
  * - Mono sources: θ = (pan + 1)·π/4, L = cos θ, R = sin θ (−3 dB each at center).

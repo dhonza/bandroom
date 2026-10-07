@@ -157,7 +157,6 @@ describe("useEventStream (SPEC §18.5)", () => {
       ["songs", "s1"],
       ["songs", "s1", "tracks"],
       ["songs", "s1", "versions", "t1"],
-      ["songs", "s1", "listen"],
       ["songs", "s1", "comments"],
       ["songs", "s1", "markers"],
       ["songs", "s1", "tempo"],
@@ -177,7 +176,6 @@ describe("useEventStream (SPEC §18.5)", () => {
       "songs/s1",
       "songs/s1/tracks",
       "songs/s1/versions/t1",
-      "songs/s1/listen",
       "projects/list/false",
       "projects/detail/p1/songs",
     ]);

@@ -1,12 +1,8 @@
-import { getSongListen, type ListenSource, type Song } from "@bandroom/shared";
-import { useQuery } from "@tanstack/react-query";
+import type { Song } from "@bandroom/shared";
 import { useState } from "react";
-import { api } from "../../api/client";
-import { useListen } from "../../player/listenStore";
-import { useProjectQueue } from "../../player/useProjectQueue";
-import { songKeys } from "../library/queries";
+import { useListen, type ListenSource } from "../../player/listenStore";
 import { saveMixerOpen } from "./mixerMode";
-import { closeMixer, openMixer } from "./playerHandoff";
+import { openMixer } from "./playerHandoff";
 
 export interface MixerToggle {
   /** Null until decided (the tracks and the mix source have loaded). */
@@ -36,18 +32,15 @@ export function useMixerToggle(
     remember: boolean;
   },
 ): MixerToggle {
-  const queue = useProjectQueue(song.project);
-  const listen = useQuery({
-    queryKey: songKeys.listen(song.id),
-    queryFn: ({ signal }) => api(getSongListen, { params: { id: song.id } }, { signal }),
-  });
-  const src = listen.data?.listen ?? null;
-  const mixPlayable = src?.status === "ready" && src.opus !== null;
+  // No Listen source since M21 (SPEC §27): the closed Mixer plays the engine with the default
+  // mix until group C makes the engine the only player.
+  const src = null as ListenSource | null;
+  const mixPlayable = false;
   const [open, setOpen] = useState<boolean | null>(null);
 
   // Decided once, during render (no flash of the other player).
   let current = open;
-  if (current === null && opts.ready && !listen.isPending) {
+  if (current === null && opts.ready) {
     const s = useListen.getState();
     const playingHere =
       s.queue[s.index]?.songId === song.id && (s.status === "playing" || s.status === "loading");
@@ -64,9 +57,8 @@ export function useMixerToggle(
       if (opts.remember) saveMixerOpen(true);
       setOpen(true);
     },
-    turnOff: ({ play } = {}) => {
-      // Without a mix the engine keeps the song and plays the default mix (SPEC §25.5).
-      if (src && mixPlayable) closeMixer(song, src, queue.data, play === undefined ? {} : { play });
+    turnOff: () => {
+      // The engine keeps the song and plays on with the Mixer closed (SPEC §27).
       if (opts.remember) saveMixerOpen(false);
       setOpen(false);
     },

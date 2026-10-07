@@ -3,7 +3,7 @@ import type { ImportReport } from "@bandroom/shared";
 import { MIN_FREE_AFTER_UPLOAD } from "../../quota";
 import { getRun, updateRun } from "./store";
 
-/** Bulk-imported media waits behind interactive uploads (0) and song mixdowns (−1). */
+/** Bulk-imported media waits behind interactive uploads (0) and cuts/bounces (−1). */
 export const IMPORT_JOB_PRIORITY = -5;
 
 /** Rough disk need per imported byte: original (or FLAC) + Opus variants + peaks. */

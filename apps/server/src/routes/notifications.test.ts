@@ -124,7 +124,6 @@ describe("notifications (SPEC §16, in-app only)", () => {
       type: "newTrack",
       songId,
       name: "Bass",
-      role: "track",
     });
     expect(res.status).toBe(200);
     expect((await inbox(admin)).notifications[0]).toMatchObject({

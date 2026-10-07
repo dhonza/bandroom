@@ -1,6 +1,5 @@
 import {
   dbToGain,
-  getSongListen,
   getSongMixer,
   listTrackVersions,
   type Song,
@@ -102,11 +101,6 @@ export function RehearsePanel({
             state: pendingMixer(useOffline.getState().outbox, song.id) ?? r.state,
           })),
   });
-  // The mix's peaks for the default-mix player (shared with the mix player's query).
-  const listen = useQuery({
-    queryKey: songKeys.listen(song.id),
-    queryFn: ({ signal }) => api(getSongListen, { params: { id: song.id } }, { signal }),
-  });
 
   // Personal listened versions that are not the current one need their version data.
   const saved = mixerQuery.data?.state ?? null;
@@ -171,8 +165,11 @@ export function RehearsePanel({
 
   // The closed Mixer shows only what plays: the mix (DECISIONS 2026-10-07).
   const summed = defaultMix;
+  // No rendered mix since M21 (SPEC §27): until group C draws the summed overview, the closed
+  // Mixer's one lane shows the first audible track.
+  const audible = playing.find((p) => !dimmedKey.split("\n").includes(p.track.id)) ?? playing[0];
   const hashes = summed
-    ? [listen.data?.listen?.peaks?.hash ?? null]
+    ? [audible?.version.variants.peaks?.hash ?? null]
     : playing.map((p) => p.version.variants.peaks?.hash ?? null);
   const pyramids = usePeaks(hashes);
   const lanes = useMemo(
@@ -220,11 +217,6 @@ export function RehearsePanel({
       title={t("mixer.playerTitle")}
       testId={defaultMix ? "default-mix-panel" : "rehearse-panel"}
     >
-      {defaultMix && (
-        <Text size="sm" c="dimmed" data-testid="default-mix-note">
-          {t("mixer.defaultMixPreparing")}
-        </Text>
-      )}
       {lockHint && (
         <Alert
           color="blue"

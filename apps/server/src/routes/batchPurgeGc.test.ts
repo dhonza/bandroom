@@ -75,7 +75,6 @@ describe("Delete permanently frees the disk within minutes (SPEC §26.3)", () =>
     createTrackWithVersion(t.db, {
       songId,
       name: "Bass",
-      role: "track",
       assetId: a.id,
       uploadedBy: adminId,
     });

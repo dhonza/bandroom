@@ -13,7 +13,8 @@ export function toQueueEntries(
     projectId: project.id,
     projectName: project.name,
     imageHash: project.imageHash,
-    listen: i.listen,
+    // No Listen sources since M21 (SPEC §27); the engine queue replaces this player (group D).
+    listen: null,
   }));
 }
 

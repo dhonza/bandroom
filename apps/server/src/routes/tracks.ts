@@ -1,10 +1,9 @@
 import {
-  listenSource,
   listTrackVersions as listTrackVersionsRepo,
   listVisibleSongs,
+  readySongIds,
   reorderTracks,
   reorderTrackVersions as reorderTrackVersionsRepo,
-  scheduleMixdown,
   setCurrentVersion,
   softDeleteTrackVersion,
   updateTrack as updateTrackRepo,
@@ -22,7 +21,6 @@ import {
   deleteTrack,
   deleteTrackVersion as deleteTrackVersionContract,
   getProjectQueue,
-  getSongListen,
   listSongTracks as listSongTracksContract,
   listTrackVersions,
   reorderSongTracks,
@@ -38,7 +36,7 @@ import { audit } from "../http/audit";
 import { registerContract } from "../http/contracts";
 import { AppError } from "../http/errors";
 import { downloadAllowed, type SongScopeAccess } from "../http/scope";
-import { toListenSource, toTrack, toTrackVersion } from "./trackDto";
+import { toTrack, toTrackVersion } from "./trackDto";
 
 export function registerTrackRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { db } = ctx;
@@ -56,7 +54,6 @@ export function registerTrackRoutes(app: FastifyInstance, ctx: AppContext): void
     }
     db.transaction(() => {
       softDeleteTrack(db, track.id, Date.now(), user.id);
-      scheduleMixdown(db, access.song.id);
       audit(db, request, {
         action: "track.deleted",
         projectId: access.project.id,
@@ -87,12 +84,10 @@ export function registerTrackRoutes(app: FastifyInstance, ctx: AppContext): void
     // Processing again would need the full-quality original, which is gone (SPEC §26.4).
     if (version.archivedAt !== null)
       throw new AppError("LOSSLESS_REMOVED", "Full-quality files were removed");
-    const track = getTrackRow(db, version.trackId);
     db.transaction(() => {
       setAssetStatus(db, asset.id, "queued");
       enqueueAudioIngest(db, {
         assetId: asset.id,
-        role: track?.role ?? "track",
         projectId: access.project.id,
         songId: access.song.id,
         trackVersionId: version.id,
@@ -156,8 +151,6 @@ export function registerVersionRoutes(app: FastifyInstance, ctx: AppContext): vo
           details: { changes: textChanges },
         });
       if (gainChanged) {
-        // The automatic mix plays current versions only.
-        if (track.currentVersionId === v.id) scheduleMixdown(db, access.song.id);
         audit(db, request, {
           action: "version.gain_changed",
           ...scope,
@@ -176,7 +169,6 @@ export function registerVersionRoutes(app: FastifyInstance, ctx: AppContext): vo
       throw new AppError("FORBIDDEN", "Not allowed");
     db.transaction(() => {
       softDeleteTrackVersion(db, v.id, Date.now(), user.id);
-      scheduleMixdown(db, access.song.id);
       audit(db, request, {
         action: "version.deleted",
         projectId: access.project.id,
@@ -198,7 +190,6 @@ export function registerVersionRoutes(app: FastifyInstance, ctx: AppContext): vo
     const before = track.currentVersionId;
     db.transaction(() => {
       setCurrentVersion(db, track.id, v.id);
-      scheduleMixdown(db, access.song.id);
       audit(db, request, {
         action: "version.set_current",
         projectId: access.project.id,
@@ -232,12 +223,8 @@ export function registerVersionRoutes(app: FastifyInstance, ctx: AppContext): vo
     if (!track) throw new AppError("NOT_FOUND", "Track not found");
     if (!canActOn(access.role, "edit", track.createdBy === user.id))
       throw new AppError("FORBIDDEN", "Not allowed");
-    const affectsMix = ["role", "defaultGainDb", "defaultPan", "defaultMuted"].some(
-      (k) => k in body,
-    );
     db.transaction(() => {
       updateTrackRepo(db, track.id, body);
-      if (affectsMix) scheduleMixdown(db, access.song.id);
       audit(db, request, {
         action: "track.updated",
         projectId: access.project.id,
@@ -266,20 +253,19 @@ export function registerVersionRoutes(app: FastifyInstance, ctx: AppContext): vo
     return { ok: true as const };
   });
 
-  registerContract(app, getSongListen, ({ access }) => {
-    const src = listenSource(db, access.song.id);
-    return { listen: src ? toListenSource(src.details, src.isAutoMix) : null };
-  });
-
-  registerContract(app, getProjectQueue, ({ user, access }) => ({
-    items: listVisibleSongs(db, user, access.project.id).map(({ song }) => {
-      const src = listenSource(db, song.id);
-      return {
+  registerContract(app, getProjectQueue, ({ user, access }) => {
+    const songs = listVisibleSongs(db, user, access.project.id).map(({ song }) => song);
+    const ready = readySongIds(
+      db,
+      songs.map((s) => s.id),
+    );
+    return {
+      items: songs.map((song) => ({
         songId: song.id,
         title: song.title,
         subtitle: song.subtitle,
-        listen: src ? toListenSource(src.details, src.isAutoMix) : null,
-      };
-    }),
-  }));
+        ready: ready.has(song.id),
+      })),
+    };
+  });
 }

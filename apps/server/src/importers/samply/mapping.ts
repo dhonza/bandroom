@@ -95,7 +95,7 @@ export function proposeProject(
       id: box.id,
       kind: box.object,
       name: stripExtension(box.name),
-      action: isAudio ? "songMix" : "document",
+      action: isAudio ? "songSingle" : "document",
       targetId: null,
       trackName: stripExtension(box.name),
       isAudio,

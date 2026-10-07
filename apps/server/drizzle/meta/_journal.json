@@ -120,6 +120,13 @@
       "when": 1791285028079,
       "tag": "0016_trash_projects_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1791360541011,
+      "tag": "0017_drop_mix_roles",
+      "breakpoints": true
     }
   ]
 }

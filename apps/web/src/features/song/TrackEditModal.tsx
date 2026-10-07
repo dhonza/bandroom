@@ -1,5 +1,5 @@
 import { TrackNameSchema, updateTrack, type Track } from "@bandroom/shared";
-import { Alert, Button, Group, Modal, Select, Stack, TextInput } from "@mantine/core";
+import { Alert, Button, Group, Modal, Stack, TextInput } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -17,7 +17,6 @@ export function TrackEditModal({ track, onClose }: { track: Track; onClose: () =
     initialValues: {
       name: track.name,
       color: track.color,
-      role: track.role,
       instrumentTag: track.instrumentTag,
     },
     validate: { name: zodValidator(TrackNameSchema, t) },
@@ -29,7 +28,6 @@ export function TrackEditModal({ track, onClose }: { track: Track; onClose: () =
         body: {
           name: v.name,
           color: v.color,
-          role: v.role,
           instrumentTag: v.instrumentTag.trim(),
         },
       }),
@@ -59,16 +57,6 @@ export function TrackEditModal({ track, onClose }: { track: Track; onClose: () =
             onChange={(c) => {
               form.setFieldValue("color", c);
             }}
-          />
-          <Select
-            label={t("tracks.fields.role")}
-            description={t("tracks.fields.roleHint")}
-            allowDeselect={false}
-            data={[
-              { value: "track", label: t("tracks.roles.track") },
-              { value: "mix", label: t("tracks.roles.mix") },
-            ]}
-            {...form.getInputProps("role")}
           />
           <TextInput
             label={t("tracks.fields.instrument")}

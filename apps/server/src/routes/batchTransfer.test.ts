@@ -96,12 +96,11 @@ function track(
   songId: string,
   name: string,
   by: string,
-  opts: { offset?: number; durationSec?: number; role?: "track" | "mix" } = {},
+  opts: { offset?: number; durationSec?: number } = {},
 ) {
   const created = createTrackWithVersion(t.db, {
     songId,
     name,
-    role: opts.role ?? "track",
     assetId: asset(by, opts.durationSec),
     uploadedBy: by,
   });
@@ -136,13 +135,7 @@ const liveTracks = (songId: string) =>
   t.db
     .select()
     .from(schema.tracks)
-    .where(
-      and(
-        eq(schema.tracks.songId, songId),
-        isNull(schema.tracks.deletedAt),
-        eq(schema.tracks.isSystem, false),
-      ),
-    )
+    .where(and(eq(schema.tracks.songId, songId), isNull(schema.tracks.deletedAt)))
     .orderBy(schema.tracks.sortOrder)
     .all();
 
@@ -228,13 +221,13 @@ const eventsOf = (batchId: string) =>
     .filter((e) => e.details?.includes(batchId))
     .map((e) => e.action)
     .sort();
+/** No automatic mix any more (SPEC §27): nothing schedules `audio.mixdown`. */
 const mixdownQueued = (songId: string) =>
   t.db
     .select()
     .from(schema.jobs)
     .where(eq(schema.jobs.dedupeKey, `mixdown:${songId}`))
-    .all()
-    .some((j) => j.status === "queued");
+    .all().length > 0;
 
 beforeAll(async () => {
   t = await createTestApp();
@@ -283,7 +276,8 @@ describe("make multitrack song (SPEC §26.5)", () => {
       manager,
     );
     const p = MultitrackPreviewSchema.parse(res.json());
-    expect(p.tracks.map((x) => x.name)).toEqual(["Drums", "Bass", "Vox"]);
+    // B brings its only track: it is named after its song (SPEC §26.5, M21).
+    expect(p.tracks.map((x) => x.name)).toEqual(["Drums", "Bass", "Night Train - vocals"]);
     expect(p.tracks.map((x) => x.durationSec)).toEqual([200, 200, 30]);
     expect(p.songs).toEqual([
       { id: a, title: "Night Train - band", emptied: true },
@@ -364,9 +358,11 @@ describe("make multitrack song (SPEC §26.5)", () => {
     // Emptied sources are in the Trash, deleted by the user.
     expect(songRow(a)?.deletedAt).not.toBeNull();
     expect(songRow(b)?.deletedBy).toBe(ids.mara);
-    // Mixdown for the new song; usage unchanged (rows only).
-    expect(mixdownQueued(songId)).toBe(true);
+    // No mixdown; usage unchanged (rows only).
+    expect(mixdownQueued(songId)).toBe(false);
     expect(getUsage(t.db, ids.petr ?? "")).toBe(usage);
+    // B's only track is renamed after B ("Keys" → "Blue B").
+    expect(liveTracks(songId).map((x) => x.name)).toEqual(["Drums", "Bass", "Blue B"]);
     expect(eventsOf(out.batchId)).toEqual([
       "song.created",
       "song.deleted",
@@ -374,6 +370,7 @@ describe("make multitrack song (SPEC §26.5)", () => {
       "track.moved",
       "track.moved",
       "track.moved",
+      "track.updated",
     ]);
     expect(
       published
@@ -409,7 +406,7 @@ describe("make multitrack song (SPEC §26.5)", () => {
     expect(versionRow(gtr.versionId)?.offsetSamples).toBe(48_000);
     expect(songRow(a)?.deletedAt).toBeNull();
     expect(liveTracks(a).map((x) => x.id)).toEqual([keep.trackId]);
-    expect(mixdownQueued(a)).toBe(true);
+    expect(mixdownQueued(a)).toBe(false);
     expect(
       published.some(
         (e) => e.type === "track.moved" && e.songId === a && e.projectId === ids.project,
@@ -525,13 +522,13 @@ describe("make multitrack song (SPEC §26.5)", () => {
     ).toBe("FORBIDDEN_ITEMS");
   });
 
-  it("names tracks from loose files after their songs and makes them tracks (move)", async () => {
-    // Two dropped files (one "Mix" track each) and a real multitrack song.
+  it("names the only track of a source song after the song (move)", async () => {
+    // Two dropped files (one track each) and a real multitrack song.
     const bass = newSong("Bass");
     const gtr = newSong("Gtr 1");
     const band = newSong("Band take");
-    track(bass, "Mix", ids.petr ?? "", { role: "mix" });
-    track(gtr, "Mix", ids.petr ?? "", { role: "mix" });
+    track(bass, "Mix", ids.petr ?? "");
+    track(gtr, "Mix", ids.petr ?? "");
     track(band, "Drums", ids.petr ?? "");
     track(band, "Keys", ids.petr ?? "");
     const items = { songs: [bass, gtr, band] };
@@ -548,13 +545,8 @@ describe("make multitrack song (SPEC §26.5)", () => {
       ),
     );
     const made = liveTracks(out.songIds[0] ?? "");
-    expect(made.map((x) => [x.name, x.role])).toEqual([
-      ["Bass", "track"],
-      ["Gtr 1", "track"],
-      ["Drums", "track"],
-      ["Keys", "track"],
-    ]);
-    expect(mixdownQueued(out.songIds[0] ?? "")).toBe(true);
+    expect(made.map((x) => x.name)).toEqual(["Bass", "Gtr 1", "Drums", "Keys"]);
+    expect(mixdownQueued(out.songIds[0] ?? "")).toBe(false);
     const updates = t.db
       .select()
       .from(schema.events)
@@ -562,17 +554,17 @@ describe("make multitrack song (SPEC §26.5)", () => {
       .filter((e) => e.action === "track.updated" && e.details?.includes(out.batchId));
     expect(updates).toHaveLength(2);
     expect(JSON.parse(updates[0]?.details ?? "{}")).toMatchObject({
-      changes: ["name", "role"],
-      before: { name: "Mix", role: "mix" },
-      after: { name: "Bass", role: "track" },
+      changes: ["name"],
+      before: { name: "Mix" },
+      after: { name: "Bass" },
     });
   });
 
   it("copies loose files with song names; names from the dialog win", async () => {
     const a = newSong("Vox take");
     const b = newSong("Gtr 2");
-    const va = track(a, "Mix", ids.petr ?? "", { role: "mix" });
-    track(b, "Mix", ids.petr ?? "", { role: "mix" });
+    const va = track(a, "Mix", ids.petr ?? "");
+    track(b, "Mix", ids.petr ?? "");
     const out = resultOf(
       await call(
         t,
@@ -588,17 +580,14 @@ describe("make multitrack song (SPEC §26.5)", () => {
         editor,
       ),
     );
-    expect(liveTracks(out.songIds[0] ?? "").map((x) => [x.name, x.role])).toEqual([
-      ["Lead vocal", "track"],
-      ["Gtr 2", "track"],
-    ]);
-    // The sources keep their mix tracks.
-    expect(liveTracks(a).map((x) => [x.name, x.role])).toEqual([["Mix", "mix"]]);
+    expect(liveTracks(out.songIds[0] ?? "").map((x) => x.name)).toEqual(["Lead vocal", "Gtr 2"]);
+    // The sources keep their tracks.
+    expect(liveTracks(a).map((x) => x.name)).toEqual(["Mix"]);
   });
 
-  it("keeps a single mix track as it is", async () => {
+  it("keeps the name of a lone track when the new song has one track", async () => {
     const a = newSong("Alone");
-    const only = track(a, "Mix", ids.petr ?? "", { role: "mix" });
+    const only = track(a, "Mix", ids.petr ?? "");
     const out = resultOf(
       await call(
         t,
@@ -607,7 +596,7 @@ describe("make multitrack song (SPEC §26.5)", () => {
         editor,
       ),
     );
-    expect(liveTracks(out.songIds[0] ?? "").map((x) => [x.name, x.role])).toEqual([["Mix", "mix"]]);
+    expect(liveTracks(out.songIds[0] ?? "").map((x) => x.name)).toEqual(["Mix"]);
   });
 });
 
@@ -714,7 +703,7 @@ describe("copy songs (SPEC §26.6)", () => {
       t.db.select().from(schema.songGrants).where(eq(schema.songGrants.songId, copyId)).all(),
     ).toHaveLength(0);
     expect(eventsOf(out.batchId)).toEqual(["song.copied"]);
-    expect(mixdownQueued(copyId)).toBe(true);
+    expect(mixdownQueued(copyId)).toBe(false);
 
     // Removing full quality on the copy affects the original too (shared files).
     resultOrOk(await call(t, batchRemoveLossless, { body: { songs: [copyId] } }, manager));
@@ -806,7 +795,6 @@ describe("move songs (SPEC §26.6)", () => {
         scopeType: "song",
         projectId: ids.project ?? "",
         songId: a,
-        content: "all-tracks",
         versions: "current-only",
         createdAt: 1,
         updatedAt: 1,

@@ -68,7 +68,6 @@ function track(id: string, over: Partial<Track> = {}): Track {
     id,
     songId: "s",
     name: id,
-    role: "track",
     color: "blue",
     sortOrder: 0,
     instrumentTag: "",
@@ -199,16 +198,15 @@ describe("timeline", () => {
 });
 
 describe("mix state", () => {
-  it("starts from track defaults; a mix track is muted next to stems", () => {
+  it("starts from track defaults (no roles, SPEC §27)", () => {
     const tracks = [
       track("a", { defaultGainDb: -3, defaultPan: 0.5, defaultMuted: true }),
-      track("m", { role: "mix" }),
+      track("m"),
     ];
     expect(defaultMix(tracks).tracks).toEqual({
       a: { gainDb: -3, pan: 0.5, mute: true, solo: false, listenedVersionId: null },
-      m: { gainDb: 0, pan: 0, mute: true, solo: false, listenedVersionId: null },
+      m: { gainDb: 0, pan: 0, mute: false, solo: false, listenedVersionId: null },
     });
-    expect(defaultMix([track("m", { role: "mix" })]).tracks.m?.mute).toBe(false);
   });
 
   it("merges saved state, resets while keeping listened versions", () => {

@@ -226,7 +226,7 @@ export function captureCommentContext(
   const rows = db
     .select({ id: tracks.id, current: tracks.currentVersionId })
     .from(tracks)
-    .where(and(eq(tracks.songId, songId), isNull(tracks.deletedAt), eq(tracks.isSystem, false)))
+    .where(and(eq(tracks.songId, songId), isNull(tracks.deletedAt)))
     .all();
   const chosenVersions: Record<string, string> = {};
   const wanted = Object.values(loaded);
@@ -297,14 +297,7 @@ export function isSongTrack(db: Db, songId: string, trackId: string): boolean {
     db
       .select({ id: tracks.id })
       .from(tracks)
-      .where(
-        and(
-          eq(tracks.id, trackId),
-          eq(tracks.songId, songId),
-          isNull(tracks.deletedAt),
-          eq(tracks.isSystem, false),
-        ),
-      )
+      .where(and(eq(tracks.id, trackId), eq(tracks.songId, songId), isNull(tracks.deletedAt)))
       .get() !== undefined
   );
 }
@@ -405,13 +398,7 @@ export function songUploaderIds(db: Db, songId: string): string[] {
     .selectDistinct({ u: trackVersions.uploadedBy })
     .from(trackVersions)
     .innerJoin(tracks, eq(tracks.id, trackVersions.trackId))
-    .where(
-      and(
-        eq(tracks.songId, songId),
-        isNull(trackVersions.deletedAt),
-        eq(trackVersions.isAutoMix, false),
-      ),
-    )
+    .where(and(eq(tracks.songId, songId), isNull(trackVersions.deletedAt)))
     .all()
     .map((r) => r.u)
     .filter((u): u is string => u !== null);

@@ -6,7 +6,6 @@ export function enqueueAudioIngest(
   db: Db,
   input: {
     assetId: string;
-    role: "track" | "mix";
     projectId: string;
     songId: string;
     trackVersionId: string;
@@ -19,7 +18,6 @@ export function enqueueAudioIngest(
     capability: "audio.ingest",
     payload: {
       assetId: input.assetId,
-      role: input.role,
       projectId: input.projectId,
       songId: input.songId,
       trackVersionId: input.trackVersionId,

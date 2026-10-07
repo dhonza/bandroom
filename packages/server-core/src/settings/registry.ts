@@ -17,25 +17,29 @@ export const SETTINGS = {
   "defaultProjectRole.guest": { schema: ContentRoleSchema, default: "none" },
   /** Keep uploaded lossless originals after the FLAC is verified (SPEC §5.3 step 4). */
   keepOriginalLossless: { schema: z.boolean(), default: false },
-  /** Opus bitrates in kbps (SPEC §5.3 step 5; tune after listening tests, §23.2). */
+  /**
+   * Opus bitrates in kbps (SPEC §5.3 step 5; tune after listening tests, §23.2). One profile for
+   * every track since M21; the `mix*` keys of older values are ignored.
+   */
   "audio.opusBitrates": {
     schema: z.object({
-      mixStereo: z.number(),
-      mixMono: z.number(),
       trackStereo: z.number(),
       trackMono: z.number(),
       lowStereo: z.number(),
       lowMono: z.number(),
     }),
     default: {
-      mixStereo: 128,
-      mixMono: 64,
       trackStereo: 96,
       trackMono: 64,
       lowStereo: 48,
       lowMono: 32,
     },
   },
+  /**
+   * Hidden auto-mix tracks soft-deleted by the M21 data conversion, purged after the migrations
+   * (SPEC §27.2); empty once done.
+   */
+  "migration.purgeTracks": { schema: z.array(z.string()), default: [] },
   /** Date (YYYY-MM-DD, server time) of the last daily maintenance run (SPEC §18.4). */
   "maintenance.lastRun": { schema: z.string().nullable(), default: null },
   /** Asset of the branding logo in use (SPEC §25.1). */

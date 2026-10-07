@@ -31,7 +31,7 @@ async function waitForServiceWorker(page: Page) {
   });
 }
 
-/** A project with one song made from a dropped file (a mix track), processed. */
+/** A project with one song made from a dropped file (one track), processed. */
 async function songWithMix(page: Page, name: string): Promise<{ songPath: string }> {
   await page.goto("library");
   await page.getByTestId("new-project").click();
@@ -45,10 +45,9 @@ async function songWithMix(page: Page, name: string): Promise<{ songPath: string
   const row = page.getByTestId("song-row").filter({ hasText: "tone_48000_s16_stereo" });
   await expect(row).toBeVisible({ timeout: 30_000 });
   await row.getByRole("link").click();
-  // One worker processes every test's uploads on this server; until the mix is ready the song
-  // opens with the Mixer.
+  // One worker processes every test's uploads on this server: wait for the track.
   await closeMixer(page, 240_000);
-  await expect(page.getByTestId("listen-panel").getByTestId("listen-play")).toBeEnabled({
+  await expect(page.getByTestId("default-mix-panel").getByTestId("rehearse-play")).toBeEnabled({
     timeout: 240_000,
   });
   return { songPath: new URL(page.url()).pathname };
@@ -109,19 +108,17 @@ test("Offline song: Listen and Rehearse in airplane mode, comment and marker syn
   await expect(page.getByTestId("offline-indicator")).toBeVisible();
   await expect(page.getByTestId("offline-button")).toHaveAttribute("data-status", "ready");
 
-  // The mix (<audio> reading the cached Opus through the service worker).
-  const listen = page.getByTestId("listen-panel");
-  await listen.getByTestId("listen-play").click();
-  await expect(listen.getByRole("button", { name: "Pause", exact: true })).toBeVisible({
-    timeout: 20_000,
-  });
-  const clock = async () => {
-    const text = (await page.getByTestId("listen-position").textContent()) ?? "0:0";
-    const [m, s] = text.split(":").map(Number);
-    return (m ?? 0) * 60 + (s ?? 0);
-  };
-  await expect.poll(clock, { timeout: 20_000 }).toBeGreaterThan(1);
-  await listen.getByRole("button", { name: "Pause", exact: true }).click();
+  // The closed Mixer plays the engine from the cache too (no rendered mix since M21, SPEC §27).
+  const closed = page.getByTestId("default-mix-panel");
+  await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("stopped");
+  await closed.getByTestId("rehearse-play").click();
+  await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("playing");
+  const p0 = (await debug(page))?.position ?? 0;
+  await expect
+    .poll(async () => (await debug(page))?.position ?? 0, { timeout: 20_000 })
+    .toBeGreaterThan(p0 + 12_000);
+  await closed.getByTestId("rehearse-play").click();
+  await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("stopped");
 
   // The Mixer (decoder worker: full and Range reads from the cache).
   await openMixer(page);

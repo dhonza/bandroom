@@ -22,7 +22,6 @@ export const publicLinks = sqliteTable(
     songId: text("song_id").references(() => songs.id, { onDelete: "cascade" }),
     /** JSON array of track-version ids (`versions` links only). */
     versionIds: text("version_ids").notNull().default("[]"),
-    content: text("content", { enum: ["mix-only", "all-tracks"] }).notNull(),
     versions: text("versions", { enum: ["current-only", "all"] }).notNull(),
     /** argon2id; null = no password. */
     passwordHash: text("password_hash"),

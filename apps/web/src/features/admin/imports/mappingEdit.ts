@@ -21,11 +21,11 @@ export function actionsFor(node: ImportNode): ImportAction[] {
   // "Multitrack song" is created by grouping; it is listed only for nodes that already are one.
   const multi: ImportAction[] = node.action === "songMultitrack" ? ["songMultitrack"] : [];
   if (node.kind === "folder") return [...multi, "container", "skip"];
-  if (node.isAudio) return ["songMix", ...multi, "trackOf", "skip"];
+  if (node.isAudio) return ["songSingle", ...multi, "trackOf", "skip"];
   return ["document", "skip"];
 }
 
-const isSong = (n: ImportNode) => n.action === "songMix" || n.action === "songMultitrack";
+const isSong = (n: ImportNode) => n.action === "songSingle" || n.action === "songMultitrack";
 
 /** Songs a node can become a track of, or a document can be attached to (not itself). */
 export function songTargets(project: ImportProject, exceptId?: string): ImportNode[] {
@@ -58,7 +58,7 @@ function edit(
 function releaseDependents(project: ImportProject, songId: string): void {
   walkNodes(project.nodes, (n) => {
     if (n.targetId !== songId) return;
-    if (n.action === "trackOf") n.action = "songMix";
+    if (n.action === "trackOf") n.action = "songSingle";
     n.targetId = null;
   });
 }

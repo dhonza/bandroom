@@ -5,7 +5,7 @@ import type { MatchProposal } from "../../lib/media";
 export function uploadTargetFor(songId: string, proposal: MatchProposal): UploadTarget {
   return proposal.trackId
     ? { type: "newVersion", trackId: proposal.trackId }
-    : { type: "newTrack", songId, name: proposal.newName, role: "track" };
+    : { type: "newTrack", songId, name: proposal.newName };
 }
 
 /** What the user may do with a track row (SPEC §3: own items vs. everyone's by role). */

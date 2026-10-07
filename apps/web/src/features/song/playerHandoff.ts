@@ -1,6 +1,6 @@
-import type { ListenSource, Song } from "@bandroom/shared";
+import type { Song } from "@bandroom/shared";
 import { currentTime, pause, playQueue, seek } from "../../player/listenEngine";
-import { useListen, type QueueEntry } from "../../player/listenStore";
+import { useListen, type ListenSource, type QueueEntry } from "../../player/listenStore";
 import { toQueueEntries } from "../../player/queue";
 import { prepareEngine, releasePlayback, setPendingStart } from "../../rehearse/controller";
 
@@ -18,9 +18,9 @@ export function songQueue(
   const items = queue?.some((q) => q.songId === song.id)
     ? queue.map((q) => (q.songId === song.id ? { ...q, listen: src } : q))
     : toQueueEntries(
-        [{ songId: song.id, title: song.title, subtitle: song.subtitle, listen: src }],
+        [{ songId: song.id, title: song.title, subtitle: song.subtitle, ready: true }],
         song.project,
-      );
+      ).map((q) => ({ ...q, listen: src }));
   return {
     items,
     index: Math.max(

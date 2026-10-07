@@ -1,4 +1,3 @@
-import type { ListenSource } from "@bandroom/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   dropFromQueue,
@@ -13,7 +12,7 @@ import {
   stop,
   togglePlay,
 } from "./listenEngine";
-import { nextPlayableIndex, useListen, type QueueEntry } from "./listenStore";
+import { nextPlayableIndex, useListen, type ListenSource, type QueueEntry } from "./listenStore";
 
 const src = (hash: string, status: ListenSource["status"] = "ready"): ListenSource => ({
   trackVersionId: `v-${hash}`,

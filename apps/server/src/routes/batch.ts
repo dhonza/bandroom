@@ -11,7 +11,6 @@ import {
   restoreSongRow,
   restoreTrackRow,
   restoreTrackVersionRow,
-  scheduleMixdown,
   softDeleteSong,
   softDeleteTrack,
   softDeleteTrackVersion,
@@ -115,18 +114,13 @@ export function registerBatchRoutes(app: FastifyInstance, ctx: AppContext): void
   registerContract(app, batchDelete, ({ user, access }, request) => {
     const batchId = uuidv7();
     const now = Date.now();
-    const songsGone = new Set(access.items.filter((i) => i.kind === "song").map((i) => i.id));
-    const remix = new Set<string>();
     db.transaction(() => {
       for (const item of access.items) {
         if (item.kind === "song") softDeleteSong(db, item.song, now, user.id);
         else if (item.kind === "track") softDeleteTrack(db, item.id, now, user.id);
         else softDeleteTrackVersion(db, item.id, now, user.id);
-        if (item.kind !== "song") remix.add(item.song.id);
         log(request, item, "deleted", batchId);
       }
-      // As the single deletes do: the automatic mix follows (not for songs now in the Trash).
-      for (const songId of remix) if (!songsGone.has(songId)) scheduleMixdown(db, songId, now);
       // Immediate, like every batch write: one snapshot while the worker writes (SPEC §26.2).
     }, IMMEDIATE);
     for (const item of access.items) publish(item, "deleted");
@@ -189,16 +183,11 @@ export function registerBatchRoutes(app: FastifyInstance, ctx: AppContext): void
     const now = Date.now();
     const order: TrashKind[] = ["song", "track", "version"];
     const sorted = [...access.items].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
-    const remix = new Set<string>();
     db.transaction(() => {
       for (const item of sorted) {
         if (item.kind === "song") restoreSongRow(db, item.id, now);
-        else if (item.kind === "track") {
-          restoreTrackRow(db, item.id, now);
-          remix.add(item.song.id);
-        } else if (restoreTrackVersionRow(db, item.id, now).becameCurrent) {
-          remix.add(item.song.id);
-        }
+        else if (item.kind === "track") restoreTrackRow(db, item.id, now);
+        else restoreTrackVersionRow(db, item.id, now);
         log(request, item, "restored", batchId);
       }
       for (const c of access.containers) {
@@ -217,7 +206,6 @@ export function registerBatchRoutes(app: FastifyInstance, ctx: AppContext): void
           batchId,
         );
       }
-      for (const songId of remix) scheduleMixdown(db, songId, now);
     }, IMMEDIATE);
     for (const item of sorted) publish(item, "restored");
     for (const c of access.containers) publishContainer(c);

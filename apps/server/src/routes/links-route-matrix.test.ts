@@ -19,7 +19,6 @@ describe("visitor route matrix", () => {
   const ROWS: Row[] = [
     { method: "GET", path: () => `/songs/${songId}`, cap: "view" },
     { method: "GET", path: () => `/songs/${songId}/tracks`, cap: "view" },
-    { method: "GET", path: () => `/songs/${songId}/listen`, cap: "stream" },
     { method: "GET", path: () => `/songs/${songId}/markers`, cap: "view" },
     { method: "GET", path: () => `/songs/${songId}/tempo`, cap: "view" },
     { method: "GET", path: () => `/songs/${songId}/comments`, cap: "view" },
@@ -53,6 +52,8 @@ describe("visitor route matrix", () => {
     { method: "GET", path: () => `/songs/${songId}/documents`, cap: "documents" },
     { method: "GET", path: () => `/songs/${songId}/links`, cap: "links" },
     { method: "GET", path: () => "/me", cap: "me" },
+    // Listen mode was removed (SPEC §27): no such route at all.
+    { method: "GET", path: () => `/songs/${songId}/listen`, cap: "listen" },
   ];
 
   for (const r of ROWS) {

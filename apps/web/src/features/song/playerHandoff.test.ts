@@ -1,6 +1,6 @@
-import type { ListenSource, Song } from "@bandroom/shared";
+import type { Song } from "@bandroom/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useListen, type QueueEntry } from "../../player/listenStore";
+import { useListen, type ListenSource, type QueueEntry } from "../../player/listenStore";
 
 const listenEngine = vi.hoisted(() => ({
   currentTime: vi.fn(() => 42),

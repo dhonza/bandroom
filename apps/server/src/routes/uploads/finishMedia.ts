@@ -132,14 +132,12 @@ export async function finishUpload(
       throw new AppError("INTERNAL", "Unexpected scope");
     let trackId: string;
     let versionId: string;
-    let role: "track" | "mix";
     if (target.type === "newTrack") {
       const { track, version } = createTrackWithVersion(
         db,
         {
           songId: target.songId,
           name: target.name,
-          role: target.role,
           assetId: asset.id,
           uploadedBy: user.id,
         },
@@ -147,7 +145,6 @@ export async function finishUpload(
       );
       trackId = track.id;
       versionId = version.id;
-      role = track.role;
     } else {
       const track = getTrackRow(db, target.trackId);
       if (!track) throw new AppError("NOT_FOUND", "Track not found");
@@ -158,11 +155,9 @@ export async function finishUpload(
       );
       trackId = track.id;
       versionId = version.id;
-      role = track.role;
     }
     enqueueAudioIngest(db, {
       assetId: asset.id,
-      role,
       projectId: access.project.id,
       songId: access.song.id,
       trackVersionId: versionId,

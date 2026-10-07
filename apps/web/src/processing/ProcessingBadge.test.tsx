@@ -15,7 +15,7 @@ const config: ClientConfig = {
   logoHash: null,
 };
 
-const none: Processing = { queued: 0, processing: 0, failed: 0, progress: null, mix: null };
+const none: Processing = { queued: 0, processing: 0, failed: 0, progress: null };
 
 async function badge(p: Processing | undefined) {
   const i18n = i18next.createInstance();
@@ -37,7 +37,7 @@ describe("ProcessingBadge (SPEC §25.3)", () => {
     expect(await badge(none)).toBeNull();
   });
 
-  it("failed wins, then processing with percent, waiting, the mix", async () => {
+  it("failed wins, then processing with percent, then waiting", async () => {
     expect(await badge({ ...none, failed: 1, processing: 2 })).toEqual({
       state: "failed",
       text: "1 failed",
@@ -47,16 +47,11 @@ describe("ProcessingBadge (SPEC §25.3)", () => {
       text: "Processing 42%",
     });
     expect(await badge({ ...none, queued: 3 })).toEqual({ state: "queued", text: "3 waiting" });
-    expect(await badge({ ...none, mix: "queued" })).toEqual({
-      state: "mix",
-      text: "Preparing mix",
-    });
   });
 
   it("only queued and running work counts as active", () => {
     expect(isActive(undefined)).toBe(false);
     expect(isActive({ ...none, failed: 2 })).toBe(false);
     expect(isActive({ ...none, queued: 1 })).toBe(true);
-    expect(isActive({ ...none, mix: "processing" })).toBe(true);
   });
 });

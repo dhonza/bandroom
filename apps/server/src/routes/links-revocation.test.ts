@@ -59,7 +59,6 @@ describe("revocation and lifecycle", () => {
         body: {
           scopeType: "song",
           label: "",
-          content: "all-tracks",
           versions: "all",
           expiresAt: Date.now() - 1000,
           allowDownload: false,

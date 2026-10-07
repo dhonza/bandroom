@@ -5,7 +5,6 @@ import { assetVariants, songs, tracks, trackVersions } from "../../db/schema";
 import { getProjectRow, getSongRow, type ProjectRow, type SongRow } from "../access";
 import { DOWNLOAD_ONLY_VARIANTS } from "../blobAccess";
 import {
-  listenSource,
   listSongTracks,
   listTrackVersions,
   type TrackListItem,
@@ -44,16 +43,13 @@ export function linkSongs(db: Db, link: LinkRow): SongRow[] {
 function shows(link: LinkRow, track: TrackRow, versionId: string): boolean {
   return linkShowsVersion(linkPolicyOf(link), {
     versionId,
-    trackRole: track.role,
-    trackIsSystem: track.isSystem,
     isCurrent: track.currentVersionId === versionId,
   });
 }
 
 /**
- * Tracks of a song as the link shows them (hidden system mix excluded): `mix-only` keeps mix
- * tracks, `versions` links keep tracks with listed versions and show a listed version as
- * current. Version counts only count visible versions.
+ * Tracks of a song as the link shows them: `versions` links keep tracks with listed versions and
+ * show a listed version as current. Version counts only count visible versions.
  */
 export function linkVisibleTracks(db: Db, link: LinkRow, songId: string): TrackListItem[] {
   const out: TrackListItem[] = [];
@@ -122,7 +118,7 @@ export function linkVersion(
   return { ...loc, song };
 }
 
-/** A track of a covered song with at least one visible version (system mix excluded). */
+/** A track of a covered song with at least one visible version. */
 export function linkTrack(
   db: Db,
   link: LinkRow,
@@ -131,36 +127,11 @@ export function linkTrack(
   const track = db
     .select()
     .from(tracks)
-    .where(and(eq(tracks.id, trackId), isNull(tracks.deletedAt), eq(tracks.isSystem, false)))
+    .where(and(eq(tracks.id, trackId), isNull(tracks.deletedAt)))
     .get();
   const song = track && linkSong(db, link, track.songId);
   if (!track || !song || linkVisibleVersions(db, link, track).length === 0) return undefined;
   return { track, song };
-}
-
-/**
- * What Listen mode plays through the link: the song's normal Listen source (mix track or
- * auto-mix) when the link shows it; for `versions` links a listed mix-track version, else the
- * listed version when only one track is listed.
- */
-export function linkListenSource(
-  db: Db,
-  link: LinkRow,
-  songId: string,
-): { details: TrackListVersion; isAutoMix: boolean } | null {
-  if (link.scopeType !== "versions") {
-    const src = listenSource(db, songId);
-    return src && shows(link, trackOfVersion(db, src.details.version), src.details.version.id)
-      ? src
-      : null;
-  }
-  const visible = linkVisibleTracks(db, link, songId);
-  const pick = visible.find((t) => t.track.role === "mix") ?? (visible.length === 1 && visible[0]);
-  return pick && pick.current ? { details: pick.current, isAutoMix: false } : null;
-}
-
-function trackOfVersion(db: Db, v: TrackVersionRow): TrackRow {
-  return db.select().from(tracks).where(eq(tracks.id, v.trackId)).get() as TrackRow;
 }
 
 /**

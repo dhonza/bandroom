@@ -6,7 +6,6 @@ import {
   getTrackVersionRow,
   getVariant,
   listDocuments,
-  listenSource,
   listSongTracks,
   listVariants,
   listVisibleSongs,
@@ -127,9 +126,6 @@ export function songOfflineManifest(
     const details = row?.trackId === t.track.id ? versionDetails(db, row) : null;
     if (details) blobs.version(details, { ...opts, lossless });
   }
-  // Listen mode's mix (a mix-role track above, or the hidden automatic mix).
-  const listen = listenSource(db, song.id);
-  if (listen) blobs.version(listen.details, { ...opts, lossless: false });
   blobs.add(projectImageHash(db, project));
   const documents = documentFiles(db, listDocuments(db, project.id, song.id), blobs);
   return {

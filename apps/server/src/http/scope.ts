@@ -10,8 +10,6 @@ import {
   documentLocation,
   documentLocationOfVersion,
   getLinkRow,
-  getTrackRow,
-  getTrackVersionRow,
   type LinkRow,
   resolveProjectAccess,
   resolveSongAccess,
@@ -86,14 +84,6 @@ export function downloadAllowed(access: SongAccess): boolean {
   );
 }
 
-/** Capabilities that only read; everything else changes the scope. */
-const READ_CAPABILITIES: ReadonlySet<Capability> = new Set(["view", "stream", "download"]);
-
-function isSystemTrackScope(db: Db, scope: "track" | "trackVersion", id: string): boolean {
-  const trackId = scope === "track" ? id : getTrackVersionRow(db, id)?.trackId;
-  return trackId !== undefined && getTrackRow(db, trackId)?.isSystem === true;
-}
-
 /**
  * Resolves and checks a scoped capability (SPEC §18.3). Scopes the user cannot see answer
  * NOT_FOUND so their existence does not leak; visible scopes without the capability answer
@@ -150,15 +140,6 @@ export function checkScope(
             : songIdOfTrackVersion(db, id);
   const access = songId === undefined ? undefined : resolveSongAccess(db, user, songId);
   if (!access || !roleAtLeast(access.role, "viewer")) {
-    throw new AppError("NOT_FOUND", "Not found");
-  }
-  // The hidden auto-mix track is the worker's: it can be listened to and downloaded, but no route
-  // may rename, delete or add versions to it (the next mixdown would discard them anyway).
-  if (
-    (scope === "track" || scope === "trackVersion") &&
-    !READ_CAPABILITIES.has(capability) &&
-    isSystemTrackScope(db, scope, id)
-  ) {
     throw new AppError("NOT_FOUND", "Not found");
   }
   if (

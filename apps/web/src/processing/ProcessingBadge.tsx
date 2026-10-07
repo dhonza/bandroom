@@ -5,13 +5,13 @@ import { useFormatters } from "../i18n/format";
 
 /**
  * A song's media work (SPEC §25.3): failed (red) wins over processing (blue, with percent),
- * then waiting (gray), then the automatic mix being prepared. Nothing when all is done.
+ * then waiting (gray). Nothing when all is done.
  */
 export function ProcessingBadge({ processing }: { processing: Processing | undefined }) {
   const { t } = useTranslation();
   const fmt = useFormatters();
   if (!processing) return null;
-  const { queued, failed, mix, progress } = processing;
+  const { queued, failed, progress } = processing;
   const running = processing.processing;
   let color: string;
   let label: string;
@@ -31,10 +31,6 @@ export function ProcessingBadge({ processing }: { processing: Processing | undef
     color = "gray";
     state = "queued";
     label = t("processing.badge.queued", { count: queued });
-  } else if (mix !== null) {
-    color = mix === "processing" ? "blue" : "gray";
-    state = "mix";
-    label = t("processing.badge.mix");
   } else {
     return null;
   }
@@ -42,7 +38,6 @@ export function ProcessingBadge({ processing }: { processing: Processing | undef
     failed > 0 && t("processing.tooltip.failed", { count: failed }),
     running > 0 && t("processing.tooltip.processing", { count: running }),
     queued > 0 && t("processing.tooltip.queued", { count: queued }),
-    mix !== null && t(`processing.tooltip.mix_${mix}`),
   ].filter((p): p is string => typeof p === "string");
   return (
     <Tooltip label={parts.join(" · ")} multiline maw={260}>

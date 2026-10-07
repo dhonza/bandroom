@@ -1,11 +1,6 @@
 import { z } from "zod";
 import { PaletteColorSchema } from "./content";
-import {
-  LINK_STATUSES,
-  LinkContentSchema,
-  LinkScopeSchema,
-  LinkVersionModeSchema,
-} from "./permissions/links";
+import { LINK_STATUSES, LinkScopeSchema, LinkVersionModeSchema } from "./permissions/links";
 
 /** Public links (SPEC §3.5). Tokens are 128-bit random, base64url (22 characters). */
 export const LINK_TOKEN_RE = /^[A-Za-z0-9_-]{22}$/;
@@ -44,7 +39,6 @@ export const PublicLinkSchema = z.object({
   songId: z.string().nullable(),
   songTitle: z.string().nullable(),
   versionIds: z.array(z.string()),
-  content: LinkContentSchema,
   versions: LinkVersionModeSchema,
   hasPassword: z.boolean(),
   expiresAt: z.number().nullable(),
@@ -66,7 +60,6 @@ export type PublicLink = z.infer<typeof PublicLinkSchema>;
 
 const LinkSettingsShape = {
   label: LinkLabelSchema,
-  content: LinkContentSchema,
   versions: LinkVersionModeSchema,
   /** Null = never expires. Must lie in the future. */
   expiresAt: z.number().int().positive().nullable(),
@@ -128,7 +121,6 @@ export type LinkAnalytics = z.infer<typeof LinkAnalyticsSchema>;
 /** What the link view needs after opening (no internal label, no ids of other content). */
 export const LinkViewSchema = z.object({
   scopeType: LinkScopeSchema,
-  content: LinkContentSchema,
   versions: LinkVersionModeSchema,
   allowComments: z.boolean(),
   showComments: z.boolean(),

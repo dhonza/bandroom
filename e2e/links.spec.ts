@@ -61,13 +61,12 @@ test("Public links: a password link plays and takes anonymous comments until it 
   await loginAsNewUser(page, request, testInfo, "member");
   await songWithTrack(page, `Links ${uniqueUsername(testInfo)}`, "Share me");
 
-  // The project manager creates a password-protected all-tracks link with comments.
+  // The project manager creates a password-protected link with comments.
   const section = page.getByTestId("song-links");
   await section.scrollIntoViewIfNeeded();
   await section.getByTestId("link-create").click();
   const form = page.getByTestId("link-form");
   await form.getByTestId("link-label").fill("For mastering");
-  await form.getByTestId("link-content").getByText("All tracks", { exact: true }).click();
   await form.getByTestId("link-password-switch").click();
   await form.getByTestId("link-password").fill("open sesame");
   await form.getByTestId("link-allow-comments").click();
@@ -97,9 +96,10 @@ test("Public links: a password link plays and takes anonymous comments until it 
   await visitor.getByTestId("link-unlock").click();
   await expect(visitor.getByTestId("link-song-title")).toHaveText("Share me");
 
-  // All-tracks links open with the Mixer; play it.
-  await expect(visitor.getByTestId("rehearse-panel")).toBeVisible({ timeout: 30_000 });
-  await expect(visitor.getByTestId("mixer-toggle")).toHaveAttribute("aria-pressed", "true");
+  // Every link gets the player with the Mixer button (SPEC §27); a one-track song opens with the
+  // Mixer closed, and the engine plays it.
+  await expect(visitor.getByTestId("default-mix-panel")).toBeVisible({ timeout: 30_000 });
+  await expect(visitor.getByTestId("mixer-toggle")).toHaveAttribute("aria-pressed", "false");
   await expect
     .poll(async () => (await debug(visitor))?.status, { timeout: 60_000 })
     .toBe("stopped");
@@ -183,12 +183,10 @@ test("Public links: a project link lists the songs without a password", async ({
   await expect(visitor.getByTestId("link-song-row")).toHaveCount(1);
   await visitor.getByTestId("link-song-open").click();
   await expect(visitor.getByTestId("link-song-title")).toHaveText("Opener");
-  // Mix-only links play the mix, with no Mixer; without comments allowed there are no comment
-  // tools.
-  await expect(
-    visitor.getByTestId("listen-panel").or(visitor.getByTestId("link-mix-preparing")),
-  ).toBeVisible({ timeout: 30_000 });
-  await expect(visitor.getByTestId("mixer-toggle")).toHaveCount(0);
+  // Every link gets the player with the Mixer button (SPEC §27); without comments allowed there
+  // are no comment tools.
+  await expect(visitor.getByTestId("default-mix-panel")).toBeVisible({ timeout: 240_000 });
+  await expect(visitor.getByTestId("mixer-toggle")).toBeVisible();
   await expect(visitor.getByTestId("comment-toolbar")).toHaveCount(0);
   if (isMobile(testInfo)) await noHorizontalOverflow(visitor);
 

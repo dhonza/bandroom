@@ -24,7 +24,7 @@ async function mixClock(page: Page): Promise<number> {
   return (m ?? 0) * 60 + (s ?? 0);
 }
 
-/** A song with one processed track (10 s tone) whose mix is ready; the player shows the mix. */
+/** A song with one processed track (10 s tone); the closed Mixer plays it through the engine. */
 async function songWithMix(page: Page, testInfo: TestInfo): Promise<void> {
   await page.goto("library");
   await page.getByTestId("new-project").click();
@@ -35,11 +35,10 @@ async function songWithMix(page: Page, testInfo: TestInfo): Promise<void> {
   await page.getByLabel("Title", { exact: true }).fill("Hand-off");
   await page.getByTestId("create-song-submit").click();
   await page.getByTestId("song-row").filter({ hasText: "Hand-off" }).getByRole("link").click();
-  // Uploaded on the open page: the player stays on the mix while it is prepared.
   await page.getByTestId("track-dropzone").locator('input[type="file"]').setInputFiles(TONE_FILE());
-  // One worker processes every test's uploads on this server; the automatic mix queues behind
-  // them (plus its 60 s debounce), so under full-suite load this can take minutes.
-  await expect(page.getByTestId("listen-panel").getByTestId("listen-play")).toBeEnabled({
+  // One worker processes every test's uploads on this server, so under full-suite load this can
+  // take minutes. No rendered mix since M21 (SPEC §27): the closed Mixer plays the engine.
+  await expect(page.getByTestId("default-mix-panel").getByTestId("rehearse-play")).toBeEnabled({
     timeout: 420_000,
   });
   await expect(page.getByTestId("mixer-toggle")).toHaveAttribute("aria-pressed", "false");
@@ -49,8 +48,9 @@ test("Mixer toggle hands playback over at the same position and is remembered", 
   page,
   request,
 }, testInfo) => {
-  // The mix player (<audio>, Opus) is covered in Chromium like listen.spec; Safari is a device
-  // test (DEVICE-TESTS M5.11).
+  // M21 group B removed the mix player (<audio>) this hand-off goes to; group C replaces the
+  // test with the one-player checks (PROGRESS, M21).
+  test.fixme(true, "Listen mode removed (SPEC §27); rewritten in M21 group C");
   test.skip(testInfo.project.name.includes("webkit") || testInfo.project.name.includes("iphone"));
   test.setTimeout(540_000);
   await loginAsNewUser(page, request, testInfo, "member");
@@ -146,8 +146,8 @@ test("Mixer on phones: track lanes with narrow headers; the toggle returns to th
   await loginAsNewUser(page, request, testInfo, "member");
   await songWithMix(page, testInfo);
   const toggle = page.getByTestId("mixer-toggle");
-  // The mix player shows one waveform: what plays (DECISIONS 2026-10-07).
-  await expect(page.getByTestId("listen-panel").getByTestId("timeline")).toHaveAttribute(
+  // The closed Mixer shows one waveform (DECISIONS 2026-10-07).
+  await expect(page.getByTestId("default-mix-panel").getByTestId("timeline")).toHaveAttribute(
     "data-lanes",
     "1",
   );
@@ -166,10 +166,10 @@ test("Mixer on phones: track lanes with narrow headers; the toggle returns to th
   await expect(page.getByTestId("track-settings-panel").getByTestId("track-fader")).toBeVisible();
   await page.keyboard.press("Escape");
 
-  // On → off: the same button plays the mix again.
+  // On → off: the same button closes the Mixer again.
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
   await toggle.click();
-  await expect(page.getByTestId("listen-panel")).toBeVisible();
+  await expect(page.getByTestId("default-mix-panel")).toBeVisible();
   await expect(page.getByTestId("rehearse-panel")).toHaveCount(0);
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
   await expect

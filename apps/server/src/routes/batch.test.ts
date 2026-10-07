@@ -72,7 +72,6 @@ function track(songId: string, name: string, by: string, versions = 1) {
   const created = createTrackWithVersion(t.db, {
     songId,
     name,
-    role: "track",
     assetId: asset(by),
     uploadedBy: by,
   });
@@ -190,11 +189,10 @@ describe("batch delete (SPEC §26.2)", () => {
     // The newest remaining version is current again.
     expect(row("tracks", mine.trackId)?.current_version_id).toBe(mine.versionIds[0]);
     expect(published.filter((e) => e.type === "version.deleted")).toHaveLength(2);
+    // No automatic mix follows any more (SPEC §27).
     expect(
-      t.db.$client
-        .prepare("SELECT count(*) AS n FROM jobs WHERE type = 'audio.mixdown' AND dedupe_key = ?")
-        .get(`mixdown:${songId}`),
-    ).toEqual({ n: 1 });
+      t.db.$client.prepare("SELECT count(*) AS n FROM jobs WHERE type = 'audio.mixdown'").get(),
+    ).toEqual({ n: 0 });
   });
 
   it("deletes songs (managers only) and publishes project-scoped SSE", async () => {
@@ -418,7 +416,6 @@ describe("purge (SPEC §26.3)", () => {
     createTrackWithVersion(t.db, {
       songId: other,
       name: "A copy",
-      role: "track",
       assetId: sharedAsset ?? "",
       uploadedBy: ids.petr ?? "",
     });

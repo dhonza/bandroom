@@ -63,7 +63,6 @@ export function sameLength(a: number | null, b: number | null): boolean {
 export interface PlannedTrack {
   node: ImportNode;
   name: string;
-  role: "mix" | "track";
 }
 
 export interface PlannedSong {
@@ -99,11 +98,12 @@ export function planProject(project: ImportProject): ProjectPlan {
       switch (n.action) {
         case "skip":
           break;
-        case "songMix": {
+        case "songSingle": {
+          // One track named after the song (SPEC §17.1, M21).
           const s: PlannedSong = {
             node: n,
             title: n.name,
-            tracks: [{ node: n, name: "Mix", role: "mix" }],
+            tracks: [{ node: n, name: n.name }],
             documents: [],
           };
           songs.set(n.id, s);
@@ -115,8 +115,7 @@ export function planProject(project: ImportProject): ProjectPlan {
           const s: PlannedSong = {
             node: n,
             title: n.songTitle?.trim() || n.name,
-            tracks:
-              n.kind === "folder" ? [] : [{ node: n, name: n.trackName || n.name, role: "track" }],
+            tracks: n.kind === "folder" ? [] : [{ node: n, name: n.trackName || n.name }],
             documents: [],
           };
           songs.set(n.id, s);
@@ -148,7 +147,7 @@ export function planProject(project: ImportProject): ProjectPlan {
     } else if (!n.isAudio) {
       plan.problems.push({ node: n, reason: "not an audio file" });
     } else {
-      target.tracks.push({ node: n, name: n.trackName || n.name, role: "track" });
+      target.tracks.push({ node: n, name: n.trackName || n.name });
     }
   }
   for (const n of deferredDocs) {
@@ -168,7 +167,7 @@ export function validateMapping(mapping: ImportMapping): string[] {
     }
     walkNodes(p.nodes, (n) => {
       const needsAudio =
-        n.action === "songMix" ||
+        n.action === "songSingle" ||
         n.action === "trackOf" ||
         (n.action === "songMultitrack" && n.kind !== "folder");
       if (needsAudio && !n.isAudio) errors.push(`${p.name} / ${n.name}: not an audio file`);

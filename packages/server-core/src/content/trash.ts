@@ -47,23 +47,14 @@ export interface ResolvedItem {
   deleted: boolean;
 }
 
-/**
- * Looks up a song, track or version with its song and project. Hidden system tracks and
- * auto-mix versions are never batch items (only the maintenance purge passes `includeSystem`),
- * and items of deleted projects are not found.
- */
-export function resolveItem(
-  db: Db,
-  kind: TrashKind,
-  id: string,
-  opts: { includeSystem?: boolean } = {},
-): ResolvedItem | undefined {
+/** Looks up a song, track or version with its song and project; items of deleted projects are not found. */
+export function resolveItem(db: Db, kind: TrashKind, id: string): ResolvedItem | undefined {
   let version: TrackVersionRow | null = null;
   let track: TrackRow | null = null;
   let songId: string;
   if (kind === "version") {
     version = db.select().from(trackVersions).where(eq(trackVersions.id, id)).get() ?? null;
-    if (!version || (version.isAutoMix && !opts.includeSystem)) return undefined;
+    if (!version) return undefined;
     track = db.select().from(tracks).where(eq(tracks.id, version.trackId)).get() ?? null;
     if (!track) return undefined;
     songId = track.songId;
@@ -74,7 +65,6 @@ export function resolveItem(
   } else {
     songId = id;
   }
-  if (track?.isSystem && !opts.includeSystem) return undefined;
   const song = db.select().from(songs).where(eq(songs.id, songId)).get();
   const project =
     song &&
@@ -562,11 +552,7 @@ export function listTrashRows(db: Db, projectId?: string): TrashRow[] {
     });
   }
   if (songIds.length === 0) return out.sort((a, b) => b.deletedAt - a.deletedAt);
-  const trackRows = db
-    .select()
-    .from(tracks)
-    .where(and(inArray(tracks.songId, songIds), eq(tracks.isSystem, false)))
-    .all();
+  const trackRows = db.select().from(tracks).where(inArray(tracks.songId, songIds)).all();
   const trackById = new Map(trackRows.map((t) => [t.id, t]));
   for (const t of trackRows) {
     const song = songById.get(t.songId);
@@ -590,13 +576,7 @@ export function listTrashRows(db: Db, projectId?: string): TrashRow[] {
     const versionRows = db
       .select()
       .from(trackVersions)
-      .where(
-        and(
-          inArray(trackVersions.trackId, trackIds),
-          isNotNull(trackVersions.deletedAt),
-          eq(trackVersions.isAutoMix, false),
-        ),
-      )
+      .where(and(inArray(trackVersions.trackId, trackIds), isNotNull(trackVersions.deletedAt)))
       .orderBy(desc(trackVersions.deletedAt))
       .all();
     for (const v of versionRows) {
@@ -630,8 +610,6 @@ export interface PurgedItem {
   projectId: string;
   /** Null for projects and project-level documents. */
   songId: string | null;
-  /** An old auto-mix version (never listed in the Trash). */
-  system: boolean;
 }
 
 /**
@@ -650,7 +628,7 @@ export function purgeTrashItems(
   const purged: PurgedItem[] = [];
   const assetIds = new Set<string>();
   const collect = (kind: TrashKind, id: string) => {
-    const item = resolveItem(db, kind, id, { includeSystem: true });
+    const item = resolveItem(db, kind, id);
     if (!item) return null;
     for (const a of subtreeOf(db, kind, id).assetIds) assetIds.add(a);
     purged.push({
@@ -659,7 +637,6 @@ export function purgeTrashItems(
       name: item.version?.label ?? item.track?.name ?? item.song.title,
       projectId: item.project.id,
       songId: item.song.id,
-      system: item.version?.isAutoMix === true || item.track?.isSystem === true,
     });
     return item;
   };
@@ -673,7 +650,6 @@ export function purgeTrashItems(
       name: item.document?.title ?? item.project.name,
       projectId: item.project.id,
       songId: item.song?.id ?? null,
-      system: false,
     });
     return item;
   };

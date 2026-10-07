@@ -7,7 +7,6 @@ import {
   getSession,
   getSong,
   getSongFollow,
-  getSongListen,
   getSongMixer,
   getSongTempo,
   listDocumentVersions,
@@ -64,7 +63,7 @@ export function projectUrls(projectId: string): string[] {
 
 /**
  * Every request the song page makes for one song (SPEC §13 "timeline JSON"): the song, tracks and
- * version stacks, Listen source, markers/sections, tempo map, personal mixer, documents, follow
+ * version stacks, markers/sections, tempo map, personal mixer, documents, follow
  * state and mention candidates. Comments are paged and added by the sync.
  */
 export function songUrls(song: Pick<OfflineSongManifest, "songId" | "trackIds">): string[] {
@@ -72,7 +71,6 @@ export function songUrls(song: Pick<OfflineSongManifest, "songId" | "trackIds">)
   return [
     contractUrl(getSong, p),
     contractUrl(listSongTracks, p),
-    contractUrl(getSongListen, p),
     contractUrl(listSongMarkers, p),
     contractUrl(getSongTempo, p),
     contractUrl(getSongMixer, p),

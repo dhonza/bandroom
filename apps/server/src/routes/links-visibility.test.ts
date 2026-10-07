@@ -1,7 +1,6 @@
-import { createSongLink, getSongListen } from "@bandroom/shared";
+import { createSongLink } from "@bandroom/shared";
 import { describe, expect, it } from "vitest";
 import {
-  admin,
   bassV1,
   bassV2,
   blob,
@@ -67,36 +66,26 @@ describe("what a link shows", () => {
     expect((await blob(tokenOf(link), cookie, hashOfVersion(bassV1))).statusCode).toBe(200);
   });
 
-  it("mix-only shows the mix track, or the automatic mix", async () => {
-    const link = await makeLink({ scopeType: "project", content: "mix-only" });
+  it("shows every track and queues the ready songs (no content option, SPEC §27)", async () => {
+    // A client still sending the removed `content: "mix-only"` gets an ordinary link.
+    const link = await makeLink({ scopeType: "project", ...({ content: "mix-only" } as object) });
+    expect(link).not.toHaveProperty("content");
     const token = tokenOf(link);
     const cookie = await openAs(link);
-    expect((await tracksVia(token, cookie)).map((x) => x.name)).toEqual(["Mix"]);
-    expect((await blob(token, cookie, hashOfVersion(bassV2))).statusCode).toBe(404);
-    const listen = (await visit(token, "GET", `/songs/${songId}/listen`, { cookie })).json<{
-      listen: { trackVersionId: string } | null;
-    }>().listen;
-    expect(listen?.trackVersionId).toBe(mixV1);
-    // Song 2 has no mix track: the automatic mix plays, its tracks stay hidden.
-    expect(await tracksVia(token, cookie, song2Id)).toEqual([]);
-    const auto = (await call(t, getSongListen, { params: { id: song2Id } }, admin)).json<{
-      listen: { trackVersionId: string; isAutoMix: boolean; opus: { hash: string } } | null;
-    }>().listen;
-    expect(auto?.isAutoMix).toBe(true);
-    const viaLink = (await visit(token, "GET", `/songs/${song2Id}/listen`, { cookie })).json<{
-      listen: { trackVersionId: string } | null;
-    }>().listen;
-    expect(viaLink?.trackVersionId).toBe(auto?.trackVersionId);
-    expect((await blob(token, cookie, auto?.opus.hash ?? "")).statusCode).toBe(200);
-    const songs = (await visit(token, "GET", `/projects/${projectId}/songs`, { cookie })).json<{
-      songs: { id: string }[];
-    }>().songs;
-    expect(songs.map((s) => s.id).sort()).toEqual([songId, song2Id].sort());
+    expect((await tracksVia(token, cookie)).map((x) => x.name).sort()).toEqual(["Bass", "Mix"]);
+    expect((await blob(token, cookie, hashOfVersion(bassV2))).statusCode).toBe(200);
+    expect((await visit(token, "GET", `/songs/${songId}/listen`, { cookie })).statusCode).toBe(404);
+    const queue = (await visit(token, "GET", `/projects/${projectId}/queue`, { cookie })).json<{
+      items: { songId: string; ready: boolean }[];
+    }>().items;
+    expect(queue).toEqual([
+      expect.objectContaining({ songId, ready: true }),
+      expect.objectContaining({ songId: song2Id, ready: true }),
+    ]);
   });
 
   it("a versions link shows exactly its versions", async () => {
     const link = await makeLink({ scopeType: "versions", versionIds: [bassV1] });
-    expect(link.content).toBe("all-tracks");
     const token = tokenOf(link);
     const cookie = await openAs(link);
     const tracks = await tracksVia(token, cookie);
@@ -104,10 +93,6 @@ describe("what a link shows", () => {
     expect((await blob(token, cookie, hashOfVersion(bassV1))).statusCode).toBe(200);
     expect((await blob(token, cookie, hashOfVersion(bassV2))).statusCode).toBe(404);
     expect((await blob(token, cookie, hashOfVersion(mixV1))).statusCode).toBe(404);
-    const listen = (await visit(token, "GET", `/songs/${songId}/listen`, { cookie })).json<{
-      listen: { trackVersionId: string } | null;
-    }>().listen;
-    expect(listen?.trackVersionId).toBe(bassV1);
     const bad = await call(
       t,
       createSongLink,
@@ -117,7 +102,6 @@ describe("what a link shows", () => {
           scopeType: "versions",
           versionIds: [otherTrack.current?.id ?? ""],
           label: "",
-          content: "all-tracks",
           versions: "all",
           expiresAt: null,
           allowDownload: false,

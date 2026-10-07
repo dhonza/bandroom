@@ -39,7 +39,6 @@ describe("processing visibility (SPEC §25.3)", () => {
       processing: 0,
       failed: 0,
       progress: null,
-      mix: null,
     });
     expect((await processing(member)).songs).toEqual([]);
 
@@ -57,7 +56,7 @@ describe("processing visibility (SPEC §25.3)", () => {
         title: "Song",
         projectId,
         projectName: "Album",
-        processing: { queued: 1, processing: 0, failed: 0, progress: null, mix: null },
+        processing: { queued: 1, processing: 0, failed: 0, progress: null },
       },
     ]);
   });
@@ -78,15 +77,15 @@ describe("processing visibility (SPEC §25.3)", () => {
     expect((await processing(guestCookie)).songs.map((s) => s.songId)).toEqual([songId]);
   });
 
-  it("after ingest only the debounced automatic mix is left", async () => {
+  it("after ingest nothing is left (no automatic mix, SPEC §27)", async () => {
     expect(await runQueuedJobs(t)).toEqual(["done"]);
     expect(await songProcessing(member)).toEqual({
       queued: 0,
       processing: 0,
       failed: 0,
       progress: null,
-      mix: "queued",
     });
+    expect((await processing(member)).songs).toEqual([]);
   }, 60_000);
 
   it("counts failed files", async () => {

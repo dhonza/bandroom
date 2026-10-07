@@ -6,7 +6,7 @@ export const processingKey = ["processing"] as const;
 
 /** Queued or running work (failures alone are not "active"). */
 export function isActive(p: Processing | undefined): boolean {
-  return p !== undefined && (p.queued > 0 || p.processing > 0 || p.mix !== null);
+  return p !== undefined && (p.queued > 0 || p.processing > 0);
 }
 
 /** Polling interval while something is being processed (SSE refreshes the rest). */

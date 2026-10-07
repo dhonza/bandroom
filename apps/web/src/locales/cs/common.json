@@ -398,7 +398,7 @@
         "artworkUnavailable": "Obrázek tohoto projektu ze Samply nejde importovat: API Samply ho neposkytuje. Po importu ho nahrajte v nastavení projektu."
       },
       "action": {
-        "songMix": "Píseň (mix)",
+        "songSingle": "Píseň (jedna stopa)",
         "songMultitrack": "Vícestopá píseň",
         "trackOf": "Stopa jiné písně",
         "document": "Dokument",
@@ -586,8 +586,6 @@
     "empty": "Zatím žádné stopy.",
     "uploading": "Nahrávání {{percent}} % z {{size}}",
     "cancelUpload": "Zrušit nahrávání",
-    "mix": "mix",
-    "mixTrackName": "Mix",
     "failed": "Zpracování selhalo",
     "processing": "Zpracování… {{percent}} %",
     "dualMono": "duální mono",
@@ -610,14 +608,8 @@
     "edit": "Upravit stopu",
     "fields": {
       "name": "Název",
-      "role": "Typ",
-      "roleHint": "Stopa typu mix obsahuje celý stereo mix; přehrávač ji se zavřeným mixpultem přehrává místo automatického mixu.",
       "instrument": "Nástroj",
       "instrumentHint": "např. baskytara — používá se u „Ztlumit můj nástroj“ v mixpultu."
-    },
-    "roles": {
-      "track": "Stopa",
-      "mix": "Mix"
     },
     "match": {
       "title": "Kam mají soubory patřit?",
@@ -1241,14 +1233,6 @@
       "song": "Tato píseň",
       "versions": "Vybrané verze"
     },
-    "content": {
-      "mix-only": "Jen mix",
-      "all-tracks": "Všechny stopy"
-    },
-    "contentHint": {
-      "mix-only": "Návštěvníci slyší stopu s mixem, nebo automatický mix, pokud žádná není. Mixpult nedostanou.",
-      "all-tracks": "Návštěvníci dostanou všechny stopy v mixpultu (ztlumení, sólo, smyčka) a po jeho zavření mohou přehrát mix."
-    },
     "versions": {
       "current-only": "Aktuální verze",
       "all": "Všechny verze"
@@ -1284,7 +1268,6 @@
       "labelHint": "Vidí ho jen kapela, např. pro koho odkaz je.",
       "labelPlaceholder": "Pro mastering",
       "scope": "Sdílet",
-      "content": "Stopy",
       "versions": "Verze",
       "pickVersions": "Verze ke sdílení",
       "password": "Vyžadovat heslo",
@@ -1492,7 +1475,6 @@
       "processingPercent": "Zpracovává se {{percent}}",
       "queued_one": "{{count}} čeká",
       "queued_other": "{{count}} čeká",
-      "mix": "Připravuje se mix",
       "failed_few": "{{count}} selhaly",
       "failed_many": "{{count}} selhalo",
       "queued_few": "{{count}} čekají",
@@ -1505,8 +1487,6 @@
       "processing_other": "Zpracovává se {{count}} souborů (průběh vlny, verze pro přehrávání).",
       "queued_one": "Na zpracování čeká {{count}} soubor.",
       "queued_other": "Na zpracování čeká {{count}} souborů.",
-      "mix_queued": "Automatický mix se brzy vytvoří.",
-      "mix_processing": "Automatický mix se právě vytváří.",
       "failed_few": "{{count}} soubory se nepodařilo zpracovat; nahrajte je znovu nebo to zkuste znovu v písni.",
       "failed_many": "{{count}} souborů se nepodařilo zpracovat; nahrajte je znovu nebo to zkuste znovu v písni.",
       "processing_few": "Zpracovávají se {{count}} soubory (průběh vlny, verze pro přehrávání).",

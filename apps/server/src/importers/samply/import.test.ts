@@ -216,7 +216,7 @@ describe("Samply import (SPEC §17)", () => {
     const p = run.mapping?.projects[0];
     expect(p?.name).toBe("Album A");
     expect(p?.nodes.map((n) => [n.name, n.action])).toEqual([
-      ["Song One", "songMix"],
+      ["Song One", "songSingle"],
       ["Tune", "container"],
       ["cover", "skip"],
     ]);
@@ -269,7 +269,7 @@ describe("Samply import (SPEC §17)", () => {
     const mapping = structuredClone(run.mapping);
     const node = mapping?.projects[0]?.nodes[2]; // cover.png (project picture)
     if (!mapping || !node) throw new Error("mapping");
-    node.action = "songMix";
+    node.action = "songSingle";
     const res = await call(
       t,
       updateImportMapping,
@@ -339,7 +339,8 @@ describe("Samply import (SPEC §17)", () => {
       .from(schema.tracks)
       .where(eq(schema.tracks.songId, songOneRow?.id ?? ""))
       .get();
-    expect(mixTrack).toMatchObject({ name: "Mix", role: "mix" });
+    // One track named after the song (SPEC §17.1, M21).
+    expect(mixTrack).toMatchObject({ name: "Song One" });
     const versions = db
       .select()
       .from(schema.trackVersions)
@@ -358,10 +359,7 @@ describe("Samply import (SPEC §17)", () => {
       .from(schema.tracks)
       .where(eq(schema.tracks.songId, tuneRow?.id ?? ""))
       .all();
-    expect(stems.map((s) => [s.name, s.role]).sort()).toEqual([
-      ["Bass", "track"],
-      ["Drums", "track"],
-    ]);
+    expect(stems.map((s) => s.name).sort()).toEqual(["Bass", "Drums"]);
 
     // Originals are stored byte-exact and ingest jobs are queued.
     const bwfSize = fs.statSync(BWF_FILE()).size;
@@ -400,7 +398,8 @@ describe("Samply import (SPEC §17)", () => {
       authorUserId: petr?.id,
       startSec: 1.5,
       endSec: 3,
-      trackId: null,
+      // On the song's only track (no roles, SPEC §27).
+      trackId: mixTrack?.id,
       source: "import",
     });
     expect(c1?.resolvedAt).toBe(5000);

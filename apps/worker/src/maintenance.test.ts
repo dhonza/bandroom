@@ -136,7 +136,6 @@ describe("Trash purge after the retention period (SPEC §26.3)", () => {
     return createTrackWithVersion(t.db, {
       songId,
       name,
-      role: "track",
       assetId: a.id,
       uploadedBy: userId,
     });
@@ -170,26 +169,6 @@ describe("Trash purge after the retention period (SPEC §26.3)", () => {
     // The blobs were released now; the GC deletes them after its grace period.
     const res = await runMaintenance(t.db, storage, new Date(now + 2 * DAY));
     expect(res).toMatchObject({ trashPurged: 0, blobsDeleted: 2 });
-  });
-
-  it("purges old auto-mix versions quietly", async () => {
-    const user = insertUser(t.db, {
-      username: "u",
-      displayName: "U",
-      globalRole: "member",
-      passwordHash: "x",
-    });
-    const project = createProjectRow(t.db, { name: "P", createdBy: user.id });
-    const song = createSongRow(t.db, { projectId: project.id, title: "S", createdBy: user.id });
-    const mix = await seed(user.id, song.id, "mix", "mix");
-    t.db.$client
-      .prepare("UPDATE tracks SET is_system = 1, deleted_at = NULL WHERE id = ?")
-      .run(mix.track.id);
-    t.db.$client
-      .prepare("UPDATE track_versions SET is_auto_mix = 1, deleted_at = ? WHERE id = ?")
-      .run(now - 40 * DAY, mix.version.id);
-    expect(purgeExpiredTrash(t.db, now)).toEqual({ purged: 0, bytesFreed: 3 });
-    expect(listEvents(t.db, { action: "version.purged" })).toHaveLength(0);
   });
 
   it("also purges deleted projects (by their deletedAt) and documents in live projects", async () => {

@@ -2,7 +2,6 @@ import {
   listTrackVersions,
   LinkPasswordSchema,
   type CreateLink,
-  type LinkContent,
   type LinkVersionMode,
   type PublicLink,
   type UpdateLink,
@@ -50,7 +49,6 @@ export function LinkFormModal(props: Props) {
     link?.scopeType === "versions" ? "versions" : "song",
   );
   const [versionIds, setVersionIds] = useState<string[]>([]);
-  const [content, setContent] = useState<LinkContent>(link?.content ?? "mix-only");
   const [versions, setVersions] = useState<LinkVersionMode>(link?.versions ?? "current-only");
   const [usePassword, setUsePassword] = useState(link?.hasPassword ?? false);
   const [password, setPassword] = useState("");
@@ -82,12 +80,11 @@ export function LinkFormModal(props: Props) {
       allowDownload,
       allowComments,
       showComments,
-      ...(!isVersions && { content, versions }),
+      ...(!isVersions && { versions }),
     };
     try {
       if (props.mode === "create") {
         const body: CreateLink = {
-          content,
           versions,
           ...common,
           scopeType: owner?.kind === "project" ? "project" : scope,
@@ -161,25 +158,6 @@ export function LinkFormModal(props: Props) {
           )}
           {!isVersions && (
             <>
-              <Stack gap={4}>
-                <Text size="sm" fw={500}>
-                  {t("links.fields.content")}
-                </Text>
-                <SegmentedControl
-                  value={content}
-                  onChange={(v) => {
-                    setContent(v === "all-tracks" ? "all-tracks" : "mix-only");
-                  }}
-                  data={[
-                    { value: "mix-only", label: t("links.content.mix-only") },
-                    { value: "all-tracks", label: t("links.content.all-tracks") },
-                  ]}
-                  data-testid="link-content"
-                />
-                <Text size="xs" c="dimmed">
-                  {t(`links.contentHint.${content}`)}
-                </Text>
-              </Stack>
               <Stack gap={4}>
                 <Text size="sm" fw={500}>
                   {t("links.fields.versions")}

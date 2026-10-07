@@ -2,7 +2,6 @@ import { z } from "zod";
 import { PaletteColorSchema } from "../content";
 import {
   VersionGainSchema,
-  ListenSourceSchema,
   QueueItemSchema,
   StackVersionSchema,
   TrackNameSchema,
@@ -107,7 +106,6 @@ export const updateTrack = defineContract({
     .object({
       name: TrackNameSchema,
       color: PaletteColorSchema,
-      role: z.enum(["track", "mix"]),
       instrumentTag: z.string().trim().max(40),
       defaultGainDb: z.number().min(-120).max(6),
       defaultPan: z.number().min(-1).max(1),
@@ -116,7 +114,7 @@ export const updateTrack = defineContract({
     .partial(),
   response: OkSchema,
   errors: ["FORBIDDEN", "SONG_LOCKED"],
-  // The default mix is frozen by a song lock; name, colour and role stay editable (SPEC §25.12).
+  // The default mix is frozen by a song lock; name and colour stay editable (SPEC §25.12).
   auth: { capability: "edit.own", scope: "track", lockFields: DEFAULT_MIX_FIELDS },
 });
 
@@ -129,15 +127,7 @@ export const reorderSongTracks = defineContract({
   auth: { capability: "edit.any", scope: "song" },
 });
 
-export const getSongListen = defineContract({
-  method: "GET",
-  path: "/songs/:id/listen",
-  params: IdParams,
-  response: z.object({ listen: ListenSourceSchema.nullable() }),
-  auth: { capability: "stream", scope: "song" },
-});
-
-/** Songs of a project in order with their Listen sources ("Play all", SPEC §6.10). */
+/** Songs of a project in order, for the engine queue ("Play all", SPEC §6.10, §18.3). */
 export const getProjectQueue = defineContract({
   method: "GET",
   path: "/projects/:id/queue",

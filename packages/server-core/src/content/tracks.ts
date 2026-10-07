@@ -44,7 +44,6 @@ export function createTrackWithVersion(
   input: {
     songId: string;
     name: string;
-    role: "track" | "mix";
     assetId: string;
     uploadedBy: string;
     source?: TrackVersionRow["source"];
@@ -55,9 +54,7 @@ export function createTrackWithVersion(
     const siblings = db
       .select({ color: tracks.color })
       .from(tracks)
-      .where(
-        and(eq(tracks.songId, input.songId), isNull(tracks.deletedAt), eq(tracks.isSystem, false)),
-      )
+      .where(and(eq(tracks.songId, input.songId), isNull(tracks.deletedAt)))
       .all();
     const last = db
       .select({ m: max(tracks.sortOrder) })
@@ -71,7 +68,6 @@ export function createTrackWithVersion(
         id: uuidv7(now),
         songId: input.songId,
         name,
-        role: input.role,
         // SPEC §25.10: by instrument, else a colour the song does not use yet, else round-robin.
         color: autoTrackColor(
           { name },
@@ -206,12 +202,12 @@ export interface TrackListItem {
   versionCount: number;
 }
 
-/** Tracks of a song (without hidden system tracks) with their current version, for the song page. */
+/** Tracks of a song with their current version, for the song page. */
 export function listSongTracks(db: Db, songId: string): TrackListItem[] {
   const list = db
     .select()
     .from(tracks)
-    .where(and(eq(tracks.songId, songId), isNull(tracks.deletedAt), eq(tracks.isSystem, false)))
+    .where(and(eq(tracks.songId, songId), isNull(tracks.deletedAt)))
     .orderBy(asc(tracks.sortOrder), asc(tracks.createdAt))
     .all();
   return list.map((track) => {
@@ -365,7 +361,6 @@ export function softDeleteTrackVersion(
 export interface TrackPatch {
   name?: string;
   color?: string;
-  role?: "track" | "mix";
   defaultGainDb?: number;
   defaultPan?: number;
   defaultMuted?: boolean;
@@ -388,7 +383,7 @@ export function reorderTracks(db: Db, songId: string, trackIds: readonly string[
   const current = db
     .select({ id: tracks.id })
     .from(tracks)
-    .where(and(eq(tracks.songId, songId), isNull(tracks.deletedAt), eq(tracks.isSystem, false)))
+    .where(and(eq(tracks.songId, songId), isNull(tracks.deletedAt)))
     .orderBy(asc(tracks.sortOrder), asc(tracks.createdAt))
     .all()
     .map((t) => t.id);
@@ -402,44 +397,27 @@ export function reorderTracks(db: Db, songId: string, trackIds: readonly string[
   });
 }
 
-/** A user-uploaded (non-system) mix track with a current version, if the song has one. */
-export function userMixTrack(db: Db, songId: string): TrackRow | undefined {
-  return db
-    .select()
-    .from(tracks)
-    .where(
-      and(
-        eq(tracks.songId, songId),
-        eq(tracks.role, "mix"),
-        eq(tracks.isSystem, false),
-        isNull(tracks.deletedAt),
-      ),
-    )
-    .orderBy(asc(tracks.sortOrder))
-    .all()
-    .find((t) => t.currentVersionId !== null);
-}
-
-export function systemMixTrack(db: Db, songId: string): TrackRow | undefined {
-  return db
-    .select()
-    .from(tracks)
-    .where(and(eq(tracks.songId, songId), eq(tracks.isSystem, true), isNull(tracks.deletedAt)))
-    .get();
-}
-
 /**
- * What Listen mode plays (SPEC §6.10): the user-uploaded mix track's current version if it exists
- * (even while processing), else the auto-mix.
+ * Songs (of the given ids) that can play (SPEC §6.10, §18.3): at least one live track whose current
+ * version's asset is ready.
  */
-export function listenSource(
-  db: Db,
-  songId: string,
-): { details: TrackListVersion; isAutoMix: boolean } | null {
-  const user = userMixTrack(db, songId);
-  const track = user ?? systemMixTrack(db, songId);
-  if (!track?.currentVersionId) return null;
-  const v = getTrackVersionRow(db, track.currentVersionId);
-  const details = v && versionDetails(db, v);
-  return details ? { details, isAutoMix: !user } : null;
+export function readySongIds(db: Db, songIds: readonly string[]): Set<string> {
+  if (songIds.length === 0) return new Set();
+  return new Set(
+    db
+      .select({ songId: tracks.songId })
+      .from(tracks)
+      .innerJoin(trackVersions, eq(trackVersions.id, tracks.currentVersionId))
+      .innerJoin(assets, eq(assets.id, trackVersions.assetId))
+      .where(
+        and(
+          inArray(tracks.songId, [...songIds]),
+          isNull(tracks.deletedAt),
+          isNull(trackVersions.deletedAt),
+          eq(assets.status, "ready"),
+        ),
+      )
+      .all()
+      .map((r) => r.songId),
+  );
 }

@@ -21,7 +21,6 @@ describe("under a base path", () => {
           body: {
             scopeType: "project",
             label: "",
-            content: "mix-only",
             versions: "current-only",
             expiresAt: null,
             allowDownload: false,

@@ -13,13 +13,10 @@ import { computePeaks } from "./peaks";
 import { probeAudio, UnsupportedMediaError, type Probe } from "./probe";
 import { mediaTimeLimitMs, PROBE_TIME_LIMIT_MS, withTimeLimit } from "./tools";
 import { removeVariant } from "./variants";
-import { scheduleMixdownAfterIngest } from "./mixdown";
 import { buildWavMeta, NotRiffWaveError } from "./wav";
 
 export const AudioIngestPayloadSchema = z.object({
   assetId: z.string(),
-  /** Bitrate profile (SPEC §5.3 step 5). */
-  role: z.enum(["track", "mix"]),
   /** For SSE fan-out (permission filtering). */
   projectId: z.string().nullable().default(null),
   songId: z.string().nullable().default(null),
@@ -154,9 +151,8 @@ export const audioIngestHandler: JobHandler<
     const bitrates = getSetting(db, "audio.opusBitrates");
     const expected = durationSamples48k(probe.durationSamples, probe.sampleRate);
     const mono = playbackChannels === 1;
-    const trackRate = mono ? bitrates.trackMono : bitrates.trackStereo;
-    const mixRate = mono ? bitrates.mixMono : bitrates.mixStereo;
-    const high = payload.role === "mix" ? mixRate : trackRate;
+    // One bitrate profile for every track (SPEC §5.3 step 5, M21).
+    const high = mono ? bitrates.trackMono : bitrates.trackStereo;
     const low = mono ? bitrates.lowMono : bitrates.lowStereo;
     for (const [variant, kbps, share] of [
       ["opus", high, 0.6],
@@ -215,11 +211,9 @@ export const audioIngestHandler: JobHandler<
     const loudness = await measureLoudness(src, tools, signal);
     setAssetProbe(db, assetId, { ...probe, loudness });
 
-    // 10: done; the song's auto-mix follows (debounced; it removes itself if a mix track exists).
-    // The original's blob stays until GC (24 h); the verified FLAC reconstructs it exactly.
+    // 10: done. The original's blob stays until GC (24 h); the verified FLAC reconstructs it exactly.
     if (!originalKept) removeVariant(db, assetId, "original");
     setAssetStatus(db, assetId, "ready");
-    if (payload.songId) scheduleMixdownAfterIngest(db, payload.songId, payload.trackVersionId);
     ctx.progress(1, "ready");
     return { lossless: probe.lossless, dualMono, originalKept, variants };
   },

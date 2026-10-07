@@ -19,7 +19,7 @@ import {
 } from "./lossless";
 import { createProjectRow } from "./projects";
 import { createSongRow } from "./songs";
-import { addTrackVersion, createTrackWithVersion, listenSource } from "./tracks";
+import { addTrackVersion, createTrackWithVersion } from "./tracks";
 
 let t: ReturnType<typeof createTestDb>;
 let db: Db;
@@ -61,11 +61,10 @@ async function addTrack(songId: string, file: string, name: string) {
   const { track, version } = createTrackWithVersion(db, {
     songId,
     name,
-    role: "track",
     assetId: asset.id,
     uploadedBy: userId,
   });
-  const { status } = await runOneJob(h, "audio.ingest", { assetId: asset.id, role: "track" });
+  const { status } = await runOneJob(h, "audio.ingest", { assetId: asset.id });
   expect(status).toBe("done");
   return { track, version, assetId: asset.id };
 }
@@ -122,21 +121,15 @@ describe("remove full quality (SPEC §26.4)", () => {
         skipped: { alreadyLossy: 2 },
       });
 
-      // Ingest never recreates the files (e.g. a stray re-run), and the mix still uses Opus.
+      // Ingest never recreates the files (e.g. a stray re-run).
       expect(assetLosslessRemoved(db, wav.assetId)).toBe(true);
-      const again = await runOneJob(h, "audio.ingest", { assetId: wav.assetId, role: "track" });
+      const again = await runOneJob(h, "audio.ingest", { assetId: wav.assetId });
       expect(again.status).toBe("done");
       expect(db.select().from(jobs).where(eq(jobs.id, again.job.id)).get()?.result).toMatch(
         /full quality was removed/,
       );
       expect(names(wav.assetId)).not.toContain("flac");
       expect(getAsset(db, wav.assetId)?.status).toBe("ready");
-      const mix = await runOneJob(h, "audio.mixdown", { songId });
-      expect(mix.status).toBe("done");
-      expect(
-        JSON.parse(db.select().from(jobs).where(eq(jobs.id, mix.job.id)).get()?.result ?? "{}"),
-      ).toMatchObject({ status: "rendered", inputs: 2 });
-      expect(listenSource(db, songId)?.isAutoMix).toBe(true);
     },
   );
 
@@ -148,7 +141,6 @@ describe("remove full quality (SPEC §26.4)", () => {
     const copy = createTrackWithVersion(db, {
       songId: other,
       name: "Tone copy",
-      role: "track",
       assetId: wav.assetId,
       uploadedBy: userId,
     });

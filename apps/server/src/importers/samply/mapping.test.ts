@@ -5,6 +5,7 @@ import { SamplyBoxSchema, SamplyProjectSchema, type SamplyBox } from "./api";
 import project0 from "./fixtures/project-0-all.json";
 import project1 from "./fixtures/project-1-all.json";
 import projectsFixture from "./fixtures/projects.json";
+import { runMapping, type ImportRunRow } from "./store";
 import {
   artworkFileName,
   computeTotals,
@@ -90,12 +91,21 @@ describe("proposeProject on recorded fixtures", () => {
     const folder = p.nodes.find((n) => n.kind === "folder");
     expect(folder?.action).toBe("container");
     expect(folder?.children).toHaveLength(9);
-    expect(folder?.children.every((c) => c.action === "songMix")).toBe(true);
+    expect(folder?.children.every((c) => c.action === "songSingle")).toBe(true);
     const plan = planProject(p);
     expect(plan.songs).toHaveLength(23);
-    expect(plan.songs.every((s) => s.tracks.length === 1 && s.tracks[0]?.role === "mix")).toBe(
+    // One track named after the song (SPEC §17.1, M21).
+    expect(plan.songs.every((s) => s.tracks.length === 1 && s.tracks[0]?.name === s.title)).toBe(
       true,
     );
+  });
+
+  it("reads a mapping saved before M21 (songMix → songSingle, SPEC §27)", () => {
+    const p = proposeProject(P, boxes1, emptyInfo, null);
+    const legacy = JSON.stringify(mappingOf(p)).replaceAll('"songSingle"', '"songMix"');
+    expect(legacy).toContain('"action":"songMix"');
+    const read = runMapping({ mapping: legacy } as ImportRunRow);
+    expect(read?.projects[0]?.nodes.map((n) => n.action)).toEqual(p.nodes.map((n) => n.action));
   });
 
   it("maps a loose image to a project document", () => {
@@ -103,7 +113,7 @@ describe("proposeProject on recorded fixtures", () => {
     const plan = planProject(p);
     expect(plan.songs).toHaveLength(2);
     expect(plan.projectDocuments.map((d) => d.name)).toEqual(["Take 5"]);
-    expect(p.nodes.map((n) => n.action)).toEqual(["songMix", "songMix", "document"]);
+    expect(p.nodes.map((n) => n.action)).toEqual(["songSingle", "songSingle", "document"]);
   });
 });
 
@@ -135,10 +145,7 @@ describe("proposeProject heuristics", () => {
     const plan = planProject(p);
     expect(plan.songs).toHaveLength(1);
     expect(plan.songs[0]?.title).toBe("Tune");
-    expect(plan.songs[0]?.tracks.map((t) => [t.name, t.role])).toEqual([
-      ["Bass", "track"],
-      ["Drums", "track"],
-    ]);
+    expect(plan.songs[0]?.tracks.map((t) => t.name)).toEqual(["Bass", "Drums"]);
     expect(validateMapping(mappingOf(p))).toEqual([]);
     expect(computeTotals(mappingOf(p))).toMatchObject({ songs: 1, tracks: 2, versions: 2 });
   });
@@ -212,12 +219,12 @@ describe("planProject and validation", () => {
     vocalNode.targetId = find(p.nodes, "Song").id;
     const plan = planProject(p);
     expect(plan.songs).toHaveLength(1);
-    expect(plan.songs[0]?.tracks.map((t) => t.name)).toEqual(["Mix", "Vocal idea"]);
+    expect(plan.songs[0]?.tracks.map((t) => t.name)).toEqual(["Song", "Vocal idea"]);
     expect(validateMapping(mappingOf(p))).toEqual([]);
 
     vocalNode.targetId = "missing";
     const docNode = find(p.nodes, "chart");
-    docNode.action = "songMix";
+    docNode.action = "songSingle";
     const errors = validateMapping(mappingOf(p));
     expect(errors.some((e) => e.includes("Vocal idea") && e.includes("not a song"))).toBe(true);
     expect(errors.some((e) => e.includes("chart") && e.includes("not an audio"))).toBe(true);

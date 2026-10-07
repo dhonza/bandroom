@@ -56,8 +56,6 @@ function expandItem(db: Db, kind: TrashKind, id: string): LosslessTarget[] {
         isNull(trackVersions.deletedAt),
         isNull(tracks.deletedAt),
         isNull(songs.deletedAt),
-        eq(tracks.isSystem, false),
-        eq(trackVersions.isAutoMix, false),
       ),
     )
     .all();
@@ -295,7 +293,6 @@ export function lossyBySong(db: Db, projectId: string): Map<string, SongLossy> {
         eq(songs.projectId, projectId),
         isNull(songs.deletedAt),
         isNull(tracks.deletedAt),
-        eq(tracks.isSystem, false),
         isNull(trackVersions.deletedAt),
         eq(assets.status, "ready"),
       ),

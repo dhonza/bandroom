@@ -67,9 +67,9 @@ afterAll(() => {
   tmp.cleanup();
 });
 
-async function ingest(file: string, role: "track" | "mix" = "track") {
+async function ingest(file: string) {
   const asset = await addOriginal(h, file, uploader);
-  const { status, job } = await runOneJob(h, "audio.ingest", { assetId: asset.id, role });
+  const { status, job } = await runOneJob(h, "audio.ingest", { assetId: asset.id });
   expect(getJob(db, job.id)?.error ?? null).toBeNull();
   expect(status).toBe("done");
   return asset.id;
@@ -169,7 +169,7 @@ describe("audio.ingest details", () => {
         { mode: 0o755 },
       );
       const asset = await addOriginal(h, BWF_FILE(), uploader);
-      const payload = { assetId: asset.id, role: "track" };
+      const payload = { assetId: asset.id };
       const failed = await runOneJob(h, "audio.ingest", payload, { ...DEFAULT_TOOLS, ffmpeg });
       expect(failed.status).not.toBe("done");
       expect(getVariant(db, asset.id, "original")).toBeDefined();
@@ -182,7 +182,7 @@ describe("audio.ingest details", () => {
   );
 
   it("handles lossy sources: keeps the original, no FLAC", { timeout: 60_000 }, async () => {
-    const id = await ingest(MP3_FILE(), "mix");
+    const id = await ingest(MP3_FILE());
     const names = listVariants(db, id)
       .map((v) => v.variant)
       .sort();
@@ -194,7 +194,8 @@ describe("audio.ingest details", () => {
       "seekindex_opus",
       "seekindex_opus_low",
     ]);
-    expect(meta(id, "opus")).toMatchObject({ bitrate: 128, channels: 2 });
+    // One bitrate profile for every track (SPEC §5.3, M21).
+    expect(meta(id, "opus")).toMatchObject({ bitrate: 96, channels: 2 });
     expect(assetProbe(getAsset(db, id) ?? (undefined as never))).toMatchObject({
       lossless: false,
       codec: "mp3",
@@ -288,7 +289,6 @@ describe("audio.ingest details", () => {
     const asset = await addOriginal(h, bogus, uploader);
     const { status, job } = await runOneJob(h, "audio.ingest", {
       assetId: asset.id,
-      role: "track",
     });
     expect(status).toBe("failed");
     expect(getJob(db, job.id)?.attempts).toBe(1);

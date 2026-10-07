@@ -81,7 +81,9 @@ const parseJson = <T>(s: string | null, schemaOf: z.ZodType<T>): T | null => {
 };
 
 export function runMapping(row: ImportRunRow): ImportMapping | null {
-  return parseJson(row.mapping, ImportMappingSchema);
+  // Mappings saved before M21 say `songMix` for what is now `songSingle` (SPEC §27).
+  const json = row.mapping?.replaceAll('"action":"songMix"', '"action":"songSingle"') ?? null;
+  return parseJson(json, ImportMappingSchema);
 }
 
 export function toImportRun(row: ImportRunRow): ImportRun {

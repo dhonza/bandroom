@@ -5,8 +5,11 @@ import { z } from "zod";
  * executed by the import job. Node ids are Samply box ids.
  */
 export const IMPORT_ACTIONS = [
-  /** Stack or single audio file → song with one `mix` track (versions = stack children). */
-  "songMix",
+  /**
+   * Stack or single audio file → song with one track named after the song (versions = stack
+   * children). Was `songMix` (a `mix`-role track) before M21 (SPEC §27).
+   */
+  "songSingle",
   /**
    * One song made of several tracks: a folder whose audio children point at it, or an audio
    * item the admin grouped with others of the same length (it becomes the first track).

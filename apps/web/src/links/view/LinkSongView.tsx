@@ -1,11 +1,4 @@
-import {
-  getSongListen,
-  linkPlayerMode,
-  listTrackVersions,
-  type Song,
-  type Track,
-  type TrackVersion,
-} from "@bandroom/shared";
+import { listTrackVersions, type Song, type Track, type TrackVersion } from "@bandroom/shared";
 import { ActionIcon, Alert, Center, Group, Loader, Menu, Stack, Text, Title } from "@mantine/core";
 import { IconDownload } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
@@ -24,8 +17,8 @@ import { errorMessage } from "../../api/errorMessage";
 import { BackLink } from "../../components/BackLink";
 
 /**
- * A song through a public link (SPEC §11.2): the song page's player (Rehearse for all-tracks
- * links, Listen for mix-only links), comments as the link allows, and downloads by policy.
+ * A song through a public link (SPEC §11.2): the song page's player with the Mixer for every
+ * visitor (SPEC §27), comments as the link allows, and downloads by policy.
  */
 export function LinkSongView({ songId, token }: { songId: string; token: string }) {
   const { t } = useTranslation();
@@ -70,8 +63,10 @@ export function LinkSongView({ songId, token }: { songId: string; token: string 
         key={song.id}
         song={song}
         tracks={tracks}
-        initial={linkPlayerMode(view, tracks.length)}
-        canSwitch={view.content === "all-tracks" && tracks.length > 0}
+        // Several tracks start with the Mixer open, as the former all-tracks links did; group C
+        // makes the closed Mixer the start state everywhere (SPEC §27).
+        initial={tracks.length > 1 ? "rehearse" : "listen"}
+        canSwitch={tracks.length > 0}
       />
       {song.access.capabilities.includes("download") && tracks.length > 0 && (
         <LinkDownloads song={song} tracks={tracks} allVersions={view.versions === "all"} />
@@ -81,8 +76,8 @@ export function LinkSongView({ songId, token }: { songId: string; token: string 
 }
 
 /**
- * The song page's player for link visitors: the Mixer button only on all-tracks links; the
- * initial state follows the link and is not stored for visitors.
+ * The song page's player for link visitors, with the Mixer button for everyone (SPEC §27); the
+ * initial state is not stored for visitors.
  */
 function LinkPlayer({
   song,
@@ -101,18 +96,14 @@ function LinkPlayer({
     remember: false,
     decide: () => initial === "rehearse",
   });
-  const listenQ = useQuery({
-    queryKey: songKeys.listen(song.id),
-    queryFn: ({ signal }) => api(getSongListen, { params: { id: song.id } }, { signal }),
-  });
   const defaultMix = useDefaultMix(song, mixer, tracks);
   if (mixer.open === null) return <Loader size="sm" />;
   const toggle = canSwitch ? mixer : undefined;
   if ((mixer.open || defaultMix) && tracks.length > 0) {
     return <RehearsePanel song={song} tracks={tracks} mixer={toggle} defaultMix={defaultMix} />;
   }
-  // Nothing to hear in the mix player yet (no tracks and no mix).
-  if (tracks.length === 0 && listenQ.isSuccess && listenQ.data.listen === null) {
+  // Nothing to hear yet (no tracks).
+  if (tracks.length === 0) {
     return (
       <Alert color="gray" data-testid="link-mix-preparing">
         {t("links.view.mixPreparing")}

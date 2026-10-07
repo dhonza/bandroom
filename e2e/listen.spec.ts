@@ -10,6 +10,9 @@ test("folder drop, Play all, timeline seek, mini-player, versions", async ({
   page,
   request,
 }, testInfo) => {
+  // M21 group B removed Listen mode (<audio>) and the server mix; group D rebuilds "Play all" and
+  // the mini-player on the engine and rewrites this spec (PROGRESS, M21).
+  test.fixme(true, "Listen mode removed (SPEC §27); rewritten in M21 group D");
   test.skip(
     !["chromium", "subpath-chromium"].includes(testInfo.project.name),
     "desktop Chromium, root and sub-path",

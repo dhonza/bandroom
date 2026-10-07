@@ -105,7 +105,6 @@ function track(songId: string, name: string, by: string, spec: AssetSpec = {}) {
   const created = createTrackWithVersion(t.db, {
     songId,
     name,
-    role: "track",
     assetId: asset(by, spec),
     uploadedBy: by,
   });
@@ -177,7 +176,6 @@ describe("remove full quality: preview (SPEC §26.4)", () => {
     createTrackWithVersion(t.db, {
       songId: other,
       name: "Bass copy",
-      role: "track",
       assetId: a.assetId,
       uploadedBy: ids.petr ?? "",
     });
@@ -280,7 +278,6 @@ describe("remove full quality: apply (SPEC §26.4)", () => {
     const copy = createTrackWithVersion(t.db, {
       songId: other,
       name: "Bass copy",
-      role: "track",
       assetId: wav.assetId,
       uploadedBy: ids.petr ?? "",
     });

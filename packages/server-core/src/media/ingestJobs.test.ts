@@ -18,7 +18,6 @@ describe("ingest job helpers", () => {
   it("queues audio.ingest once per asset, with the given priority", () => {
     const input = {
       assetId: "a1",
-      role: "track" as const,
       projectId: "p1",
       songId: "s1",
       trackVersionId: "v1",
@@ -37,7 +36,6 @@ describe("ingest job helpers", () => {
     expect(rows[0]?.payload).toBe(
       JSON.stringify({
         assetId: "a1",
-        role: "track",
         projectId: "p1",
         songId: "s1",
         trackVersionId: "v1",

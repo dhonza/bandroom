@@ -3,17 +3,13 @@ import { canDownload, type Capability, type DownloadPolicy } from "./content";
 
 /**
  * Public links (SPEC §3.5): what a link visitor may see and do. Visitors act with at most
- * `viewer` or `commenter` capabilities, limited to the link's scope and content. The server
+ * `viewer` or `commenter` capabilities, limited to the link's scope. Every visitor gets the same
+ * player with the Mixer (SPEC §27: the `mix-only`/`all-tracks` content option was removed). The server
  * resolves scopes against these rules centrally (apps/server/src/http/linkAuth.ts).
  */
 export const LINK_SCOPES = ["project", "song", "versions"] as const;
 export type LinkScope = (typeof LINK_SCOPES)[number];
 export const LinkScopeSchema = z.enum(LINK_SCOPES);
-
-/** `mix-only`: only `mix`-role tracks, or the automatic mix when there is none. */
-export const LINK_CONTENTS = ["mix-only", "all-tracks"] as const;
-export type LinkContent = (typeof LINK_CONTENTS)[number];
-export const LinkContentSchema = z.enum(LINK_CONTENTS);
 
 /** `all` allows browsing the version stacks. */
 export const LINK_VERSION_MODES = ["current-only", "all"] as const;
@@ -26,7 +22,6 @@ export type LinkStatus = (typeof LINK_STATUSES)[number];
 /** The link settings that decide access (a subset of the stored link). */
 export interface LinkPolicy {
   scopeType: LinkScope;
-  content: LinkContent;
   versions: LinkVersionMode;
   /** Listed track versions (`versions` links only). */
   versionIds: readonly string[];
@@ -89,16 +84,12 @@ export function linkCanDownload(
 /** A track version as the link rules see it. */
 export interface LinkVersionFacts {
   versionId: string;
-  trackRole: "track" | "mix";
-  /** The hidden automatic mix track (SPEC §5.5). */
-  trackIsSystem: boolean;
   isCurrent: boolean;
 }
 
 /** Whether a (non-deleted) version of a song covered by the link is visible to its visitors. */
 export function linkShowsVersion(link: LinkPolicy, v: LinkVersionFacts): boolean {
   if (link.scopeType === "versions") return link.versionIds.includes(v.versionId);
-  if (link.content === "mix-only" && v.trackRole !== "mix" && !v.trackIsSystem) return false;
   return link.versions === "all" || v.isCurrent;
 }
 
@@ -112,17 +103,4 @@ export function linkShowsComment(
   comment: { linkId: string | null },
 ): boolean {
   return link.showComments || comment.linkId === linkId;
-}
-
-/**
- * Player of the link view (SPEC §11.2): Listen for mix-only links, Rehearse for all-tracks links.
- * A `versions` link plays in Listen mode when it lists a single track of the song.
- */
-export function linkPlayerMode(
-  link: Pick<LinkPolicy, "scopeType" | "content">,
-  visibleTracks: number,
-): "listen" | "rehearse" {
-  if (link.content === "mix-only") return "listen";
-  if (link.scopeType === "versions" && visibleTracks < 2) return "listen";
-  return "rehearse";
 }
