@@ -526,8 +526,8 @@ export function hasPreviousSong(s: RehearseState = useRehearse.getState()): bool
 }
 
 /**
- * Deleted songs leave the queue (SPEC §6.10). `"stopped"`: the loaded song is among them and
- * playback stopped (the caller says why).
+ * Deleted songs leave the queue (SPEC §6.10); a deleted loaded song closes. `"stopped"`: it was
+ * playing, or playing on elsewhere (the mini-player), so the caller says why it stopped.
  */
 export function dropSongs(gone: GoneSongs): "stopped" | "removed" | "none" {
   const s = useRehearse.getState();
@@ -537,8 +537,9 @@ export function dropSongs(gone: GoneSongs): "stopped" | "removed" | "none" {
     ((gone.songIds ?? []).includes(s.info.songId) || gone.projectId === s.info.projectId);
   const { result, queue } = dropGone(s.queue, gone);
   if (loadedGone || result === "stopped") {
+    const noticed = isPlaying() || s.songId !== attachedSongId;
     closeSong();
-    return "stopped";
+    return noticed ? "stopped" : "removed";
   }
   if (result === "removed") useRehearse.setState({ queue });
   return result;

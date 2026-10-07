@@ -480,6 +480,15 @@ describe("song lifecycle and queue (SPEC §6.10)", () => {
     expect(useRehearse.getState().queue).toBeNull();
   });
 
+  it("deleting the stopped song on its own page closes it without a notice", async () => {
+    const id = nextSong();
+    const detach = controller.attachPage(id);
+    await openSong(id, [track("a")], null, {}, "", info(id));
+    expect(controller.dropSongs({ songIds: [id] })).toBe("removed");
+    expect(useRehearse.getState().open).toBe(false);
+    detach();
+  });
+
   it("a song opened on its page joins the queue that holds it", async () => {
     const { loader } = loaderFor();
     controller.startQueue([entry("f1"), entry("f2")], source, loader);
