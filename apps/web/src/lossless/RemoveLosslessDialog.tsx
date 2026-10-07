@@ -156,6 +156,9 @@ function DialogBody({
             ]}
             value={quality ?? "keep"}
             allowDeselect={false}
+            // Inside the dialog: portalled into the page, the dropdown of the full-screen phone
+            // dialog widened the layout viewport, moved, and so kept jumping (Pixel e2e).
+            comboboxProps={{ withinPortal: false }}
             onChange={(v) => {
               const q = AudioQualitySchema.safeParse(v);
               setQuality(q.success ? q.data : null);

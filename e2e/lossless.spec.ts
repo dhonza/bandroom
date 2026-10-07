@@ -183,7 +183,7 @@ test("upload with lossy on upload: Opus only, the badge says converted on upload
 test("remove full quality at another Opus quality: re-encoded first (SPEC §28.3)", async ({
   page,
 }, testInfo) => {
-  test.setTimeout(240_000);
+  test.setTimeout(360_000);
   await loginAsNewUser(page, page.request, testInfo, "member");
   const { songId } = await projectWithSong(page, `Reencode ${uniqueUsername(testInfo)}`, "Take");
   await page.goto(`songs/${songId}`);
@@ -200,8 +200,9 @@ test("remove full quality at another Opus quality: re-encoded first (SPEC §28.3
   await confirmRemoval(page);
 
   const gtr = page.getByTestId("track-row").filter({ hasText: "Gtr" });
+  // The re-encode queues behind other tests' jobs on the one e2e worker.
   await expect(gtr.getByTestId("lossy-badge")).toHaveAttribute("data-reason", "reencode", {
-    timeout: 60_000,
+    timeout: 180_000,
   });
   expect(await downloadsOf(page, "Gtr")).toEqual(["opus"]);
   await gtr.getByTestId("version-button").click();
