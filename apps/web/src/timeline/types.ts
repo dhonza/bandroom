@@ -44,8 +44,13 @@ export interface TimelineProps {
   headerWidth?: number;
   /** DOM lanes between the ruler and the waveforms (sections, markers; SPEC §11.3). */
   topLanesHeight?: number;
-  /** Header cell beside the top lanes (desktop track-header column). */
+  /** Labels beside the top lanes, in the track-header column or, Mixer closed, the label column. */
   renderTopHeader?: () => ReactNode;
+  /**
+   * Width of the narrow label column holding the top-lane labels while `hideLanes` (Mixer closed,
+   * SPEC §11.3). Shown only when there are top lanes; default 0 (no column).
+   */
+  labelWidth?: number;
   /** Absolutely positioned content over the detail view, laid out from the current view. */
   renderOverlay?: (view: View) => ReactNode;
   /** Section bands on the overview strip and marker guides across the lanes. */

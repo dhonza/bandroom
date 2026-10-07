@@ -69,6 +69,9 @@ import { Transport, TransportState } from "./Transport";
 const HEADER_W = 320;
 /** Phones: name above M/S (DECISIONS 2026-10-07). */
 const HEADER_W_NARROW = 116;
+/** The label column of the top lanes while the Mixer is closed (fits "Komentáře" at xs). */
+const LABEL_W = 88;
+const LABEL_W_PHONE = 72;
 /** Default height of the overview strip (SPEC §25.9: the vertical zoom with the Mixer closed). */
 export const OVERVIEW_DEFAULT_H = 80;
 
@@ -270,6 +273,7 @@ export function RehearsePanel({
               playing={status === "playing"}
               onSeek={seekSec}
               hideLanes={!mixerOpen}
+              labelWidth={isPhone ? LABEL_W_PHONE : LABEL_W}
               overviewHeight={overviewHeight}
               laneHeight={laneHeight}
               onLaneHeight={mixerOpen ? setTrackLaneHeight : setOverviewHeight}

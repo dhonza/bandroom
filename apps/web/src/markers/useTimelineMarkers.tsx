@@ -75,7 +75,8 @@ export function useTimelineMarkers(
   const actions = useMarkerActions(song.id);
   const layout = useMarkerLayout(markers);
   const { comments } = useSongComments(song.id);
-  const commentH = commentLaneHeight(layout.coarse);
+  // The comment lane shows only when the song has comments (SPEC §11.3).
+  const commentH = comments.length > 0 ? commentLaneHeight(layout.coarse) : 0;
   const selection = useTimelineUi((s) => s.selection);
   const loopOn = useTimelineUi((s) => s.loopOn);
   const [menu, setMenu] = useState<TimelineMenuState | null>(null);

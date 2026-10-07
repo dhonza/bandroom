@@ -225,12 +225,37 @@ describe("timeline items", () => {
       height: 84,
       coarse: false,
     });
-    expect(layoutFor([], true)).toEqual({
+    expect(
+      layoutFor(
+        song.filter((m) => m.type !== "section"),
+        true,
+      ),
+    ).toEqual({
       sectionH: 44,
       markerH: 36,
-      sectionLanes: 1,
-      height: 80,
+      sectionLanes: 0,
+      height: 36,
       coarse: true,
+    });
+  });
+
+  it("gives empty lanes no height", () => {
+    expect(layoutFor([], true)).toEqual({
+      sectionH: 44,
+      markerH: 0,
+      sectionLanes: 0,
+      height: 0,
+      coarse: true,
+    });
+    expect(
+      layoutFor(
+        song.filter((m) => m.type === "section"),
+        false,
+      ),
+    ).toMatchObject({
+      markerH: 0,
+      sectionLanes: 2,
+      height: 60,
     });
   });
 

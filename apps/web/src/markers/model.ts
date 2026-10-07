@@ -307,12 +307,15 @@ export function validateMarkerForm(
   return { ok: true, name, startSec, endSec };
 }
 
-/** Lane heights: touch devices get 44 px section lanes (SPEC §11.1 touch targets). */
+/**
+ * Lane heights: touch devices get 44 px section lanes (SPEC §11.1 touch targets). Only lanes with
+ * items take space (SPEC §11.3): no sections, no section lane; no markers, a 0 px markers lane.
+ */
 export function layoutFor(markers: readonly Marker[], coarse: boolean) {
   const sectionH = coarse ? 44 : 30;
-  const markerH = coarse ? 36 : 24;
+  const markerH = markers.some((m) => m.type !== "section") ? (coarse ? 36 : 24) : 0;
   const sectionLanes = Math.max(
-    1,
+    0,
     ...markers.filter((m) => m.type === "section").map((m) => m.lane + 1),
   );
   return { sectionH, markerH, sectionLanes, height: sectionLanes * sectionH + markerH, coarse };

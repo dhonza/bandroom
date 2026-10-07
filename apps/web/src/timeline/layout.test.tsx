@@ -55,7 +55,12 @@ describe("overview lanes", () => {
 });
 
 describe("Timeline props", () => {
-  const timeline = (props: { hideLanes?: boolean; overviewHeight?: number }) => (
+  const timeline = (props: {
+    hideLanes?: boolean;
+    overviewHeight?: number;
+    topLanesHeight?: number;
+    labelWidth?: number;
+  }) => (
     <I18nextProvider i18n={i18n}>
       <MantineProvider>
         <Timeline
@@ -67,6 +72,7 @@ describe("Timeline props", () => {
           renderHeader={(i) => <span>{`header ${String(i)}`}</span>}
           headerWidth={120}
           belowOverview={<span>tools</span>}
+          renderTopHeader={() => <span>top labels</span>}
           {...props}
         />
       </MantineProvider>
@@ -93,4 +99,32 @@ describe("Timeline props", () => {
     expect(screen.getByText("tools")).toBeTruthy();
     view.unmount();
   });
+
+  it("keeps the labels in the track-header column with the Mixer open", () => {
+    const view = render(timeline({ topLanesHeight: 54, labelWidth: 88 }));
+    expect(screen.getByTestId("track-headers").style.width).toBe(remOf(120));
+    expect(screen.getByText("top labels")).toBeTruthy();
+    expect(screen.queryByTestId("lane-labels")).toBeNull();
+    view.unmount();
+  });
+
+  it("puts the top-lane labels in a narrow column with the Mixer closed", () => {
+    const view = render(timeline({ hideLanes: true, topLanesHeight: 54, labelWidth: 88 }));
+    expect(screen.getByTestId("lane-labels").style.width).toBe(remOf(88));
+    expect(screen.getByText("top labels")).toBeTruthy();
+    expect(screen.queryByText("header 0")).toBeNull();
+    view.unmount();
+  });
+
+  it("has no label column when no top lane has items", () => {
+    const view = render(timeline({ hideLanes: true, topLanesHeight: 0, labelWidth: 88 }));
+    expect(screen.queryByTestId("lane-labels")).toBeNull();
+    expect(screen.queryByText("top labels")).toBeNull();
+    view.unmount();
+  });
 });
+
+/** Mantine's `w={px}` style value. */
+function remOf(px: number): string {
+  return `calc(${String(px / 16)}rem * var(--mantine-scale))`;
+}

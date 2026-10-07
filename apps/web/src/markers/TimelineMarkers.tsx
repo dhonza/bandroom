@@ -80,7 +80,7 @@ export function MarkersOverlay({
   );
 }
 
-/** Labels of the top lanes in the desktop track-header column. */
+/** One label per top lane; a lane without items has height 0 and no row (SPEC §11.3). */
 export function TopLaneLabels({
   layout,
   commentsHeight = 0,
@@ -89,29 +89,29 @@ export function TopLaneLabels({
   commentsHeight?: number;
 }) {
   const { t } = useTranslation();
+  const rows = [
+    { key: "sections", h: layout.sectionLanes * layout.sectionH, label: t("markers.sections") },
+    { key: "markers", h: layout.markerH, label: t("markers.markers") },
+    { key: "comments", h: commentsHeight, label: t("comments.lane") },
+  ];
   return (
     <Box>
-      <Box
-        h={layout.sectionLanes * layout.sectionH}
-        px="xs"
-        style={{ display: "flex", alignItems: "center" }}
-      >
-        <Text size="xs" c="dimmed">
-          {t("markers.sections")}
-        </Text>
-      </Box>
-      <Box h={layout.markerH} px="xs" style={{ display: "flex", alignItems: "center" }}>
-        <Text size="xs" c="dimmed">
-          {t("markers.markers")}
-        </Text>
-      </Box>
-      {commentsHeight > 0 && (
-        <Box h={commentsHeight} px="xs" style={{ display: "flex", alignItems: "center" }}>
-          <Text size="xs" c="dimmed">
-            {t("comments.lane")}
-          </Text>
-        </Box>
-      )}
+      {rows
+        .filter((r) => r.h > 0)
+        .map((r) => (
+          <Box
+            key={r.key}
+            h={r.h}
+            // Narrow padding: "Komentáře" (cs) fits the 72 px phone label column.
+            px={4}
+            style={{ display: "flex", alignItems: "center", minWidth: 0 }}
+            data-testid={`lane-label-${r.key}`}
+          >
+            <Text size="xs" c="dimmed" truncate="end">
+              {r.label}
+            </Text>
+          </Box>
+        ))}
     </Box>
   );
 }

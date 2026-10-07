@@ -141,6 +141,63 @@ test("one Player: one waveform with the Mixer closed; toggling moves nothing abo
   await expect(timeline).toHaveAttribute("data-lanes", "0");
 });
 
+test("lane labels: only lanes with items, in a narrow column with the Mixer closed", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(540_000);
+  await loginAsNewUser(page, request, testInfo, "member");
+  await songWithTrack(page, testInfo);
+  const panel = page.getByTestId("rehearse-panel");
+  const labels = panel.getByTestId("lane-labels");
+  const detail = panel.getByTestId("timeline-detail");
+  const overview = panel.getByTestId("timeline-overview");
+
+  // No sections, markers or comments: no top lanes and no label column; full-width timeline.
+  await expect(labels).toHaveCount(0);
+  expect(Math.abs((await box(detail)).width - (await box(overview)).width)).toBeLessThanOrEqual(1);
+
+  // The first marker makes its lane (and the column) appear; there is still no Sections lane.
+  await page.getByTestId("add-marker").click();
+  await expect(panel.getByTestId("marker-item")).toHaveCount(1);
+  await expect(labels.getByTestId("lane-label-markers")).toHaveText("Markers");
+  await expect(labels.getByTestId("lane-label-sections")).toHaveCount(0);
+  await expect(labels.getByTestId("lane-label-comments")).toHaveCount(0);
+
+  // The first comment adds the Comments lane.
+  await page.getByTestId("comment-at-playhead").click();
+  const comments = page.getByTestId("comments-panel");
+  await comments.getByTestId("comment-input").fill("Lane label check");
+  await comments.getByTestId("comment-input-submit").click();
+  await expect(comments.getByTestId("comment-item")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  const close = page.getByTestId("comments-close");
+  if (await close.isVisible()) await close.click({ timeout: 5_000 }).catch(() => undefined);
+  await expect(close).toBeHidden();
+  await expect(labels.getByTestId("lane-label-comments")).toHaveText("Comments");
+  await expect(labels.getByTestId("lane-label-sections")).toHaveCount(0);
+  // The column is narrow: the detail view starts right of it, the overview keeps the full width.
+  const col = await box(labels);
+  expect(col.width).toBeLessThanOrEqual(isMobile(testInfo) ? 72 : 88);
+  expect((await box(detail)).x).toBeGreaterThanOrEqual(col.x + col.width - 1);
+  expect((await box(overview)).x).toBeLessThanOrEqual(col.x + 1);
+  await noHorizontalOverflow(page);
+
+  // Mixer open: the labels move to the track-header column; the narrow column goes.
+  await page.getByTestId("mixer-toggle").click();
+  const headers = panel.getByTestId("track-headers");
+  await expect(headers.getByTestId("lane-label-markers")).toBeVisible();
+  await expect(headers.getByTestId("lane-label-comments")).toBeVisible();
+  await expect(labels).toHaveCount(0);
+  await page.getByTestId("mixer-toggle").click();
+  await expect(labels).toBeVisible();
+
+  // 360 px wide: the labels still fit without a horizontal scroll.
+  await page.setViewportSize({ width: 360, height: 740 });
+  await expect(labels.getByTestId("lane-label-comments")).toBeVisible();
+  await noHorizontalOverflow(page);
+});
+
 test("Mixer on phones: track lanes with narrow headers; the transport stays sticky on top", async ({
   page,
   request,

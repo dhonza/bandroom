@@ -68,6 +68,7 @@ export function Timeline({
   headerWidth = 0,
   topLanesHeight = 0,
   renderTopHeader,
+  labelWidth = 0,
   renderOverlay,
   bands,
   guides,
@@ -81,7 +82,11 @@ export function Timeline({
 }: TimelineProps) {
   const { t } = useTranslation();
   const { ref: sizeRef, width: fullWidth } = useElementSize();
-  const headerW = renderHeader && !hideLanes ? headerWidth : 0;
+  // Mixer open: the track-header column. Mixer closed: a narrow column with the top-lane labels,
+  // only while some top lane has items (SPEC §11.3).
+  const trackHeaders = !!renderHeader && !hideLanes;
+  const labelColumn = hideLanes && !!renderTopHeader && topLanesHeight > 0 && labelWidth > 0;
+  const headerW = trackHeaders ? headerWidth : labelColumn ? labelWidth : 0;
   // The overview spans the full width in both Mixer states, so opening the Mixer leaves it as it
   // is (SPEC §11.3).
   const overviewW = fullWidth;
@@ -499,11 +504,11 @@ export function Timeline({
       />
       {belowOverview && <Box mt={6}>{belowOverview}</Box>}
       <Box mt={6} style={{ display: "flex", alignItems: "flex-start" }}>
-        {renderHeader && !hideLanes && (
+        {(trackHeaders || labelColumn) && (
           <Box
             w={headerW}
             style={{ flex: "none", paddingTop: RULER_H }}
-            data-testid="track-headers"
+            data-testid={trackHeaders ? "track-headers" : "lane-labels"}
           >
             {topLanesHeight > 0 && (
               <Box h={topLanesHeight} style={{ overflow: "hidden" }}>
@@ -512,7 +517,7 @@ export function Timeline({
             )}
             {lanesShown.map((lane, i) => (
               <Box key={lane.id} h={laneHeight} style={{ overflow: "hidden" }}>
-                {renderHeader(i)}
+                {renderHeader?.(i)}
               </Box>
             ))}
           </Box>
