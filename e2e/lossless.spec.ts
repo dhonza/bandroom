@@ -156,7 +156,7 @@ test("upload with lossy on upload: Opus only, the badge says converted on upload
   await expect(settings).toHaveText("Keep full quality");
   expect((await settings.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   await settings.click();
-  await page.getByText("Convert to lossy on upload").click();
+  await page.getByRole("switch", { name: "Convert to lossy on upload" }).check();
   await page.getByTestId("upload-quality").click();
   await page.getByRole("option", { name: /^High/ }).click();
   await expect(settings).toHaveText("Lossy on upload · 128 kbps");
