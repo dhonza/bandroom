@@ -637,7 +637,8 @@
       "upload_few": "Nahrát {{count}} soubory",
       "upload_many": "Nahrát {{count}} souboru",
       "upload_other": "Nahrát {{count}} souborů"
-    }
+    },
+    "opusKbps": "Opus {{kbps}} kb/s"
   },
   "listen": {
     "play": "Přehrát",
@@ -1644,7 +1645,11 @@
     "notAllowed_one": "{{count}} vybraná položka obsahuje verze, které nejsou vaše, a zůstane.",
     "notAllowed_few": "{{count}} vybrané položky obsahují verze, které nejsou vaše, a zůstanou.",
     "notAllowed_many": "{{count}} vybraných položek obsahuje verze, které nejsou vaše, a zůstane.",
-    "notAllowed_other": "{{count}} vybraných položek obsahuje verze, které nejsou vaše, a zůstane."
+    "notAllowed_other": "{{count}} vybraných položek obsahuje verze, které nejsou vaše, a zůstane.",
+    "convertedOnUpload": "Převedeno na ztrátový formát při nahrání {{date}}.",
+    "convertedOnUploadBy": "Převedeno na ztrátový formát při nahrání {{date}} ({{name}}).",
+    "reencodedOn": "Překódováno a plná kvalita odstraněna {{date}}.",
+    "reencodedOnBy": "Překódováno a plná kvalita odstraněna {{date}} ({{name}})."
   },
   "transfer": {
     "makeMultitrack": "Vytvořit vícestopou píseň",
@@ -1712,5 +1717,23 @@
     "editorsOnly": "Kopírování vyžaduje práva editora.",
     "emptyNeedsManager": "Přesunutím všech stop z písně se píseň smaže, a to mohou jen správci.",
     "trackName": "Název stopy {{index}}"
+  },
+  "upload": {
+    "settings": {
+      "title": "Nastavení nahrávání",
+      "keepFull": "Zachovat plnou kvalitu",
+      "summaryFull": "Plná kvalita · Opus {{kbps}} kb/s",
+      "summaryLossy": "Ztrátově při nahrání · {{kbps}} kb/s",
+      "lossyOnly": "Při nahrání převést na ztrátový formát",
+      "lossyOnlyHint": "Ponechá jen komprimovaný zvuk (Opus) a nahraný soubor smaže. Šetří místo; stažení ve FLAC a WAV nebude k dispozici.",
+      "quality": "Kvalita Opus",
+      "qualityHint": "Pro přehrávání; při převodu na ztrátový formát jediná kopie.",
+      "qualities": {
+        "veryHigh": "Velmi vysoká · {{stereo}} kb/s ({{mono}} mono)",
+        "high": "Vysoká · {{stereo}} kb/s ({{mono}} mono)",
+        "standard": "Standardní · {{stereo}} kb/s ({{mono}} mono)",
+        "low": "Nízká · {{stereo}} kb/s ({{mono}} mono)"
+      }
+    }
   }
 }

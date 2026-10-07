@@ -410,6 +410,7 @@ function VersionItem({
               v.uploaderName ?? t("versions.unknownUploader"),
               fmt.dateTime(v.createdAt),
               v.media ? formatDuration(v.media.durationSec) : null,
+              v.variants.opus ? t("tracks.opusKbps", { kbps: v.variants.opus.bitrate }) : null,
               v.originalFilename,
               v.storedBytes !== undefined
                 ? t("storage.stored", { size: fmt.bytes(v.storedBytes) })

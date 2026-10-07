@@ -1,11 +1,26 @@
-import { canActOn, type Song, type Track, type UploadTarget } from "@bandroom/shared";
+import {
+  canActOn,
+  type Song,
+  type Track,
+  type UploadOptions,
+  type UploadTarget,
+} from "@bandroom/shared";
 import type { MatchProposal } from "../../lib/media";
+import { uploadOptions } from "../../upload/prefs";
 
-/** Where an uploaded file goes: a new version of the matched track, else a new track. */
-export function uploadTargetFor(songId: string, proposal: MatchProposal): UploadTarget {
+/**
+ * Where an uploaded file goes: a new version of the matched track, else a new track; with this
+ * device's upload settings (SPEC §28.2) unless they are the defaults.
+ */
+export function uploadTargetFor(
+  songId: string,
+  proposal: MatchProposal,
+  options: UploadOptions | undefined = uploadOptions(),
+): UploadTarget {
+  const opts = options ? { options } : {};
   return proposal.trackId
-    ? { type: "newVersion", trackId: proposal.trackId }
-    : { type: "newTrack", songId, name: proposal.newName };
+    ? { type: "newVersion", trackId: proposal.trackId, ...opts }
+    : { type: "newTrack", songId, name: proposal.newName, ...opts };
 }
 
 /** What the user may do with a track row (SPEC §3: own items vs. everyone's by role). */

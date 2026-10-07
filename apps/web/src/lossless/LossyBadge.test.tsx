@@ -68,6 +68,30 @@ describe("lossy badges (SPEC §26.4)", () => {
     expect(removed?.getAttribute("aria-label")).toMatch(/Full quality removed on .*2026 by Jana/);
   });
 
+  it("says when a version was converted on upload or re-encoded (SPEC §28.2, §28.3)", () => {
+    const at = Date.UTC(2026, 9, 7);
+    wrap(
+      <>
+        <LossyBadge
+          version={{
+            media: media(true),
+            archived: { at, by: { id: "u", displayName: "Jana" }, reason: "upload" },
+          }}
+        />
+        <LossyBadge
+          version={{ media: media(true), archived: { at, by: null, reason: "reencode" } }}
+        />
+      </>,
+    );
+    const [upload, reencode] = screen.getAllByTestId("lossy-badge");
+    expect(upload?.getAttribute("data-reason")).toBe("upload");
+    expect(upload?.getAttribute("aria-label")).toMatch(
+      /Converted to lossy on upload on .*2026 by Jana/,
+    );
+    expect(reencode?.getAttribute("data-reason")).toBe("reencode");
+    expect(reencode?.getAttribute("aria-label")).toMatch(/Re-encoded and full quality removed on/);
+  });
+
   it("labels songs that are all or partly lossy", () => {
     wrap(
       <>

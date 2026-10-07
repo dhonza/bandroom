@@ -3,6 +3,7 @@ import { Button, Group, Modal, Select, Stack, Text } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { MatchProposal } from "../../lib/media";
+import { UploadSettings } from "../../upload/UploadSettings";
 
 const NEW = "__new";
 
@@ -56,18 +57,21 @@ export function MatchDialog({
             />
           </Group>
         ))}
-        <Group justify="flex-end">
-          <Button variant="default" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            onClick={() => {
-              onConfirm(rows);
-            }}
-            data-testid="match-confirm"
-          >
-            {t("tracks.match.upload", { count: rows.length })}
-          </Button>
+        <Group justify="space-between" gap="xs">
+          <UploadSettings testId="match-upload-settings" />
+          <Group gap="xs" justify="flex-end" style={{ flex: 1 }}>
+            <Button variant="default" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              onClick={() => {
+                onConfirm(rows);
+              }}
+              data-testid="match-confirm"
+            >
+              {t("tracks.match.upload", { count: rows.length })}
+            </Button>
+          </Group>
         </Group>
       </Stack>
     </Modal>

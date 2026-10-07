@@ -48,6 +48,7 @@ import { Section } from "../../components/Section";
 import { proposeMatches, type MatchProposal } from "../../lib/media";
 import { canPickFolder, FolderButton } from "../../upload/FolderButton";
 import { usePrepareFiles } from "../../upload/usePrepareFiles";
+import { UploadSettings } from "../../upload/UploadSettings";
 import { startUpload } from "../../upload/startUpload";
 import { useUploads } from "../../upload/uploadStore";
 import {
@@ -220,16 +221,19 @@ export function TracksSection({ song }: { song: Song }) {
           </Group>
         </Dropzone>
       )}
-      {canUpload && canPickFolder() && (
-        <Group justify="flex-end">
-          <FolderButton
-            label={t("tracks.uploadFolder")}
-            disabled={!online}
-            testId="track-upload-folder"
-            onFiles={(files) => {
-              void uploadFiles(files);
-            }}
-          />
+      {canUpload && (
+        <Group justify="flex-end" gap="xs">
+          <UploadSettings testId="track-upload-settings" />
+          {canPickFolder() && (
+            <FolderButton
+              label={t("tracks.uploadFolder")}
+              disabled={!online}
+              testId="track-upload-folder"
+              onFiles={(files) => {
+                void uploadFiles(files);
+              }}
+            />
+          )}
         </Group>
       )}
 

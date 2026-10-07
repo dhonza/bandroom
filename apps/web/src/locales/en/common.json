@@ -621,7 +621,8 @@
       "newVersionOf": "New version of {{name}}",
       "upload_one": "Upload {{count}} file",
       "upload_other": "Upload {{count}} files"
-    }
+    },
+    "opusKbps": "Opus {{kbps}} kbps"
   },
   "listen": {
     "play": "Play",
@@ -1522,7 +1523,11 @@
     "done_one": "Full quality removed from {{count}} version; {{size}} freed.",
     "done_other": "Full quality removed from {{count}} versions; {{size}} freed.",
     "notAllowed_one": "{{count}} selected item has versions that are not yours, so it stays.",
-    "notAllowed_other": "{{count}} selected items have versions that are not yours, so they stay."
+    "notAllowed_other": "{{count}} selected items have versions that are not yours, so they stay.",
+    "convertedOnUpload": "Converted to lossy on upload on {{date}}.",
+    "convertedOnUploadBy": "Converted to lossy on upload on {{date}} by {{name}}.",
+    "reencodedOn": "Re-encoded and full quality removed on {{date}}.",
+    "reencodedOnBy": "Re-encoded and full quality removed on {{date}} by {{name}}."
   },
   "transfer": {
     "makeMultitrack": "Make multitrack song",
@@ -1572,5 +1577,23 @@
     "editorsOnly": "Copying needs editor rights.",
     "emptyNeedsManager": "Moving every track out of a song deletes it, which only managers can do.",
     "trackName": "Name of track {{index}}"
+  },
+  "upload": {
+    "settings": {
+      "title": "Upload settings",
+      "keepFull": "Keep full quality",
+      "summaryFull": "Full quality · Opus {{kbps}} kbps",
+      "summaryLossy": "Lossy on upload · {{kbps}} kbps",
+      "lossyOnly": "Convert to lossy on upload",
+      "lossyOnlyHint": "Keeps only the compressed audio (Opus) and deletes the uploaded file. Saves space; FLAC and WAV downloads are not available.",
+      "quality": "Opus quality",
+      "qualityHint": "For playback, and the only copy when converting to lossy.",
+      "qualities": {
+        "veryHigh": "Very high · {{stereo}} kbps ({{mono}} mono)",
+        "high": "High · {{stereo}} kbps ({{mono}} mono)",
+        "standard": "Standard · {{stereo}} kbps ({{mono}} mono)",
+        "low": "Low · {{stereo}} kbps ({{mono}} mono)"
+      }
+    }
   }
 }

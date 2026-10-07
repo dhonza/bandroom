@@ -141,3 +141,41 @@ test("remove one version's full quality from the stack on a 360 px phone", async
   await stack.getByTestId("version-actions").click();
   await expect(page.getByTestId("remove-lossless-version")).toHaveCount(0);
 });
+
+test("upload with lossy on upload: Opus only, the badge says converted on upload (SPEC §28.2)", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(240_000);
+  await page.setViewportSize({ width: 360, height: 740 });
+  await loginAsNewUser(page, page.request, testInfo, "member");
+  const { songId } = await projectWithSong(page, `OnUpload ${uniqueUsername(testInfo)}`, "Take");
+  await page.goto(`songs/${songId}`);
+
+  // The settings next to the dropzone, remembered on this device.
+  const settings = page.getByTestId("track-upload-settings");
+  await expect(settings).toHaveText("Keep full quality");
+  expect((await settings.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await settings.click();
+  await page.getByText("Convert to lossy on upload").click();
+  await page.getByTestId("upload-quality").click();
+  await page.getByRole("option", { name: /^High/ }).click();
+  await expect(settings).toHaveText("Lossy on upload · 128 kbps");
+  expect(await noHorizontalScroll(page)).toBe(true);
+  await page.keyboard.press("Escape");
+
+  await uploadTracks(page, ["Vox"]);
+  const vox = page.getByTestId("track-row").filter({ hasText: "Vox" });
+  await expect(vox.getByTestId("lossy-badge")).toHaveAttribute("data-reason", "upload", {
+    timeout: 30_000,
+  });
+  expect(await downloadsOf(page, "Vox")).toEqual(["opus"]);
+  await vox.getByTestId("version-button").click();
+  await expect(page.getByTestId("version-archived")).toContainText(
+    /Converted to lossy on upload on/,
+  );
+  await expect(page.getByTestId("version-stack")).toContainText("Opus 128 kbps");
+  await page.keyboard.press("Escape");
+
+  await page.reload();
+  await expect(page.getByTestId("track-upload-settings")).toHaveText("Lossy on upload · 128 kbps");
+});

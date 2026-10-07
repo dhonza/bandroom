@@ -24,7 +24,7 @@ import { isProbablyAudio } from "../../lib/media";
 import { startUpload } from "../../upload/startUpload";
 import { useUploadErrorToast } from "../../upload/UploadRow";
 import { songKeys } from "../library/queries";
-import { trackPermissions } from "./model";
+import { trackPermissions, uploadTargetFor } from "./model";
 import { TrackEditModal } from "./TrackEditModal";
 import { TrackMenu } from "./TrackMenu";
 import { VersionStackModal } from "./VersionStackModal";
@@ -97,7 +97,7 @@ export function TrackRow({
     if (!file) return;
     startUpload(
       file,
-      { type: "newVersion", trackId: track.id },
+      uploadTargetFor(song.id, { file: file.name, newName: track.name, trackId: track.id }),
       { songId: song.id, projectId: song.project.id },
     )
       .then(refresh)

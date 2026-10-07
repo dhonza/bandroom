@@ -9,6 +9,8 @@ import { api } from "../api/client";
 import { useApiError } from "../api/useApiError";
 import { projectKeys } from "../features/library/queries";
 import { useTempoUi } from "../tempo/store";
+import { uploadOptions } from "../upload/prefs";
+import { UploadSettings } from "../upload/UploadSettings";
 import { pageState } from "./controller";
 
 export interface BounceOptions {
@@ -85,8 +87,13 @@ function BounceForm({ song, onClose }: { song: Pick<Song, "id" | "title">; onClo
   const valid = SongTitleSchema.safeParse(title).success;
   const body = () =>
     bounceRequestBody(title, { ...options, includeClick: options.includeClick && hasTempo });
+  // This device's upload settings apply to the rendered file too (SPEC §28.2).
+  const withUploadOptions = () => {
+    const o = uploadOptions();
+    return { ...body(), ...(o && { options: o }) };
+  };
   const run = useMutation({
-    mutationFn: () => api(bounceSong, { params: { id: song.id }, body: body() }),
+    mutationFn: () => api(bounceSong, { params: { id: song.id }, body: withUploadOptions() }),
     onSuccess: ({ song: created }) => {
       void qc.invalidateQueries({ queryKey: projectKeys.all });
       onClose();
@@ -161,6 +168,9 @@ function BounceForm({ song, onClose }: { song: Pick<Song, "id" | "title">; onClo
             {t("bounce.alwaysCopied")}
           </Text>
         </Stack>
+        <Group justify="flex-start">
+          <UploadSettings testId="bounce-upload-settings" />
+        </Group>
         {run.isError && <Alert color="red">{apiError(run.error)}</Alert>}
         <Group justify="flex-end" gap="sm">
           <Button variant="default" onClick={onClose} mih={44}>

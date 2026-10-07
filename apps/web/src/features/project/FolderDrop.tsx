@@ -11,6 +11,8 @@ import { useApiError } from "../../api/useApiError";
 import { groupByFolder, trackNamesFromFiles, type PathFile } from "../../lib/media";
 import { canPickFolder, FolderButton } from "../../upload/FolderButton";
 import { usePrepareFiles } from "../../upload/usePrepareFiles";
+import { uploadOptions } from "../../upload/prefs";
+import { UploadSettings } from "../../upload/UploadSettings";
 import { startUpload } from "../../upload/startUpload";
 import { useUploads } from "../../upload/uploadStore";
 import {
@@ -52,6 +54,7 @@ export function FolderDrop({ project }: { project: Project }) {
 
   const onDrop = async (dropped: PathFile[], picked: boolean) => {
     const files = await prepareFiles(dropped, "project", picked);
+    const options = uploadOptions();
     const groups = groupByFolder(files);
     let created = 0;
     for (const g of groups) {
@@ -83,7 +86,12 @@ export function FolderDrop({ project }: { project: Project }) {
         s.files.forEach((file, i) => {
           startUpload(
             file,
-            { type: "newTrack", songId, name: names[i] ?? file.name },
+            {
+              type: "newTrack",
+              songId,
+              name: names[i] ?? file.name,
+              ...(options && { options }),
+            },
             { songId, projectId: project.id },
           )
             .then(invalidate)
@@ -131,8 +139,9 @@ export function FolderDrop({ project }: { project: Project }) {
           </Stack>
         </Group>
       </Dropzone>
-      {canPickFolder() && (
-        <Group justify="flex-end">
+      <Group justify="flex-end" gap="xs">
+        <UploadSettings testId="project-upload-settings" />
+        {canPickFolder() && (
           <FolderButton
             label={t("songs.uploadFolder")}
             disabled={!online}
@@ -141,8 +150,8 @@ export function FolderDrop({ project }: { project: Project }) {
               handleDrop(files, true);
             }}
           />
-        </Group>
-      )}
+        )}
+      </Group>
       {uploads.map((u) => (
         <UploadRow key={u.id} item={u} errorText={errorText} />
       ))}
