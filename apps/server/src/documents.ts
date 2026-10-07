@@ -68,12 +68,12 @@ export function textFilename(title: string, kind: EditableDocumentKind): string 
 /** SSE: something about a document changed (list, versions, processing state). */
 export function publishDocumentChanged(
   ctx: Pick<AppContext, "hub">,
-  scope: { projectId: string; songId: string | null; documentId: string },
+  scope: { projectId: string; documentId: string },
 ): void {
   ctx.hub.publish({
     type: "document.changed",
     projectId: scope.projectId,
-    songId: scope.songId,
+    songId: null,
     data: { documentId: scope.documentId },
   });
 }

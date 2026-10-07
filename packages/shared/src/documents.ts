@@ -86,9 +86,6 @@ export type DocumentVersion = z.infer<typeof DocumentVersionSchema>;
 export const DocumentSchema = z.object({
   id: z.string(),
   projectId: z.string(),
-  /** Null = project-level document. */
-  songId: z.string().nullable(),
-  songTitle: z.string().nullable(),
   title: z.string(),
   kind: DocumentKindSchema,
   sortOrder: z.number(),

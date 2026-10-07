@@ -14,8 +14,6 @@ import {
   commentMentions,
   commentReactions,
   comments,
-  documents,
-  documentVersions,
   markers,
   publicLinks,
   songGrants,
@@ -397,47 +395,6 @@ function copyTempo(
   return true;
 }
 
-/** Copies the song's live documents with their live versions (same assets). */
-function copyDocuments(
-  db: Db,
-  fromSongId: string,
-  songId: string,
-  projectId: string,
-  now: number,
-): number {
-  const docs = db
-    .select()
-    .from(documents)
-    .where(and(eq(documents.songId, fromSongId), isNull(documents.deletedAt)))
-    .all();
-  for (const d of docs) {
-    const id = uuidv7(now);
-    const versions = db
-      .select()
-      .from(documentVersions)
-      .where(and(eq(documentVersions.documentId, d.id), isNull(documentVersions.deletedAt)))
-      .orderBy(asc(documentVersions.number))
-      .all();
-    db.insert(documents)
-      .values({ ...d, id, projectId, songId, currentVersionId: null })
-      .run();
-    const vmap = new Map<string, string>();
-    for (const v of versions) {
-      const vid = uuidv7(now);
-      vmap.set(v.id, vid);
-      db.insert(documentVersions)
-        .values({ ...v, id: vid, documentId: id })
-        .run();
-    }
-    const current =
-      (d.currentVersionId && vmap.get(d.currentVersionId)) ??
-      vmap.get(versions[versions.length - 1]?.id ?? "");
-    if (current)
-      db.update(documents).set({ currentVersionId: current }).where(eq(documents.id, id)).run();
-  }
-  return docs.length;
-}
-
 // ——— make multitrack song ————————————————————————————————————————————————————————————————
 
 export interface TransferredTrack {
@@ -462,7 +419,7 @@ export interface MultitrackResult {
 /**
  * Makes one new song from the tracks (SPEC §26.5, §26.6), in one transaction of the caller:
  * - `move`: the tracks move with all their versions; comments on them move along (and the
- *   song-wide comments and documents of a source left empty, which goes to the Trash);
+ *   song-wide comments of a source left empty, which goes to the Trash);
  * - `copy`: the tracks and their live versions are copied (same assets), with their comments.
  * Each source song's tracks shift so its earliest version starts at 0. Markers and sections of
  * every source are copied (later sources' get "from <song>" via `fromLabel`); the tempo map comes
@@ -562,12 +519,6 @@ export function makeMultitrackSong(
           .where(eq(comments.id, c.id))
           .run();
       }
-      if (emptied) {
-        db.update(documents)
-          .set({ songId: song.id, projectId: input.projectId })
-          .where(and(eq(documents.songId, g.song.id), isNull(documents.deletedAt)))
-          .run();
-      }
     }
     if (gi === 0)
       copyTempo(
@@ -645,8 +596,8 @@ function nextSortOrder(db: Db, projectId: string): number {
 /**
  * Copies a song into a project (SPEC §26.6): tracks with their live versions (same assets),
  * markers and sections, the tempo map with its history, comments (threads, authors, timestamps,
- * reactions, mentions) and documents (same assets). Grants, links, follows, mixer settings,
- * visits and the automatic mix are not copied (the mix is rendered again).
+ * reactions, mentions). Documents stay with the project (SPEC §28.4). Grants, links, follows,
+ * mixer settings and visits are not copied.
  */
 export function copySongTo(
   db: Db,
@@ -678,13 +629,11 @@ export function copySongTo(
     0,
     now,
   );
-  copyDocuments(db, from.id, song.id, projectId, now);
   return song;
 }
 
 /**
- * Moves a song into another project (SPEC §26.6): its documents and links go along (links keep
- * working); song grants are dropped, since they refine the old project's roles (SPEC §3.2).
+ * Moves a song into another project (SPEC §26.6): its links go along (links keep working); song grants are dropped, since they refine the old project's roles (SPEC §3.2).
  * Returns the dropped grants.
  */
 export function moveSongTo(
@@ -697,7 +646,6 @@ export function moveSongTo(
     .set({ projectId, sortOrder: nextSortOrder(db, projectId), updatedAt: now })
     .where(eq(songs.id, song.id))
     .run();
-  db.update(documents).set({ projectId }).where(eq(documents.songId, song.id)).run();
   db.update(publicLinks)
     .set({ projectId, updatedAt: now })
     .where(eq(publicLinks.songId, song.id))

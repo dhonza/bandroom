@@ -93,8 +93,6 @@ export interface ResolvedContainer {
   id: string;
   /** The project itself, or the document's project. */
   project: ProjectRow;
-  /** A song document's song (in any state). */
-  song: SongRow | null;
   document: DocumentRow | null;
   /** The creator, for the `.own` rules. */
   ownerId: string | null;
@@ -113,7 +111,7 @@ export function resolveContainer(
   if (kind === "project") {
     const project = db.select().from(projects).where(eq(projects.id, id)).get();
     if (!project) return undefined;
-    const base = { kind, id, project, song: null, document: null, ownerId: project.createdBy };
+    const base = { kind, id, project, document: null, ownerId: project.createdBy };
     return { ...base, deleted: project.deletedAt !== null };
   }
   const document = db.select().from(documents).where(eq(documents.id, id)).get();
@@ -123,15 +121,11 @@ export function resolveContainer(
     .from(projects)
     .where(and(eq(projects.id, document.projectId), isNull(projects.deletedAt)))
     .get();
-  const song = document.songId
-    ? (db.select().from(songs).where(eq(songs.id, document.songId)).get() ?? null)
-    : null;
-  if (!project || (document.songId !== null && !song)) return undefined;
+  if (!project) return undefined;
   return {
     kind,
     id,
     project,
-    song,
     document,
     ownerId: document.createdBy,
     deleted: document.deletedAt !== null,
@@ -338,13 +332,11 @@ function subtreeOf(db: Db, kind: TrashListKind, id: string): Subtree {
             : [];
   const docCols = { id: documentVersions.id, assetId: documentVersions.assetId };
   const docWhere =
-    kind === "song"
-      ? eq(documents.songId, id)
-      : kind === "project"
-        ? eq(documents.projectId, id)
-        : kind === "document"
-          ? eq(documents.id, id)
-          : undefined;
+    kind === "project"
+      ? eq(documents.projectId, id)
+      : kind === "document"
+        ? eq(documents.id, id)
+        : undefined;
   const docRows = docWhere
     ? db
         .select(docCols)
@@ -520,14 +512,13 @@ export function listTrashRows(db: Db, projectId?: string): TrashRow[] {
     .where(and(inArray(documents.projectId, [...byProject.keys()]), isNotNull(documents.deletedAt)))
     .all()) {
     const project = byProject.get(d.projectId);
-    const song = d.songId === null ? null : songById.get(d.songId);
-    if (d.deletedAt === null || !project || song === undefined || song?.deletedAt != null) continue;
+    if (d.deletedAt === null || !project) continue;
     out.push({
       kind: "document",
       id: d.id,
       name: d.title,
       number: null,
-      song,
+      song: null,
       project,
       track: null,
       ownerId: d.createdBy,
@@ -649,7 +640,7 @@ export function purgeTrashItems(
       id,
       name: item.document?.title ?? item.project.name,
       projectId: item.project.id,
-      songId: item.song?.id ?? null,
+      songId: null,
     });
     return item;
   };
@@ -711,12 +702,11 @@ export function expiredTrashIds(db: Db, cutoff: number): Required<TrashIds> {
     .filter((r) => !expiredSongs.has(r.songId) && !expiredTracks.has(r.trackId))
     .map((r) => r.id);
   const documentIds = db
-    .select({ id: documents.id, songId: documents.songId })
+    .select({ id: documents.id })
     .from(documents)
     .innerJoin(projects, eq(projects.id, documents.projectId))
     .where(and(liveProject, lt(documents.deletedAt, cutoff)))
     .all()
-    .filter((r) => r.songId === null || !expiredSongs.has(r.songId))
     .map((r) => r.id);
   const projectIds = db
     .select({ id: projects.id })

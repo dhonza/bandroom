@@ -10,7 +10,6 @@ export function enqueueDocumentIngest(
     documentId: string;
     documentVersionId: string;
     projectId: string;
-    songId: string | null;
     createdBy: string | null;
     priority?: number;
   },
@@ -23,7 +22,6 @@ export function enqueueDocumentIngest(
       documentId: input.documentId,
       documentVersionId: input.documentVersionId,
       projectId: input.projectId,
-      songId: input.songId,
     },
     priority: input.priority ?? 0,
     dedupeKey: `docingest:${input.assetId}`,
@@ -44,7 +42,6 @@ export function enqueueDocumentBackfill(db: Db): number {
       documentId: v.documentId,
       documentVersionId: v.versionId,
       projectId: v.projectId,
-      songId: v.songId,
       createdBy: null,
       priority: -5,
     });

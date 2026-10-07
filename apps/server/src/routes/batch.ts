@@ -152,7 +152,7 @@ export function registerBatchRoutes(app: FastifyInstance, ctx: AppContext): void
       ctx.hub.publish({
         type: "document.changed",
         projectId: c.project.id,
-        songId: c.song?.id ?? null,
+        songId: null,
         data: { documentId: c.id },
       });
     }
@@ -168,9 +168,6 @@ export function registerBatchRoutes(app: FastifyInstance, ctx: AppContext): void
           (i.kind === "version" &&
             i.track?.deletedAt != null &&
             !restoring.has(`track:${i.track.id}`)),
-      ),
-      ...access.containers.filter(
-        (c) => c.song !== null && c.song.deletedAt !== null && !restoring.has(`song:${c.song.id}`),
       ),
     ];
     if (blocked.length > 0) {
@@ -199,7 +196,7 @@ export function registerBatchRoutes(app: FastifyInstance, ctx: AppContext): void
             kind: c.kind,
             id: c.id,
             projectId: c.project.id,
-            songId: c.song?.id ?? null,
+            songId: null,
             name: c.document?.title ?? c.project.name,
           },
           "restored",

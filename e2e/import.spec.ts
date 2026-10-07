@@ -51,7 +51,8 @@ test("Samply import: connect, scan, review, dry run, import, report", async ({
   await expect(totals).toContainText("Songs2");
   await expect(totals).toContainText("Tracks3");
   await node("lyrics").getByTestId("import-node-attach").click();
-  await page.getByRole("option", { name: "Stems Tune" }).click();
+  // Documents belong to the project; picking the song only names the document after it.
+  await page.getByRole("option", { name: /Stems Tune/ }).click();
 
   await page.getByTestId("import-dry-run").click();
   await expect(page.getByTestId("dry-run-summary")).toBeVisible({ timeout: 30_000 });
@@ -73,4 +74,6 @@ test("Samply import: connect, scan, review, dry run, import, report", async ({
     .click();
   await expect(page.getByTestId("song-row").filter({ hasText: "Demo Song" })).toBeVisible();
   await expect(page.getByTestId("song-row").filter({ hasText: "Stems Tune" })).toBeVisible();
+  await page.goto(`${page.url().split("?")[0] ?? ""}?tab=documents`);
+  await expect(page.getByTestId("project-documents")).toContainText("Stems Tune — lyrics");
 });

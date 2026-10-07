@@ -5,7 +5,7 @@ import {
   API_PREFIX,
   createProject,
   createSong,
-  createSongTextDocument,
+  createProjectTextDocument,
   getProjectOfflineManifest,
   getSongOfflineManifest,
   listSongTracks,
@@ -63,8 +63,8 @@ beforeAll(async () => {
   await tusUpload(t, admin, tone, "Bass.wav", { type: "newTrack", songId, name: "Bass" });
   await call(
     t,
-    createSongTextDocument,
-    { params: { id: songId }, body: { title: "Lyrics", kind: "markdown", text: "# La la" } },
+    createProjectTextDocument,
+    { params: { id: projectId }, body: { title: "Lyrics", kind: "markdown", text: "# La la" } },
     admin,
   );
   for (let pass = 0; pass < 3; pass++) {
@@ -140,6 +140,7 @@ describe("song offline manifest (SPEC §13)", () => {
     expect(hashes.sort()).toEqual(
       [v?.variants.opus?.hash, v?.variants.seekIndex.opus, v?.variants.peaks?.hash].sort(),
     );
+    // The project's documents go along, for the song page's Docs panel (SPEC §28.4).
     expect(m.documents).toHaveLength(1);
 
     // Every file is readable by this user, and the sizes are right.
@@ -223,6 +224,9 @@ describe("project offline manifest", () => {
     ).json<{ project: OfflineProjectManifest }>().project;
     expect(all.songs.map((s) => s.title)).toEqual(["Offline song", "Other song"]);
     expect(all.songs[0]?.blobs.length).toBeGreaterThan(0);
+    // The project's documents are listed once, on the project.
+    expect(all.documents).toHaveLength(1);
+    expect(all.songs.every((s) => s.documents.length === 0)).toBe(true);
 
     // A guest with one song grant sees the project in the reduced view: that song only.
     const reduced = await call(
@@ -235,6 +239,10 @@ describe("project offline manifest", () => {
     const r = reduced.json<{ project: OfflineProjectManifest }>().project;
     expect(r.songs.map((s) => s.songId)).toEqual([songId]);
     expect(r.documents).toEqual([]);
+    expect(r.songs[0]?.documents).toEqual([]);
+    // Nor does the song alone carry the project's documents for them.
+    const alone = (await songManifest({}, guest)).json<{ song: OfflineSongManifest }>().song;
+    expect(alone.documents).toEqual([]);
   });
 });
 

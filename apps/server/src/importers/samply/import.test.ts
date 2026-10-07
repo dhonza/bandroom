@@ -378,9 +378,10 @@ describe("Samply import (SPEC §17)", () => {
     expect(ingests.every((j) => j.priority < 0)).toBe(true);
 
     const docs = db.select().from(schema.documents).where(isNull(schema.documents.deletedAt)).all();
-    // The project picture is the project image, not a document.
-    expect(docs.map((d) => [d.title, d.kind, d.songId === tuneRow?.id])).toEqual([
-      ["lyrics", "text", true],
+    // The project picture is the project image, not a document. A song's document goes to the
+    // project, titled after the song (SPEC §28.4).
+    expect(docs.map((d) => [d.title, d.kind, d.projectId === project?.id])).toEqual([
+      ["Tune — lyrics", "text", true],
     ]);
     const picture = db
       .select()
@@ -460,7 +461,8 @@ describe("Samply import (SPEC §17)", () => {
       ["Tune - Drums", "trackOf", "Drums"],
       ["lyrics", "document", "lyrics"],
     ]);
-    expect(tuneKids[2]?.targetId).toBe(bass.id);
+    // Documents belong to the project (SPEC §28.4): no song to restore for them.
+    expect(tuneKids[2]?.targetId).toBeNull();
     expect(run.totals).toMatchObject({ versions: 1, alreadyImported: 5 });
     const res = await call(
       t,

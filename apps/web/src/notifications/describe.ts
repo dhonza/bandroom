@@ -108,12 +108,8 @@ export function describeNotification(n: Notification, t: TFunction): Notificatio
           { actor, title: p.documentTitle ?? "", number: p.versionNumber ?? 1 },
         ),
         detail: where,
-        // Song documents open next to the player; project documents on their own page.
-        link: p.songId
-          ? `/songs/${p.songId}?doc=${p.documentId ?? ""}`
-          : p.documentId
-            ? `/documents/${p.documentId}`
-            : null,
+        // Documents belong to the project and open on their own page (SPEC §28.4).
+        link: p.documentId ? `/documents/${p.documentId}` : null,
       };
   }
 }

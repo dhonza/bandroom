@@ -111,7 +111,6 @@ export const UploadTargetSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("newDocument"),
     projectId: z.string(),
-    songId: z.string().nullable(),
     title: z.string().trim().min(1).max(200).optional(),
   }),
   /** A new version of an existing document ("a new file dropped onto a document", SPEC §10). */

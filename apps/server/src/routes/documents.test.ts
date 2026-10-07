@@ -19,19 +19,17 @@ import {
   createProject,
   createProjectTextDocument,
   createSong,
-  createSongTextDocument,
   deleteDocument,
   deleteDocumentVersion,
   getDocument,
   listDocumentVersions,
   listNotifications,
   listProjectDocuments,
-  listSongDocuments,
   restoreDocument,
   restoreDocumentVersion,
   saveDocumentText,
   setCurrentDocumentVersion,
-  setSongFollow,
+  setProjectFollow,
   StreamEventSchema,
   updateDocument,
   updateProject,
@@ -68,7 +66,6 @@ const ids: Record<string, string> = {};
 const cookies: Record<string, string> = {};
 let projectId = "";
 let songId = "";
-let secretSongId = "";
 const published: StreamEvent[] = [];
 
 beforeAll(async () => {
@@ -90,14 +87,6 @@ beforeAll(async () => {
   }>().project.id;
   songId = (
     await call(t, createSong, { params: { id: projectId }, body: { title: "Song" } }, cookies.boss)
-  ).json<{ song: { id: string } }>().song.id;
-  secretSongId = (
-    await call(
-      t,
-      createSong,
-      { params: { id: projectId }, body: { title: "Secret" } },
-      cookies.boss,
-    )
   ).json<{ song: { id: string } }>().song.id;
   setProjectGrantRow(t.db, projectId, ids.eva ?? "", "editor", boss.id);
   setProjectGrantRow(t.db, projectId, ids.vik ?? "", "viewer", boss.id);
@@ -129,8 +118,8 @@ async function upload(who: string, data: Buffer, filename: string, target: unkno
   const res = await tusUpload(t, cookies[who] ?? "", data, filename, target);
   return res;
 }
-async function uploadDoc(who: string, data: Buffer, filename: string, song: string | null) {
-  const res = await upload(who, data, filename, { type: "newDocument", projectId, songId: song });
+async function uploadDoc(who: string, data: Buffer, filename: string) {
+  const res = await upload(who, data, filename, { type: "newDocument", projectId });
   expect(res.status, res.body).toBe(200);
   const r = UploadResultSchema.parse(JSON.parse(res.body));
   await runQueuedJobs(t);
@@ -165,21 +154,15 @@ describe("documents: upload, ingest, viewers (SPEC §10, §5.7)", () => {
   let mdDocId = "";
   let mdVersionId = "";
 
-  it("uploads Markdown to a song through tus and ingests it as markdown", async () => {
+  it("uploads Markdown to the project through tus and ingests it as markdown", async () => {
     const before = published.length;
-    const r = await uploadDoc(
-      "petr",
-      Buffer.from("# Lyrics\n\nVerse **one**\n"),
-      "Lyrics.md",
-      songId,
-    );
+    const r = await uploadDoc("petr", Buffer.from("# Lyrics\n\nVerse **one**\n"), "Lyrics.md");
     mdDocId = r.documentId ?? "";
     mdVersionId = r.documentVersionId ?? "";
     const doc = await getDoc(mdDocId);
     expect(doc).toMatchObject({
       title: "Lyrics",
       kind: "markdown",
-      songId,
       versionCount: 1,
       canEdit: true,
       canDelete: true,
@@ -189,11 +172,11 @@ describe("documents: upload, ingest, viewers (SPEC §10, §5.7)", () => {
     expect(published.slice(before).some((e) => e.type === "document.changed")).toBe(true);
     expect(listEvents(t.db, { action: "document.created" }).at(-1)).toMatchObject({
       targetId: mdDocId,
-      songId,
+      songId: null,
       actorUserId: ids.petr,
     });
     const list = ok<{ documents: Document[] }>(
-      await call(t, listSongDocuments, { params: { id: songId } }, cookies.vik),
+      await call(t, listProjectDocuments, { params: { id: projectId } }, cookies.vik),
     ).documents;
     expect(list.map((d) => d.id)).toEqual([mdDocId]);
     // Viewers see it but may not edit or delete someone else's document.
@@ -216,19 +199,14 @@ describe("documents: upload, ingest, viewers (SPEC §10, §5.7)", () => {
   });
 
   it("detects the kind by content, not by the file name", async () => {
-    const pdfNamedTxt = await uploadDoc("petr", makePdf(["One"]), "notes.txt", songId);
+    const pdfNamedTxt = await uploadDoc("petr", makePdf(["One"]), "notes.txt");
     expect((await getDoc(pdfNamedTxt.documentId ?? "")).kind).toBe("pdf");
-    const noExt = await uploadDoc("petr", Buffer.from("Am  C  G\nla la la\n"), "chords", songId);
+    const noExt = await uploadDoc("petr", Buffer.from("Am  C  G\nla la la\n"), "chords");
     expect((await getDoc(noExt.documentId ?? "")).kind).toBe("text");
-    const latin2 = await uploadDoc(
-      "petr",
-      Buffer.from([0x50, 0xf8, 0xed, 0x6c, 0x69]),
-      "x.txt",
-      songId,
-    );
+    const latin2 = await uploadDoc("petr", Buffer.from([0x50, 0xf8, 0xed, 0x6c, 0x69]), "x.txt");
     const other = await getDoc(latin2.documentId ?? "");
     expect(other.kind).toBe("other");
-    const zip = await uploadDoc("petr", Buffer.from("PK\u0003\u0004rest-of-zip"), "a.docx", songId);
+    const zip = await uploadDoc("petr", Buffer.from("PK\u0003\u0004rest-of-zip"), "a.docx");
     expect((await getDoc(zip.documentId ?? "")).kind).toBe("other");
     // Binary documents are served as opaque octet streams (never rendered by the browser).
     const res = await content(other.current?.id ?? "");
@@ -238,12 +216,7 @@ describe("documents: upload, ingest, viewers (SPEC §10, §5.7)", () => {
   it.skipIf(!HAS_POPPLER)(
     "counts PDF pages and renders a 256 px first-page thumbnail",
     async () => {
-      const r = await uploadDoc(
-        "petr",
-        makePdf(["Page one", "Page two", "Three"]),
-        "Chart.pdf",
-        songId,
-      );
+      const r = await uploadDoc("petr", makePdf(["Page one", "Page two", "Three"]), "Chart.pdf");
       const doc = await getDoc(r.documentId ?? "");
       expect(doc.current).toMatchObject({ kind: "pdf", pages: 3, status: "ready" });
       const hash = doc.current?.thumbHash ?? "";
@@ -253,12 +226,13 @@ describe("documents: upload, ingest, viewers (SPEC §10, §5.7)", () => {
       expect(img.headers["content-type"]).toBe("image/webp");
       const meta = await sharp(img.rawPayload).metadata();
       expect(Math.max(meta.width, meta.height)).toBe(256);
-      expect((await blob(hash, "gus")).statusCode).toBe(200); // gus has a grant on this song
+      // Gus sees the project only through a song grant (reduced view): no documents.
+      expect((await blob(hash, "gus")).statusCode).toBe(404);
     },
   );
 
   it("stores an unreadable PDF without a thumbnail (still downloadable)", async () => {
-    const r = await uploadDoc("petr", Buffer.from("%PDF-1.4\ngarbage"), "broken.pdf", songId);
+    const r = await uploadDoc("petr", Buffer.from("%PDF-1.4\ngarbage"), "broken.pdf");
     const doc = await getDoc(r.documentId ?? "");
     expect(doc.current).toMatchObject({ kind: "pdf", status: "ready", thumbHash: null });
   });
@@ -269,7 +243,7 @@ describe("documents: upload, ingest, viewers (SPEC §10, §5.7)", () => {
     })
       .png()
       .toBuffer();
-    const r = await uploadDoc("petr", png, "Setlist photo.png", songId);
+    const r = await uploadDoc("petr", png, "Setlist photo.png");
     const doc = await getDoc(r.documentId ?? "");
     expect(doc.current).toMatchObject({ kind: "image", status: "ready" });
     const view = await sharp(
@@ -282,19 +256,17 @@ describe("documents: upload, ingest, viewers (SPEC §10, §5.7)", () => {
     expect(thumb).toMatchObject({ width: 256, height: 128 });
   });
 
-  it("refuses uploads from viewers and to invisible songs", async () => {
+  it("refuses uploads from viewers and from the reduced view", async () => {
     const viewer = await upload("vik", Buffer.from("x"), "a.md", {
       type: "newDocument",
       projectId,
-      songId,
     });
     expect(viewer.createStatus).toBe(403);
-    const hidden = await upload("gus", Buffer.from("x"), "a.md", {
+    const reduced = await upload("gus", Buffer.from("x"), "a.md", {
       type: "newDocument",
       projectId,
-      songId: secretSongId,
     });
-    expect(hidden.createStatus).toBe(404);
+    expect([403, 404]).toContain(reduced.createStatus);
     const version = await upload("vik", Buffer.from("x"), "a.md", {
       type: "documentVersion",
       documentId: mdDocId,
@@ -350,7 +322,7 @@ describe("documents: upload, ingest, viewers (SPEC §10, §5.7)", () => {
     })
       .png()
       .toBuffer();
-    const r = await uploadDoc("petr", png, "x.png", songId);
+    const r = await uploadDoc("petr", png, "x.png");
     const res = await call(
       t,
       saveDocumentText,
@@ -394,7 +366,7 @@ describe("documents: upload, ingest, viewers (SPEC §10, §5.7)", () => {
   });
 
   it("never deletes the only version", async () => {
-    const r = await uploadDoc("petr", Buffer.from("only"), "only.txt", songId);
+    const r = await uploadDoc("petr", Buffer.from("only"), "only.txt");
     const res = await call(
       t,
       deleteDocumentVersion,
@@ -419,7 +391,7 @@ describe("documents: upload, ingest, viewers (SPEC §10, §5.7)", () => {
       "NOT_FOUND",
     );
     const list = ok<{ documents: Document[] }>(
-      await call(t, listSongDocuments, { params: { id: songId } }, cookies.petr),
+      await call(t, listProjectDocuments, { params: { id: projectId } }, cookies.petr),
     ).documents;
     expect(list.some((d) => d.id === mdDocId)).toBe(false);
     const restored = ok<{ document: Document }>(
@@ -435,7 +407,7 @@ describe("documents: upload, ingest, viewers (SPEC §10, §5.7)", () => {
 describe("documents: download policy (SPEC §3.4, §10)", () => {
   let versionId = "";
   beforeAll(async () => {
-    const r = await uploadDoc("petr", Buffer.from("setlist"), "Setlist 2026.txt", null);
+    const r = await uploadDoc("petr", Buffer.from("setlist"), "Setlist 2026.txt");
     versionId = r.documentVersionId ?? "";
   });
 
@@ -467,7 +439,7 @@ describe("documents: download policy (SPEC §3.4, §10)", () => {
     const docs = ok<{ documents: Document[] }>(
       await call(t, listProjectDocuments, { params: { id: projectId } }, cookies.petr),
     ).documents;
-    expect(docs[0]?.canDownload).toBe(false);
+    expect(docs.every((d) => !d.canDownload)).toBe(true);
     ok(
       await call(
         t,
@@ -483,7 +455,7 @@ describe("documents: project level and the reduced view (SPEC §3.3)", () => {
   let projectDocId = "";
   let projectVersionId = "";
 
-  it("creates Markdown documents in the app at project and song level", async () => {
+  it("creates Markdown documents in the app", async () => {
     const p = ok<{ document: Document }>(
       await call(
         t,
@@ -498,19 +470,10 @@ describe("documents: project level and the reduced view (SPEC §3.3)", () => {
     projectDocId = p.id;
     projectVersionId = p.current?.id ?? "";
     expect(p).toMatchObject({
-      songId: null,
+      projectId,
       kind: "markdown",
       current: { status: "ready", source: "edit" },
     });
-    const s = ok<{ document: Document }>(
-      await call(
-        t,
-        createSongTextDocument,
-        { params: { id: secretSongId }, body: { title: "Chords", kind: "text", text: "Am C" } },
-        cookies.petr,
-      ),
-    ).document;
-    expect(s).toMatchObject({ songId: secretSongId, kind: "text" });
     expect(
       codeOf(
         await call(
@@ -523,20 +486,19 @@ describe("documents: project level and the reduced view (SPEC §3.3)", () => {
     ).toBe("FORBIDDEN");
   });
 
-  it("lists project documents and song documents grouped by visible song", async () => {
-    const all = ok<{ documents: Document[]; songs: { songId: string; documents: Document[] }[] }>(
+  it("lists the project's documents", async () => {
+    const all = ok<{ documents: Document[] }>(
       await call(t, listProjectDocuments, { params: { id: projectId } }, cookies.vik),
     );
     expect(all.documents.some((d) => d.id === projectDocId)).toBe(true);
-    expect(all.songs.map((s) => s.songId).sort()).toEqual([songId, secretSongId].sort());
+    expect(Object.keys(all)).toEqual(["documents"]);
   });
 
-  it("hides project-level documents from users who only have a song grant", async () => {
-    const reduced = ok<{ documents: Document[]; songs: { songId: string }[] }>(
+  it("hides documents from users who only have a song grant", async () => {
+    const reduced = ok<{ documents: Document[] }>(
       await call(t, listProjectDocuments, { params: { id: projectId } }, cookies.gus),
     );
     expect(reduced.documents).toEqual([]);
-    expect(reduced.songs.map((s) => s.songId)).toEqual([songId]);
     expect(codeOf(await call(t, getDocument, { params: { id: projectDocId } }, cookies.gus))).toBe(
       "NOT_FOUND",
     );
@@ -556,22 +518,22 @@ describe("documents: project level and the reduced view (SPEC §3.3)", () => {
 });
 
 describe("documents: notifications and backfill", () => {
-  it("notifies song followers about new documents", async () => {
+  it("notifies project followers about new documents", async () => {
     ok(
       await call(
         t,
-        setSongFollow,
-        { params: { id: songId }, body: { following: true } },
+        setProjectFollow,
+        { params: { id: projectId }, body: { following: true } },
         cookies.vik,
       ),
     );
-    await uploadDoc("jana", Buffer.from("# Bridge"), "Bridge.md", songId);
+    await uploadDoc("jana", Buffer.from("# Bridge"), "Bridge.md");
     const list = ok<{ notifications: Notification[] }>(
       await call(t, listNotifications, {}, cookies.vik),
     ).notifications;
     expect(list[0]).toMatchObject({
       type: "new_document",
-      payload: { documentTitle: "Bridge", songId, actorName: "Jana" },
+      payload: { documentTitle: "Bridge", projectId, actorName: "Jana" },
     });
   });
 
@@ -591,7 +553,6 @@ describe("documents: notifications and backfill", () => {
     setAssetStatus(t.db, asset.id, "ready");
     const { document } = createDocumentWithVersion(t.db, {
       projectId,
-      songId,
       title: "lyrics",
       kind: "other",
       assetId: asset.id,

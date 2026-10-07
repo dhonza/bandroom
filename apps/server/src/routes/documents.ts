@@ -8,9 +8,7 @@ import {
   getDocumentVersionRow,
   getVariant,
   listDocuments,
-  listDocumentsOfSongs,
   listDocumentVersionRows,
-  listVisibleSongs,
   restoreDocumentVersionRow,
   setAssetStatus,
   setCurrentDocumentVersionRow,
@@ -23,14 +21,12 @@ import {
 import {
   canActOn,
   createProjectTextDocument,
-  createSongTextDocument,
   deleteDocument,
   deleteDocumentVersion,
   DocumentProbeSchema,
   getDocument,
   listDocumentVersions,
   listProjectDocuments,
-  listSongDocuments,
   restoreDocument,
   restoreDocumentVersion,
   retryDocumentVersion,
@@ -78,7 +74,7 @@ function kindOfVersion(ctx: AppContext, assetId: string, doc: DocumentRow): Docu
 }
 
 function viewerOf(user: UserRow, access: Omit<DocumentViewer, "userId">): DocumentViewer {
-  return { userId: user.id, role: access.role, project: access.project, song: access.song };
+  return { userId: user.id, role: access.role, project: access.project };
 }
 
 export function registerDocumentRoutes(app: FastifyInstance, ctx: AppContext): void {
@@ -93,7 +89,7 @@ export function registerDocumentRoutes(app: FastifyInstance, ctx: AppContext): v
   };
   const event = (
     request: FastifyRequest,
-    access: { project: { id: string }; song: { id: string } | null },
+    access: { project: { id: string } },
     action: Parameters<typeof audit>[2]["action"],
     doc: DocumentRow,
     details?: Record<string, unknown>,
@@ -101,64 +97,22 @@ export function registerDocumentRoutes(app: FastifyInstance, ctx: AppContext): v
     audit(db, request, {
       action,
       projectId: access.project.id,
-      songId: access.song?.id ?? null,
       targetType: "document",
       targetId: doc.id,
       ...(details && { details }),
     });
-    publishDocumentChanged(ctx, {
-      projectId: doc.projectId,
-      songId: doc.songId,
-      documentId: doc.id,
-    });
+    publishDocumentChanged(ctx, { projectId: doc.projectId, documentId: doc.id });
   };
 
   // --- Lists ----------------------------------------------------------------------------------
 
-  registerContract(app, listSongDocuments, ({ user, access }) => ({
-    documents: toDocuments(db, listDocuments(db, access.project.id, access.song.id), {
-      userId: user.id,
-      role: access.role,
-      project: access.project,
-      song: access.song,
-    }),
-  }));
-
-  registerContract(app, listProjectDocuments, ({ user, access }) => {
-    // Project-level documents need `viewer` on the project; the reduced view has none (§3.3).
-    const own =
+  registerContract(app, listProjectDocuments, ({ user, access }) => ({
+    // Documents need `viewer` on the project; the reduced view has none (SPEC §3.3).
+    documents:
       access.visibility === "full"
-        ? toDocuments(db, listDocuments(db, access.project.id, null), {
-            userId: user.id,
-            role: access.role,
-            project: access.project,
-            song: null,
-          })
-        : [];
-    const visible = listVisibleSongs(db, user, access.project.id);
-    const rows = listDocumentsOfSongs(
-      db,
-      visible.map((s) => s.song.id),
-    );
-    const songs = visible.flatMap(({ song, role }) => {
-      const docs = rows.filter((d) => d.songId === song.id);
-      return docs.length === 0
-        ? []
-        : [
-            {
-              songId: song.id,
-              songTitle: song.title,
-              documents: toDocuments(db, docs, {
-                userId: user.id,
-                role,
-                project: access.project,
-                song,
-              }),
-            },
-          ];
-    });
-    return { documents: own, songs };
-  });
+        ? toDocuments(db, listDocuments(db, access.project.id), viewerOf(user, access))
+        : [],
+  }));
 
   // --- Text documents written in the app ------------------------------------------------------
 
@@ -175,7 +129,6 @@ export function registerDocumentRoutes(app: FastifyInstance, ctx: AppContext): v
     });
     const { document, version } = createDocumentWithVersion(db, {
       projectId: scope.project.id,
-      songId: scope.song?.id ?? null,
       title: body.title,
       kind: body.kind,
       assetId: asset.id,
@@ -190,7 +143,6 @@ export function registerDocumentRoutes(app: FastifyInstance, ctx: AppContext): v
     notifyDocument(ctx, {
       actor: user,
       project: scope.project,
-      song: scope.song,
       document,
       version,
     });
@@ -200,16 +152,8 @@ export function registerDocumentRoutes(app: FastifyInstance, ctx: AppContext): v
 
   registerContract(
     app,
-    createSongTextDocument,
-    ({ user, access, body }, request) =>
-      createText(request, user, viewerOf(user, { ...access, song: access.song }), body),
-    { bodyLimit: TEXT_BODY_LIMIT },
-  );
-  registerContract(
-    app,
     createProjectTextDocument,
-    ({ user, access, body }, request) =>
-      createText(request, user, viewerOf(user, { ...access, song: null }), body),
+    ({ user, access, body }, request) => createText(request, user, viewerOf(user, access), body),
     { bodyLimit: TEXT_BODY_LIMIT },
   );
 
@@ -292,7 +236,6 @@ export function registerDocumentRoutes(app: FastifyInstance, ctx: AppContext): v
       notifyDocument(ctx, {
         actor: user,
         project: access.project,
-        song: access.song,
         document,
         version,
       });
@@ -366,7 +309,6 @@ export function registerDocumentRoutes(app: FastifyInstance, ctx: AppContext): v
       documentId: doc.id,
       documentVersionId: v.id,
       projectId: doc.projectId,
-      songId: doc.songId,
       createdBy: user.id,
     });
     event(request, access, "document.retried", doc, { versionId: v.id });
@@ -406,7 +348,6 @@ export function registerDocumentRoutes(app: FastifyInstance, ctx: AppContext): v
         audit(db, request, {
           action: "document.viewed",
           projectId: access.project.id,
-          songId: access.song?.id ?? null,
           targetType: "document",
           targetId: doc.id,
           details: { versionId: v.id, number: v.number },
@@ -438,7 +379,6 @@ export function registerDocumentRoutes(app: FastifyInstance, ctx: AppContext): v
       audit(db, request, {
         action: "document.downloaded",
         projectId: access.project.id,
-        songId: access.song?.id ?? null,
         targetType: "document",
         targetId: doc.id,
         details: { versionId: v.id, number: v.number, bytes: asset.sizeBytes },

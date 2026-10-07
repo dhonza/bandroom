@@ -30,9 +30,6 @@ function canAccessBlob(
       if (!a || !hasCapability(a.role, "stream")) continue;
       if (DOWNLOAD_ONLY_VARIANTS.has(r.variant) && !downloadAllowed(a)) continue;
       return { ok: true, variant: r.variant };
-    } else if (r.kind === "songDocument") {
-      const a = resolveSongAccess(ctx.db, user, r.songId);
-      if (a && hasCapability(a.role, "stream")) return { ok: true, variant: r.variant };
     } else if (r.kind === "projectDocument") {
       const a = resolveProjectAccess(ctx.db, user, r.projectId);
       if (a && roleAtLeast(a.role, "viewer")) return { ok: true, variant: r.variant };

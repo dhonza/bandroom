@@ -140,31 +140,27 @@ export function notifyVersionUploaded(
 }
 
 /**
- * A new document or document version (SPEC §10, §16): followers of the song, or of the project
- * for project-level documents. Uploading to a song follows it, like track versions.
+ * A new document or document version (SPEC §10, §16, §28.4): the project's followers who see
+ * the project fully.
  */
 export function notifyDocument(
   ctx: Ctx,
   a: {
     actor: UserRow;
     project: ProjectRow;
-    song: SongRow | null;
     document: { id: string; title: string };
     version: { number: number };
   },
 ): void {
-  if (a.song) followTarget(ctx.db, a.actor.id, "song", a.song.id);
   notify(ctx, {
     type: "new_document",
-    userIds: a.song
-      ? followerIds(ctx.db, "song", a.song.id)
-      : followerIds(ctx.db, "project", a.project.id),
+    userIds: followerIds(ctx.db, "project", a.project.id),
     actorId: a.actor.id,
     projectId: a.project.id,
-    songId: a.song?.id ?? null,
-    projectViewersOnly: a.song === null,
+    songId: null,
+    projectViewersOnly: true,
     payload: {
-      ...scopePayload(a.project, a.song),
+      ...scopePayload(a.project, null),
       actorName: a.actor.displayName,
       documentId: a.document.id,
       documentTitle: a.document.title,

@@ -61,7 +61,7 @@ export async function scan(
 
 /**
  * On a re-run, propose what the earlier run created instead of the defaults: items grouped into a
- * multitrack song stay grouped, documents stay on their song. Otherwise already imported items
+ * multitrack song stay grouped. Otherwise already imported items
  * would be proposed as separate songs again.
  */
 export function restorePreviousGrouping(db: Db, project: ImportProject): void {
@@ -106,12 +106,6 @@ export function restorePreviousGrouping(db: Db, project: ImportProject): void {
       }
       return;
     }
-    const fileId = n.versions[0]?.id;
-    const docId = fileId ? liveLocal(db, "file", fileId, "document") : null;
-    const doc = docId
-      ? db.select().from(schema.documents).where(eq(schema.documents.id, docId)).get()
-      : undefined;
-    const anchor = songAnchor(doc?.songId);
-    if (anchor && byId.has(anchor)) n.targetId = anchor;
+    // Documents belong to the project (SPEC §28.4): nothing to restore.
   });
 }

@@ -10,6 +10,7 @@ import {
   listVariants,
   listVisibleSongs,
   projectImageHash,
+  resolveProjectAccess,
   storeClientResponse,
   storedClientResponse,
   type Db,
@@ -104,6 +105,8 @@ function documentFiles(db: Db, docs: DocumentRow[], blobs: Collector): OfflineDo
  * song's files (`role`, SPEC §3.4): lossless audio counts as a download. Besides each track's
  * current version it holds the version the user listens to instead in their saved mix
  * (`listenedVersionId`, DECISIONS 2026-10-03), when that version is still a version of the track.
+ * With `withDocuments` it also holds the project's documents (the song page's Docs panel, SPEC
+ * §28.4); a project manifest lists them once, on the project.
  */
 export function songOfflineManifest(
   db: Db,
@@ -112,6 +115,7 @@ export function songOfflineManifest(
   role: EffectiveRole,
   opts: ManifestOptions,
   userId: string,
+  withDocuments: boolean,
 ): OfflineSongManifest {
   const blobs = new Collector(db);
   const tracks = listSongTracks(db, song.id);
@@ -127,7 +131,7 @@ export function songOfflineManifest(
     if (details) blobs.version(details, { ...opts, lossless });
   }
   blobs.add(projectImageHash(db, project));
-  const documents = documentFiles(db, listDocuments(db, project.id, song.id), blobs);
+  const documents = withDocuments ? documentFiles(db, listDocuments(db, project.id), blobs) : [];
   return {
     songId: song.id,
     projectId: project.id,
@@ -157,6 +161,8 @@ export function registerOfflineRoutes(app: FastifyInstance, ctx: AppContext): vo
       access.role,
       options(query),
       user.id,
+      // Project documents need `viewer` on the project (SPEC §3.3).
+      resolveProjectAccess(db, user, access.project.id)?.visibility === "full",
     ),
   }));
 
@@ -167,11 +173,13 @@ export function registerOfflineRoutes(app: FastifyInstance, ctx: AppContext): vo
     // Project documents need `viewer` on the project; the reduced view has none (SPEC §3.3).
     const documents =
       access.visibility === "full"
-        ? documentFiles(db, listDocuments(db, access.project.id, null), blobs)
+        ? documentFiles(db, listDocuments(db, access.project.id), blobs)
         : [];
     const songs = listVisibleSongs(db, user, access.project.id)
       .filter(({ role }) => hasCapability(role, "stream"))
-      .map(({ song, role }) => songOfflineManifest(db, access.project, song, role, opts, user.id));
+      .map(({ song, role }) =>
+        songOfflineManifest(db, access.project, song, role, opts, user.id, false),
+      );
     return {
       project: {
         projectId: access.project.id,

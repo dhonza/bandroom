@@ -608,7 +608,7 @@ describe("copy songs (SPEC §26.6)", () => {
     reply(c, a, "Thanks");
     marker(a, "Chorus", 30, true);
     tempo(a, 0.25);
-    // A song document (shares its asset too).
+    // A project document: documents belong to the project and are not copied (SPEC §28.4).
     const docAsset = createAsset(t.db, {
       kind: "document",
       originalFilename: "lyrics.md",
@@ -622,7 +622,6 @@ describe("copy songs (SPEC §26.6)", () => {
       .values({
         id: docId,
         projectId: ids.project ?? "",
-        songId: a,
         title: "Lyrics",
         kind: "markdown",
         createdAt: 1,
@@ -685,19 +684,14 @@ describe("copy songs (SPEC §26.6)", () => {
       t.db.select().from(schema.tempoMaps).where(eq(schema.tempoMaps.songId, copyId)).get()
         ?.bar1OffsetSec,
     ).toBe(0.25);
-    const docs = t.db
-      .select()
-      .from(schema.documents)
-      .where(eq(schema.documents.songId, copyId))
-      .all();
-    expect(docs.map((d) => [d.title, d.projectId])).toEqual([["Lyrics", ids.other]]);
     expect(
       t.db
         .select()
-        .from(schema.documentVersions)
-        .where(eq(schema.documentVersions.id, docs[0]?.currentVersionId ?? ""))
-        .get()?.assetId,
-    ).toBe(docAsset);
+        .from(schema.documents)
+        .where(eq(schema.documents.projectId, ids.other ?? ""))
+        .all()
+        .map((d) => d.title),
+    ).not.toContain("Lyrics");
     // Grants are not copied.
     expect(
       t.db.select().from(schema.songGrants).where(eq(schema.songGrants.songId, copyId)).all(),
@@ -770,7 +764,7 @@ describe("copy songs (SPEC §26.6)", () => {
 });
 
 describe("move songs (SPEC §26.6)", () => {
-  it("moves the song with documents and links; song grants are dropped with events", async () => {
+  it("moves the song with its links; documents stay; song grants are dropped", async () => {
     const a = newSong("Mover");
     const bass = track(a, "Bass", ids.petr ?? "");
     const docId = uuidv7();
@@ -779,7 +773,6 @@ describe("move songs (SPEC §26.6)", () => {
       .values({
         id: docId,
         projectId: ids.project ?? "",
-        songId: a,
         title: "Chords",
         kind: "text",
         createdAt: 1,
@@ -814,7 +807,7 @@ describe("move songs (SPEC §26.6)", () => {
     expect(trackRow(bass.trackId)?.songId).toBe(a);
     expect(
       t.db.select().from(schema.documents).where(eq(schema.documents.id, docId)).get()?.projectId,
-    ).toBe(ids.other);
+    ).toBe(ids.project);
     expect(
       t.db.select().from(schema.publicLinks).where(eq(schema.publicLinks.id, linkId)).get()
         ?.projectId,

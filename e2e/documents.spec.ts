@@ -56,27 +56,28 @@ test("Documents: write, edit, PDF pages with pedal keys, images, split view, pro
   await page.getByTestId("create-project-submit").click();
   await page.getByTestId("project-settings-tab").waitFor();
   const projectUrl = page.url().replace(/\?.*$/, "");
+  const projectId = projectUrl.split("/").pop() ?? "";
   await page.getByTestId("new-song").click();
   await page.getByLabel("Title", { exact: true }).fill("Paper trail");
   await page.getByTestId("create-song-submit").click();
   await page.getByTestId("song-row").filter({ hasText: "Paper trail" }).getByRole("link").click();
-  const songPath = new URL(page.url()).pathname;
-  const songId = songPath.split("/").pop() ?? "";
   await page.getByTestId("track-dropzone").locator('input[type="file"]').setInputFiles(TONE_FILE());
 
-  // --- A Markdown document written in the app, shown in the split view. ---
-  const section = page.getByTestId("song-documents");
-  await expect(section.getByTestId("doc-empty")).toBeVisible();
-  await section.getByTestId("doc-new").click();
+  // --- A Markdown document written in the app from the Docs panel next to the player. Documents
+  // belong to the project (SPEC §28.4): the song page has no documents section of its own. ---
+  await expect(page.getByTestId("song-documents")).toHaveCount(0);
+  await page.getByTestId("open-docs").click();
+  const panel = page.getByTestId("docs-panel");
+  await expect(panel.getByTestId("doc-empty")).toBeVisible();
+  await panel.getByTestId("doc-new").click();
   await page.getByTestId("doc-new-title").fill("Lyrics");
   await page
     .getByTestId("doc-new-text")
     .fill("# Verse\n\nFirst **line**\n\n| Chord | Bars |\n| --- | --- |\n| Am | 2 |\n");
   await page.getByTestId("doc-new-save").click();
-  const lyricsRow = section.getByTestId("doc-row").filter({ hasText: "Lyrics" });
+  const lyricsRow = panel.getByTestId("doc-row").filter({ hasText: "Lyrics" });
   await expect(lyricsRow).toBeVisible();
   await lyricsRow.getByTestId("doc-open").click();
-  const panel = page.getByTestId("docs-panel");
   await expect(panel).toHaveAttribute("data-layout", phone ? "sheet" : "side");
   const md = panel.getByTestId("doc-markdown");
   await expect(md.locator("h1")).toHaveText("Verse");
@@ -192,7 +193,7 @@ test("Documents: write, edit, PDF pages with pedal keys, images, split view, pro
 
   // --- Live update: a document added elsewhere appears without reloading (SSE). ---
   if (await panel.getByTestId("doc-back").isVisible()) await panel.getByTestId("doc-back").click();
-  const res = await page.request.post(`api/v1/songs/${songId}/documents`, {
+  const res = await page.request.post(`api/v1/projects/${projectId}/documents`, {
     headers: CSRF,
     data: { title: "Arrangement", kind: "text", text: "Intro  x4\nVerse  x8\n" },
   });
@@ -228,7 +229,9 @@ test("Documents: write, edit, PDF pages with pedal keys, images, split view, pro
   // --- Project documents: own page, download follows the policy. ---
   await page.goto(`${projectUrl}?tab=documents`);
   const tab = page.getByTestId("project-documents");
-  await expect(tab.getByTestId("project-song-documents")).toContainText("Paper trail");
+  // The documents made on the song page are the project's.
+  await expect(tab.getByTestId("doc-row").filter({ hasText: "Lyrics" })).toBeVisible();
+  await expect(tab.getByTestId("project-song-documents")).toHaveCount(0);
   await tab.getByTestId("doc-new").first().click();
   await page.getByTestId("doc-new-title").fill("Setlist");
   await page.getByTestId("doc-new-text").fill("1. Paper trail\n2. Encore\n");
@@ -243,4 +246,7 @@ test("Documents: write, edit, PDF pages with pedal keys, images, split view, pro
   expect(dl.headers()["content-disposition"]).toContain("attachment");
   expect(await dl.text()).toContain("Encore");
   if (phone) await noHorizontalOverflow(page);
+  // The document page leads back to the project's Documents tab.
+  await page.getByTestId("document-page").getByRole("link", { name: projectName }).click();
+  await expect(page.getByTestId("project-documents")).toBeVisible();
 });

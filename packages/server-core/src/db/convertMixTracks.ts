@@ -4,6 +4,7 @@ import { purgeTrashItems } from "../content/trash";
 import { recordEvent } from "../events/record";
 import { getSetting, setSetting } from "../settings/registry";
 import type { Db, Sqlite } from "./connection";
+import { dropSongDocuments, releaseDroppedDocumentAssets } from "./dropSongDocuments";
 import { runMigrations } from "./migrate";
 
 /**
@@ -199,16 +200,37 @@ export function purgeConvertedAutoMixes(db: Db, now: number = Date.now()): numbe
   });
 }
 
+/** The default purge grace (`PURGE_GC_GRACE_SECONDS`, 10 min). */
+const DEFAULT_GC_GRACE_MS = 600_000;
+
+export interface MigrateResult {
+  conversion: MixConversionResult | null;
+  purgedAutoMixes: number;
+  /** M22: song documents deleted (null when the step had nothing to look at). */
+  droppedSongDocuments: number | null;
+  /** M22: bytes taken off the usage by releasing their files. */
+  songDocumentBytesFreed: number;
+}
+
 /**
- * The server's migration path (server start and `bandroom migrate`): the M21 conversion while the
- * old columns exist, the Drizzle migrations, then the purge of the old automatic mixes.
+ * The server's migration path (server start and `bandroom migrate`): the one-time data steps
+ * while the old columns exist (M21 mix conversion, M22 song documents), the Drizzle migrations,
+ * then the post-steps (purge of the old automatic mixes, release of the song documents' files,
+ * whose `blob.gc` job runs `gcGraceMs` later).
  */
 export function migrateDatabase(
   db: Db,
   migrationsFolder: string,
   now: number = Date.now(),
-): { conversion: MixConversionResult | null; purgedAutoMixes: number } {
+  gcGraceMs: number = DEFAULT_GC_GRACE_MS,
+): MigrateResult {
   const conversion = convertMixTracks(db, now);
+  const droppedSongDocuments = dropSongDocuments(db, now);
   runMigrations(db, migrationsFolder);
-  return { conversion, purgedAutoMixes: purgeConvertedAutoMixes(db, now) };
+  return {
+    conversion,
+    purgedAutoMixes: purgeConvertedAutoMixes(db, now),
+    droppedSongDocuments,
+    songDocumentBytesFreed: releaseDroppedDocumentAssets(db, gcGraceMs, now),
+  };
 }

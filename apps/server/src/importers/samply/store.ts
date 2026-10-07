@@ -150,9 +150,7 @@ const ALIVE_SQL: Record<LocalType, string> = {
           WHERE v.id = ? AND v.deleted_at IS NULL AND t.deleted_at IS NULL
             AND s.deleted_at IS NULL AND p.deleted_at IS NULL`,
   document: `SELECT 1 FROM documents d JOIN projects p ON p.id = d.project_id
-          LEFT JOIN songs s ON s.id = d.song_id
-          WHERE d.id = ? AND d.deleted_at IS NULL AND p.deleted_at IS NULL
-            AND (d.song_id IS NULL OR s.deleted_at IS NULL)`,
+          WHERE d.id = ? AND d.deleted_at IS NULL AND p.deleted_at IS NULL`,
   comment: `SELECT 1 FROM comments c JOIN songs s ON s.id = c.song_id JOIN projects p ON p.id = s.project_id
           WHERE c.id = ? AND c.deleted_at IS NULL AND s.deleted_at IS NULL AND p.deleted_at IS NULL`,
   event: `SELECT 1 FROM events e LEFT JOIN projects p ON p.id = e.project_id

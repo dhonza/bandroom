@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import path from "node:path";
 import { uuidv7 } from "@bandroom/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -11,26 +10,13 @@ import { createAsset } from "../media/assets";
 import { getUsage, putVariant, SYSTEM_USAGE_ID } from "../media/variants";
 import { getSetting } from "../settings/registry";
 import { getBlob } from "../storage/blobs";
+import { migrationsUpTo } from "../testing/migrationsUpTo";
 import { makeTempDir } from "../testing/tempDir";
 import { TEST_MIGRATIONS_DIR } from "../testing/testDb";
 import { openDb, type Db } from "./connection";
 import { convertMixTracks, hasColumn, migrateDatabase } from "./convertMixTracks";
 import { runMigrations } from "./migrate";
 import { blobs } from "./schema";
-
-/** The migrations folder as of migration 0016 (before M21 dropped the mix columns). */
-function migrationsUpTo(dir: string, lastIdx: number): string {
-  const out = path.join(dir, `migrations-${lastIdx}`);
-  fs.mkdirSync(path.join(out, "meta"), { recursive: true });
-  const journal = JSON.parse(
-    fs.readFileSync(path.join(TEST_MIGRATIONS_DIR, "meta", "_journal.json"), "utf8"),
-  ) as { entries: { idx: number; tag: string }[] };
-  journal.entries = journal.entries.filter((e) => e.idx <= lastIdx);
-  for (const e of journal.entries)
-    fs.copyFileSync(path.join(TEST_MIGRATIONS_DIR, `${e.tag}.sql`), path.join(out, `${e.tag}.sql`));
-  fs.writeFileSync(path.join(out, "meta", "_journal.json"), JSON.stringify(journal));
-  return out;
-}
 
 let tmp: ReturnType<typeof makeTempDir>;
 let db: Db;
@@ -300,7 +286,7 @@ describe("convertMixTracks (SPEC §27.2)", () => {
     // A second run changes nothing.
     const songs = all("SELECT id, title FROM songs ORDER BY id");
     const events = all("SELECT id FROM events").length;
-    expect(migrateDatabase(db, TEST_MIGRATIONS_DIR, now + 1000)).toEqual({
+    expect(migrateDatabase(db, TEST_MIGRATIONS_DIR, now + 1000)).toMatchObject({
       conversion: null,
       purgedAutoMixes: 0,
     });

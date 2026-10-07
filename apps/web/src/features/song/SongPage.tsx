@@ -45,7 +45,6 @@ import { songKeys, useInvalidateContent, useSong, useSongTracks } from "../libra
 import { FollowButton } from "../../notifications/FollowButton";
 import { OfflineButton } from "../../offline/OfflineButton";
 import { DocsPanel } from "../../documents/DocsPanel";
-import { SongDocumentsSection } from "../../documents/SongDocuments";
 import { errorMessage } from "../../api/errorMessage";
 import { BackLink } from "../../components/BackLink";
 import { dropDeletedFromQueue } from "../../player/dropDeleted";
@@ -116,7 +115,6 @@ export function SongPage() {
       <WhatsNewBanner song={song} />
       <SongPlayer song={song} mixer={mixer} />
       <TracksSection song={song} />
-      <SongDocumentsSection song={song} />
       <DocsPanel song={song} />
 
       {song.notes && (

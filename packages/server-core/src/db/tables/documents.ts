@@ -1,9 +1,10 @@
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { projects, songs } from "./content";
+import { projects } from "./content";
 import { users } from "./identity";
 import { assets } from "./storage";
 
-// Documents (SPEC §4.2; tables from M14 for the importer, UI in M8).
+// Documents (SPEC §4.2; tables from M14 for the importer, UI in M8). Project-level only since M22
+// (SPEC §28.4).
 
 export const documents = sqliteTable(
   "documents",
@@ -12,8 +13,6 @@ export const documents = sqliteTable(
     projectId: text("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
-    /** Null = project-level document. */
-    songId: text("song_id").references(() => songs.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     kind: text("kind", { enum: ["markdown", "text", "pdf", "image", "midi", "other"] }).notNull(),
     currentVersionId: text("current_version_id"),
@@ -24,10 +23,7 @@ export const documents = sqliteTable(
     /** Who moved it to the Trash (SPEC §26.3). */
     deletedBy: text("deleted_by").references(() => users.id, { onDelete: "set null" }),
   },
-  (t) => [
-    index("documents_project_idx").on(t.projectId, t.sortOrder),
-    index("documents_song_idx").on(t.songId, t.sortOrder),
-  ],
+  (t) => [index("documents_project_idx").on(t.projectId, t.sortOrder)],
 );
 
 export const documentVersions = sqliteTable(

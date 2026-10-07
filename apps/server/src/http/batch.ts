@@ -124,7 +124,7 @@ function idsParam(ids: readonly string[]): Record<string, string | number> {
 
 /**
  * Deleted projects and documents in a restore or purge (SPEC §26.3): the item must be in the
- * Trash and visible (a project's role, or a document's song or project role, at least `viewer`);
+ * Trash and visible (the project's role at least `viewer`);
  * projects are for admins only. Other actions never take them (the schemas have no such fields).
  */
 function checkContainers(
@@ -144,12 +144,7 @@ function checkContainers(
     for (const id of new Set(ids ?? [])) {
       const item = resolveContainer(db, kind, id);
       const ok = item !== undefined && item.deleted && (action === "restore" || action === "purge");
-      const role =
-        item && ok
-          ? item.song
-            ? songRoleOf(db, user, item.song)
-            : projectRoleOf(db, user, item.project.id)
-          : undefined;
+      const role = item && ok ? projectRoleOf(db, user, item.project.id) : undefined;
       if (!item || role === undefined || !roleAtLeast(role, "viewer")) {
         missing.push(id);
         continue;

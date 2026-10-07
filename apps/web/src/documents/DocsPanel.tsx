@@ -27,7 +27,8 @@ import { usePlayerView } from "../rehearse/controller";
 import { DESKTOP_QUERY } from "../shell/mediaQueries";
 import { DocumentList, DocumentToolbar } from "./DocumentList";
 import { DocumentPane } from "./DocumentPane";
-import { useDocument, useProjectDocuments, useSongDocuments } from "./queries";
+import { useProject } from "../features/library/queries";
+import { useDocument, useProjectDocuments } from "./queries";
 import {
   closeDocsPanel,
   docsPanelFor,
@@ -49,7 +50,7 @@ export function useDocsInset(): number {
 /** "Docs (N)" next to the comments button (SPEC §11.3 "[Mixer] [Comments] [Docs]"). */
 export function DocsButton({ song }: { song: Song }) {
   const { t } = useTranslation();
-  const docs = useSongDocuments(song.id);
+  const docs = useProjectDocuments(song.project.id);
   const n = docs.data?.documents.length ?? 0;
   return (
     <Button
@@ -74,7 +75,6 @@ export function DocsButton({ song }: { song: Song }) {
  * the other. `?doc=<id>` (notification links) opens a document.
  */
 export function DocsPanel({ song }: { song: Song }) {
-  const { t } = useTranslation();
   const desktop = useMediaQuery(DESKTOP_QUERY, false, { getInitialValueInEffect: false });
   const open = useDocsUi((s) => s.open);
   const documentId = useDocsUi((s) => s.documentId);
@@ -108,7 +108,25 @@ export function DocsPanel({ song }: { song: Song }) {
   }, [open]);
 
   if (!open) return null;
-  const canUpload = song.access.capabilities.includes("upload");
+  return <DocsPanelBody song={song} desktop={desktop} documentId={documentId} width={width} />;
+}
+
+function DocsPanelBody({
+  song,
+  desktop,
+  documentId,
+  width,
+}: {
+  song: Song;
+  desktop: boolean;
+  documentId: string | null;
+  width: number;
+}) {
+  const { t } = useTranslation();
+  // Documents belong to the project (SPEC §28.4): uploading needs it there, in the full view.
+  const project = useProject(song.project.id).data?.project;
+  const canUpload =
+    project?.visibility === "full" && project.access.capabilities.includes("upload");
   const body = documentId ? (
     <OpenDocument id={documentId} canUpload={canUpload} />
   ) : (
@@ -273,38 +291,22 @@ function OpenDocument({ id, canUpload }: { id: string; canUpload: boolean }) {
   );
 }
 
-/** Song documents first, then the project's own (setlist, band rules). */
+/** The project's documents (SPEC §10, §28.4). */
 function SongDocsList({ song, canUpload }: { song: Song; canUpload: boolean }) {
-  const { t } = useTranslation();
-  const songDocs = useSongDocuments(song.id);
-  const projectDocs = useProjectDocuments(song.project.id);
-  const own = projectDocs.data?.documents ?? [];
-  const open = (d: { id: string }) => {
-    showDocument(d.id);
-  };
+  const docs = useProjectDocuments(song.project.id);
+  const scope = { projectId: song.project.id };
   return (
     <Stack gap="sm" style={{ overflow: "auto", minHeight: 0 }}>
-      {canUpload && <DocumentToolbar scope={{ projectId: song.project.id, songId: song.id }} />}
+      {canUpload && <DocumentToolbar scope={scope} />}
       <DocumentList
-        documents={songDocs.data?.documents ?? []}
-        loading={songDocs.isPending}
-        scope={{ projectId: song.project.id, songId: song.id }}
+        documents={docs.data?.documents ?? []}
+        loading={docs.isPending}
+        scope={scope}
         canUpload={canUpload}
-        onOpen={open}
+        onOpen={(d) => {
+          showDocument(d.id);
+        }}
       />
-      {own.length > 0 && (
-        <>
-          <Text size="sm" fw={600} c="dimmed" mt="xs">
-            {t("documents.projectDocuments", { project: song.project.name })}
-          </Text>
-          <DocumentList
-            documents={own}
-            scope={{ projectId: song.project.id, songId: null }}
-            canUpload={false}
-            onOpen={open}
-          />
-        </>
-      )}
     </Stack>
   );
 }

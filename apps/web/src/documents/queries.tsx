@@ -4,7 +4,6 @@ import {
   getDocument,
   listDocumentVersions,
   listProjectDocuments,
-  listSongDocuments,
   restoreDocument,
   restoreDocumentVersion,
   saveDocumentText,
@@ -25,19 +24,11 @@ import { useUploadErrorToast } from "../upload/UploadRow";
 
 export const docKeys = {
   all: ["documents"] as const,
-  song: (songId: string) => ["documents", "song", songId] as const,
   project: (projectId: string) => ["documents", "project", projectId] as const,
   detail: (id: string) => ["documents", "detail", id] as const,
   versions: (id: string) => ["documents", "detail", id, "versions"] as const,
   text: (versionId: string) => ["documents", "text", versionId] as const,
 };
-
-export function useSongDocuments(songId: string) {
-  return useQuery({
-    queryKey: docKeys.song(songId),
-    queryFn: ({ signal }) => api(listSongDocuments, { params: { id: songId } }, { signal }),
-  });
-}
 
 export function useProjectDocuments(projectId: string) {
   return useQuery({
@@ -135,10 +126,10 @@ export function useDocumentUpload() {
   return (
     files: readonly File[],
     target: (file: File) => UploadTarget,
-    scope: { projectId: string; songId: string | null },
+    scope: { projectId: string },
   ) => {
     for (const file of files) {
-      startUpload(file, target(file), scope)
+      startUpload(file, target(file), { projectId: scope.projectId, songId: null })
         .then(() => invalidate())
         .catch((err: unknown) => {
           uploadErrorToast(err, file.name);

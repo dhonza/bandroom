@@ -9,7 +9,7 @@ import { OkSchema } from "./auth";
 import { defineContract } from "./contract";
 
 /**
- * Documents (SPEC §10): project- and song-level documents with version stacks. File uploads use
+ * Documents (SPEC §10, §28.4): project documents with version stacks. File uploads use
  * the tus targets `newDocument` / `documentVersion`; the file itself is read through
  * `GET /document-versions/:id/content` (viewing) and `…/download` (download policy).
  */
@@ -17,32 +17,14 @@ import { defineContract } from "./contract";
 const IdParams = z.object({ id: z.string().min(1).max(64) });
 const DocumentText = z.string().max(DOCUMENT_TEXT_MAX);
 
-export const listSongDocuments = defineContract({
-  method: "GET",
-  path: "/songs/:id/documents",
-  params: IdParams,
-  response: z.object({ documents: z.array(DocumentSchema) }),
-  auth: { capability: "view", scope: "song" },
-});
-
 /**
- * The project's own documents (empty in the reduced view, SPEC §3.3) and the documents of the
- * songs the user can see, grouped by song.
+ * The project's documents (SPEC §10, §28.4); empty in the reduced view (SPEC §3.3).
  */
 export const listProjectDocuments = defineContract({
   method: "GET",
   path: "/projects/:id/documents",
   params: IdParams,
-  response: z.object({
-    documents: z.array(DocumentSchema),
-    songs: z.array(
-      z.object({
-        songId: z.string(),
-        songTitle: z.string(),
-        documents: z.array(DocumentSchema),
-      }),
-    ),
-  }),
+  response: z.object({ documents: z.array(DocumentSchema) }),
   auth: { capability: "view", scope: "project" },
 });
 
@@ -53,16 +35,6 @@ const NewTextDocumentBody = z.object({
 });
 
 /** A new Markdown/text document written in the app (SPEC §10 Markdown editing). */
-export const createSongTextDocument = defineContract({
-  method: "POST",
-  path: "/songs/:id/documents",
-  params: IdParams,
-  body: NewTextDocumentBody,
-  response: z.object({ document: DocumentSchema }),
-  errors: ["QUOTA_EXCEEDED", "DISK_FULL"],
-  auth: { capability: "upload", scope: "song" },
-});
-
 export const createProjectTextDocument = defineContract({
   method: "POST",
   path: "/projects/:id/documents",

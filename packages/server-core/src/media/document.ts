@@ -27,7 +27,6 @@ export const DocumentIngestPayloadSchema = z.object({
   documentId: z.string(),
   documentVersionId: z.string(),
   projectId: z.string().nullable().default(null),
-  songId: z.string().nullable().default(null),
 });
 export type DocumentIngestPayload = z.infer<typeof DocumentIngestPayloadSchema>;
 

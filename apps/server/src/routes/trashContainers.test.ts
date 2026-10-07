@@ -12,12 +12,10 @@ import {
 } from "@bandroom/server-core";
 import {
   ApiErrorSchema,
-  batchDelete,
   batchPurge,
   batchRestore,
   createProject,
   createProjectTextDocument,
-  createSongTextDocument,
   deleteDocument,
   deleteProject,
   getProject,
@@ -210,38 +208,5 @@ describe("deleted documents in the project Trash", () => {
     expect(codeOf(await call(t, batchPurge, { body: { documents: [a] } }, manager))).toBe(
       "NOT_FOUND",
     );
-  });
-
-  it("leaves a song's documents to the song while it is in the Trash", async () => {
-    const projectId = await newProject("Song docs");
-    const songId = createSongRow(t.db, {
-      projectId,
-      title: "Ballad",
-      createdBy: ids.mara ?? "",
-    }).id;
-    const doc = (
-      await call(
-        t,
-        createSongTextDocument,
-        { params: { id: songId }, body: { title: "Words", kind: "text", text: "la" } },
-        manager,
-      )
-    ).json<{ document: { id: string } }>().document.id;
-    await call(t, deleteDocument, { params: { id: doc } }, manager);
-    expect((await projectTrash(projectId, manager)).find((i) => i.id === doc)?.song).toMatchObject({
-      id: songId,
-      title: "Ballad",
-      deleted: false,
-    });
-    await call(t, batchDelete, { body: { songs: [songId] } }, manager);
-    expect((await projectTrash(projectId, manager)).some((i) => i.id === doc)).toBe(false);
-    // Restoring it alone needs the song back first (or in the same call).
-    expect(codeOf(await call(t, batchRestore, { body: { documents: [doc] } }, manager))).toBe(
-      "TRASH_PARENT_DELETED",
-    );
-    expect(
-      codeOf(await call(t, batchRestore, { body: { songs: [songId], documents: [doc] } }, manager)),
-    ).toBe("ok");
-    expect(documentRow(doc)?.deletedAt).toBeNull();
   });
 });

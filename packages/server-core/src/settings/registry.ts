@@ -40,6 +40,11 @@ export const SETTINGS = {
    * (SPEC §27.2); empty once done.
    */
   "migration.purgeTracks": { schema: z.array(z.string()), default: [] },
+  /**
+   * Assets of the song documents deleted by the M22 step (SPEC §28.4), released after the
+   * migrations; empty once done.
+   */
+  "migration.releaseAssets": { schema: z.array(z.string()), default: [] },
   /** Date (YYYY-MM-DD, server time) of the last daily maintenance run (SPEC §18.4). */
   "maintenance.lastRun": { schema: z.string().nullable(), default: null },
   /** Asset of the branding logo in use (SPEC §25.1). */

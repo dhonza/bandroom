@@ -33,11 +33,11 @@ export function DocumentPage() {
       return <NotFoundPage />;
     return <Alert color="red">{errorMessage(t, query.error)}</Alert>;
   }
-  const back = doc.songId ? `/songs/${doc.songId}` : `/projects/${doc.projectId}?tab=documents`;
-  const backLabel = doc.songId ? doc.songTitle : project.data?.project.name;
+  const back = `/projects/${doc.projectId}?tab=documents`;
+  const backLabel = project.data?.project.name;
   const canUpload =
     project.data?.project.access.capabilities.includes("upload") === true &&
-    (doc.songId !== null || project.data.project.visibility === "full");
+    project.data.project.visibility === "full";
   return (
     <Box
       style={{

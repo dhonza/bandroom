@@ -1,7 +1,7 @@
 import { uuidv7, type DocumentKind as SharedDocumentKind } from "@bandroom/shared";
 import { and, desc, eq, inArray, isNull, max, sql } from "drizzle-orm";
 import type { Db } from "../db/connection";
-import { assets, documents, documentVersions, songs } from "../db/schema";
+import { assets, documents, documentVersions } from "../db/schema";
 import { touchProject } from "./projects";
 
 export type DocumentRow = typeof documents.$inferSelect;
@@ -17,7 +17,6 @@ export function createDocumentWithVersion(
   db: Db,
   input: {
     projectId: string;
-    songId: string | null;
     title: string;
     kind: DocumentKind;
     assetId: string;
@@ -28,20 +27,16 @@ export function createDocumentWithVersion(
   now: number = Date.now(),
 ): { document: DocumentRow; version: DocumentVersionRow } {
   return db.transaction(() => {
-    const scope = input.songId
-      ? eq(documents.songId, input.songId)
-      : and(eq(documents.projectId, input.projectId), isNull(documents.songId));
     const last = db
       .select({ m: max(documents.sortOrder) })
       .from(documents)
-      .where(and(scope, isNull(documents.deletedAt)))
+      .where(and(eq(documents.projectId, input.projectId), isNull(documents.deletedAt)))
       .get();
     const document = db
       .insert(documents)
       .values({
         id: uuidv7(now),
         projectId: input.projectId,
-        songId: input.songId,
         title: input.title.slice(0, 200),
         kind: input.kind,
         sortOrder: (last?.m ?? -1) + 1,
@@ -118,7 +113,7 @@ export function addDocumentVersion(
   });
 }
 
-/** A live document (not deleted, on a live song/project) or undefined. */
+/** A live document (not deleted) or undefined. */
 export function getDocumentRow(db: Db, id: string): DocumentRow | undefined {
   return db
     .select()
@@ -140,52 +135,31 @@ export function getDocumentVersionRow(db: Db, id: string): DocumentVersionRow | 
 export function documentLocation(
   db: Db,
   id: string,
-): { documentId: string; projectId: string; songId: string | null } | undefined {
+): { documentId: string; projectId: string } | undefined {
   const d = db
-    .select({ id: documents.id, projectId: documents.projectId, songId: documents.songId })
+    .select({ id: documents.id, projectId: documents.projectId })
     .from(documents)
     .where(eq(documents.id, id))
     .get();
-  return d && { documentId: d.id, projectId: d.projectId, songId: d.songId };
+  return d && { documentId: d.id, projectId: d.projectId };
 }
 
 export function documentLocationOfVersion(
   db: Db,
   versionId: string,
-): { documentId: string; projectId: string; songId: string | null } | undefined {
+): { documentId: string; projectId: string } | undefined {
   const v = getDocumentVersionRow(db, versionId);
   return v && documentLocation(db, v.documentId);
 }
 
-export function listDocuments(db: Db, projectId: string, songId: string | null): DocumentRow[] {
-  const scope = songId
-    ? eq(documents.songId, songId)
-    : and(eq(documents.projectId, projectId), isNull(documents.songId));
+/** The project's live documents, in order. */
+export function listDocuments(db: Db, projectId: string): DocumentRow[] {
   return db
     .select()
     .from(documents)
-    .where(and(scope, isNull(documents.deletedAt)))
+    .where(and(eq(documents.projectId, projectId), isNull(documents.deletedAt)))
     .orderBy(documents.sortOrder, documents.createdAt)
     .all();
-}
-
-/** Live documents of several songs (project Documents tab), in song and document order. */
-export function listDocumentsOfSongs(db: Db, songIds: readonly string[]): DocumentRow[] {
-  if (songIds.length === 0) return [];
-  return db
-    .select({ d: documents })
-    .from(documents)
-    .innerJoin(songs, eq(songs.id, documents.songId))
-    .where(
-      and(
-        inArray(documents.songId, [...songIds]),
-        isNull(documents.deletedAt),
-        isNull(songs.deletedAt),
-      ),
-    )
-    .orderBy(documents.sortOrder, documents.createdAt)
-    .all()
-    .map((r) => r.d);
 }
 
 /** Live versions, newest first. */
@@ -300,7 +274,6 @@ export function documentVersionsWithoutProbe(db: Db): {
   assetId: string;
   documentId: string;
   projectId: string;
-  songId: string | null;
 }[] {
   return db
     .select({
@@ -308,7 +281,6 @@ export function documentVersionsWithoutProbe(db: Db): {
       assetId: documentVersions.assetId,
       documentId: documents.id,
       projectId: documents.projectId,
-      songId: documents.songId,
     })
     .from(documentVersions)
     .innerJoin(documents, eq(documents.id, documentVersions.documentId))
@@ -326,12 +298,9 @@ export function documentVersionsWithoutProbe(db: Db): {
 }
 
 /** Assets referenced by live document versions (blob access). */
-export function documentReferrersOfAsset(
-  db: Db,
-  assetId: string,
-): { projectId: string; songId: string | null }[] {
+export function documentReferrersOfAsset(db: Db, assetId: string): { projectId: string }[] {
   return db
-    .select({ projectId: documents.projectId, songId: documents.songId })
+    .select({ projectId: documents.projectId })
     .from(documentVersions)
     .innerJoin(documents, eq(documents.id, documentVersions.documentId))
     .where(

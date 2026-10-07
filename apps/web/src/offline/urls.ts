@@ -15,7 +15,6 @@ import {
   listProjects,
   listProjectSongs,
   listSongComments,
-  listSongDocuments,
   listSongMarkers,
   listSongTracks,
   listTrackVersions,
@@ -63,7 +62,7 @@ export function projectUrls(projectId: string): string[] {
 
 /**
  * Every request the song page makes for one song (SPEC §13 "timeline JSON"): the song, tracks and
- * version stacks, markers/sections, tempo map, personal mixer, documents, follow
+ * version stacks, markers/sections, tempo map, personal mixer, follow
  * state and mention candidates. Comments are paged and added by the sync.
  */
 export function songUrls(song: Pick<OfflineSongManifest, "songId" | "trackIds">): string[] {
@@ -74,7 +73,6 @@ export function songUrls(song: Pick<OfflineSongManifest, "songId" | "trackIds">)
     contractUrl(listSongMarkers, p),
     contractUrl(getSongTempo, p),
     contractUrl(getSongMixer, p),
-    contractUrl(listSongDocuments, p),
     contractUrl(getSongFollow, p),
     contractUrl(listMentionableUsers, p),
     ...song.trackIds.map((id) => contractUrl(listTrackVersions, { params: { id } })),

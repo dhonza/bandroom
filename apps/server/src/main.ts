@@ -15,9 +15,15 @@ async function main(): Promise<void> {
   for (const w of config.warnings) logger.warn(w);
 
   const db = openDb(config.dbPath);
-  // M21: the mix-track conversion runs before the migrations drop the old columns (SPEC §27.2).
-  const { conversion, purgedAutoMixes } = migrateDatabase(db, MIGRATIONS_DIR);
+  // One-time data steps run before the migrations drop the old columns (SPEC §27.2, §28.4).
+  const { conversion, purgedAutoMixes, droppedSongDocuments, songDocumentBytesFreed } =
+    migrateDatabase(db, MIGRATIONS_DIR, Date.now(), config.purgeGcGraceMs);
   if (conversion) logger.info({ ...conversion, purgedAutoMixes }, "converted mix tracks (M21)");
+  if (droppedSongDocuments !== null)
+    logger.info(
+      { documents: droppedSongDocuments, bytesFreed: songDocumentBytesFreed },
+      "removed song documents (M22)",
+    );
   logger.info({ dbPath: config.dbPath }, "database ready");
   const backfill = enqueueDocumentBackfill(db);
   if (backfill > 0) logger.info({ documents: backfill }, "queued document previews (backfill)");

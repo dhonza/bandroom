@@ -400,7 +400,16 @@ function reportTrackOutcomes(rc: RunContext, pc: ProjectContext): void {
   }
 }
 
-/** Documents (song-level and project-level). */
+/**
+ * A document's title: documents belong to the project (SPEC §28.4), so a song's document gets the
+ * song title in front ("‹song› — ‹file›", at most 200 characters).
+ */
+export function documentTitle(song: { title: string } | null, filename: string): string {
+  const base = stripExtension(filename);
+  return (song ? `${song.title} — ${base}` : base).slice(0, 200);
+}
+
+/** Documents: all go to the project; a song's documents are titled after the song. */
 async function importDocuments(rc: RunContext, pc: ProjectContext): Promise<void> {
   const { ctx, db, run, client, dry, admin, rep } = rc;
   const { project, projectId, plan } = pc;
@@ -438,11 +447,9 @@ async function importDocuments(rc: RunContext, pc: ProjectContext): Promise<void
           },
           blob,
         );
-        const songIdOfDoc = d.song ? pc.ensureSong(d.song) : null;
         const { document, version } = createDocumentWithVersion(db, {
           projectId,
-          songId: songIdOfDoc,
-          title: stripExtension(v.name),
+          title: documentTitle(d.song, v.name),
           kind: documentKind(v.name),
           assetId: asset.id,
           createdBy: admin,
@@ -454,7 +461,6 @@ async function importDocuments(rc: RunContext, pc: ProjectContext): Promise<void
           documentId: document.id,
           documentVersionId: version.id,
           projectId,
-          songId: songIdOfDoc,
           createdBy: admin,
           priority: IMPORT_JOB_PRIORITY,
         });

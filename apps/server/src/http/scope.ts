@@ -41,15 +41,14 @@ export type SongScopeAccess = {
   targetId: string;
 } & SongAccess;
 /**
- * Document-level access (SPEC §10): the song's role for a song document, the project's role for
- * a project-level document. `targetId` is the document or document-version id.
+ * Document-level access (SPEC §10, §28.4): documents belong to projects, so the project's role.
+ * `targetId` is the document or document-version id.
  */
 export interface DocumentScopeAccess {
   scope: "document" | "documentVersion";
   targetId: string;
   documentId: string;
   project: ProjectRow;
-  song: SongRow | null;
   role: EffectiveRole;
 }
 /** A public link, checked against its song (song/versions links) or its project (SPEC §3.5). */
@@ -68,12 +67,8 @@ export type ScopeAccess =
 export function documentDownloadAllowed(access: {
   role: EffectiveRole;
   project: ProjectRow;
-  song: SongRow | null;
 }): boolean {
-  return canDownload(
-    access.role,
-    effectiveDownloadPolicy(access.song?.downloadPolicy ?? null, access.project.downloadPolicy),
-  );
+  return canDownload(access.role, effectiveDownloadPolicy(null, access.project.downloadPolicy));
 }
 
 /** Whether the user may download originals/lossless files of this song (SPEC §3.4). */
@@ -127,7 +122,7 @@ function checkOneScope(
     if (
       (capability !== "view" && !hasCapability(access.role, capability)) ||
       (capability === "download" &&
-        !documentDownloadAllowed({ role: access.role, project: access.project, song: null }))
+        !documentDownloadAllowed({ role: access.role, project: access.project }))
     ) {
       throw new AppError("FORBIDDEN", `Missing capability ${capability}`);
     }
@@ -174,9 +169,8 @@ function checkOneScope(
 }
 
 /**
- * Documents resolve to their song, or to their project when project-level. Project-level
- * documents need at least `viewer` on the project itself: users who see the project only in the
- * reduced view (song grants) do not see them (SPEC §3.3).
+ * Documents resolve to their project and need at least `viewer` on it: users who see the project
+ * only in the reduced view (song grants) do not see them (SPEC §3.3).
  */
 function checkDocumentScope(
   db: Db,
@@ -187,14 +181,8 @@ function checkDocumentScope(
 ): DocumentScopeAccess {
   const loc = scope === "document" ? documentLocation(db, id) : documentLocationOfVersion(db, id);
   if (!loc) throw new AppError("NOT_FOUND", "Not found");
-  let access: { project: ProjectRow; song: SongRow | null; role: EffectiveRole } | undefined;
-  if (loc.songId) {
-    const a = resolveSongAccess(db, user, loc.songId);
-    access = a && { project: a.project, song: a.song, role: a.role };
-  } else {
-    const a = resolveProjectAccess(db, user, loc.projectId);
-    access = a && { project: a.project, song: null, role: a.role };
-  }
+  const a = resolveProjectAccess(db, user, loc.projectId);
+  const access = a && { project: a.project, role: a.role };
   if (!access || !roleAtLeast(access.role, "viewer")) throw new AppError("NOT_FOUND", "Not found");
   if (
     !hasCapability(access.role, capability) ||

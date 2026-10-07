@@ -40,7 +40,7 @@ function withDb<T>(env: Record<string, string | undefined>, fn: (db: Db, appUrl:
   const config = loadConfig(env);
   const db = openDb(config.dbPath);
   try {
-    migrateDatabase(db, MIGRATIONS_DIR);
+    migrateDatabase(db, MIGRATIONS_DIR, Date.now(), config.purgeGcGraceMs);
     return fn(db, config.appUrl);
   } finally {
     db.$client.close();
@@ -115,13 +115,18 @@ export async function runCli(
         const config = loadConfig(env);
         const db = openDb(config.dbPath);
         const pending = pendingMigrationCount(db.$client, MIGRATIONS_DIR);
-        // M21: converts mix tracks before the migrations drop the old columns (SPEC §27.2).
-        const { conversion, purgedAutoMixes } = migrateDatabase(db, MIGRATIONS_DIR);
+        // One-time data steps before the migrations drop the old columns (SPEC §27.2, §28.4).
+        const r = migrateDatabase(db, MIGRATIONS_DIR, Date.now(), config.purgeGcGraceMs);
         db.$client.close();
-        if (conversion)
+        if (r.conversion)
           io.out(
-            `Converted mix tracks: ${conversion.movedTracks} moved to new songs, ` +
-              `${purgedAutoMixes} automatic mixes removed`,
+            `Converted mix tracks: ${r.conversion.movedTracks} moved to new songs, ` +
+              `${r.purgedAutoMixes} automatic mixes removed`,
+          );
+        if (r.droppedSongDocuments !== null)
+          io.out(
+            `Removed song documents: ${r.droppedSongDocuments} ` +
+              `(${r.songDocumentBytesFreed} bytes released)`,
           );
         io.out(`Applied ${pending} migration(s) to ${config.dbPath}`);
         return 0;

@@ -35,8 +35,6 @@ const version: DocumentVersion = {
 const doc = {
   id: "d1",
   projectId: "p1",
-  songId: null,
-  songTitle: null,
   title: "Lyrics",
   kind: "text",
   sortOrder: 0,

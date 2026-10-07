@@ -97,7 +97,6 @@ export function DocumentMenu({
                 if (file)
                   upload([file], () => ({ type: "documentVersion", documentId: doc.id }), {
                     projectId: doc.projectId,
-                    songId: doc.songId,
                   });
               }}
             >

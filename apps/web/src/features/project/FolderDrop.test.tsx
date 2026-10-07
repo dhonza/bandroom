@@ -211,7 +211,7 @@ describe("FolderDrop (SPEC §5.1)", () => {
         upload({
           id: "e",
           filename: "lyrics.md",
-          target: { type: "newDocument", projectId: "p1", songId: "s1" },
+          target: { type: "newDocument", projectId: "p1" },
         }),
         upload({ id: "f", filename: "drums.wav", status: "error", errorCode: "DISK_FULL" }),
       ],

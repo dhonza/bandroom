@@ -2,13 +2,11 @@ import {
   ApiErrorSchema,
   CONTENT_ROLES,
   createProjectTextDocument,
-  createSongTextDocument,
   deleteDocument,
   deleteDocumentVersion,
   getDocument,
   listDocumentVersions,
   listProjectDocuments,
-  listSongDocuments,
   restoreDocument,
   restoreDocumentVersion,
   retryDocumentVersion,
@@ -214,15 +212,8 @@ const ENDPOINTS: Endpoint[] = [
   { name: "resolveComment", contract: resolveComment, scope: "comment", body: { resolved: true } },
   { name: "deleteComment", contract: deleteComment, scope: "comment" },
   { name: "restoreComment", contract: restoreComment, scope: "comment" },
-  // Documents (SPEC §10): each role acts on a song document it created.
-  { name: "listSongDocuments", contract: listSongDocuments, scope: "song" },
+  // Documents (SPEC §10, §28.4): each role acts on a project document it created.
   { name: "listProjectDocuments", contract: listProjectDocuments, scope: "project" },
-  {
-    name: "createSongTextDocument",
-    contract: createSongTextDocument,
-    scope: "song",
-    body: { title: "Lyrics", kind: "markdown", text: "# Hi" },
-  },
   {
     name: "createProjectTextDocument",
     contract: createProjectTextDocument,
@@ -314,7 +305,6 @@ beforeAll(async () => {
       }).id;
     const doc = createDocumentWithVersion(t.db, {
       projectId: project.id,
-      songId: song.id,
       title: "Doc",
       kind: "markdown",
       assetId: asset(),

@@ -1,6 +1,5 @@
 import {
   createProjectTextDocument,
-  createSongTextDocument,
   DocumentTitleSchema,
   type Document,
   type DocumentKind,
@@ -53,10 +52,9 @@ const KIND_ICONS: Record<DocumentKind, typeof IconFile> = {
   other: IconFile,
 };
 
+/** Documents belong to a project (SPEC §28.4). */
 export interface DocumentScope {
   projectId: string;
-  /** Null = project-level documents. */
-  songId: string | null;
 }
 
 /** Upload rows of document uploads running in this scope. */
@@ -65,13 +63,9 @@ function useScopeUploads(scope: DocumentScope) {
   return useMemo(
     () =>
       all.filter(
-        (u) =>
-          isDocumentUpload(u) &&
-          u.status !== "done" &&
-          u.projectId === scope.projectId &&
-          u.songId === scope.songId,
+        (u) => isDocumentUpload(u) && u.status !== "done" && u.projectId === scope.projectId,
       ),
-    [all, scope.projectId, scope.songId],
+    [all, scope.projectId],
   );
 }
 
@@ -88,11 +82,7 @@ export function DocumentToolbar({ scope }: { scope: DocumentScope }) {
       <FileButton
         multiple
         onChange={(files) => {
-          upload(
-            files,
-            () => ({ type: "newDocument", projectId: scope.projectId, songId: scope.songId }),
-            scope,
-          );
+          upload(files, () => ({ type: "newDocument", projectId: scope.projectId }), scope);
         }}
       >
         {(props) => (
@@ -141,9 +131,7 @@ function NewDocumentModal({ scope, onClose }: { scope: DocumentScope; onClose: (
   const create = useMutation({
     mutationFn: () => {
       const body = { title, kind, text };
-      return scope.songId
-        ? api(createSongTextDocument, { params: { id: scope.songId }, body })
-        : api(createProjectTextDocument, { params: { id: scope.projectId }, body });
+      return api(createProjectTextDocument, { params: { id: scope.projectId }, body });
     },
     onSuccess: () => {
       void invalidate();
@@ -309,7 +297,6 @@ function DocumentRow({
         if (file)
           upload([file], () => ({ type: "documentVersion", documentId: doc.id }), {
             projectId: doc.projectId,
-            songId: doc.songId,
           });
       }}
     >

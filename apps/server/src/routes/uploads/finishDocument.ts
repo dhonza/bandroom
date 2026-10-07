@@ -58,7 +58,6 @@ export async function finishDocumentUpload(
               db,
               {
                 projectId: target.projectId,
-                songId: target.songId,
                 title: target.title ?? documentTitleFromFilename(filename),
                 kind: documentKindFromName(filename),
                 assetId: asset.id,
@@ -81,13 +80,11 @@ export async function finishDocumentUpload(
         documentId: created.document.id,
         documentVersionId: created.version.id,
         projectId: created.document.projectId,
-        songId: created.document.songId,
         createdBy: user.id,
       });
       recordEvent(db, {
         actorUserId: user.id,
         projectId: created.document.projectId,
-        songId: created.document.songId,
         ip: ipOf(req),
         userAgent: req.headers.get("user-agent"),
         action: target.type === "newDocument" ? "document.created" : "document.version_added",
@@ -110,16 +107,11 @@ export async function finishDocumentUpload(
   notifyDocument(ctx, {
     actor: user,
     project: access.project,
-    song: "song" in access && access.song ? access.song : null,
     document,
     version,
   });
   notifyQuotaFor(ctx, user);
-  publishDocumentChanged(ctx, {
-    projectId: document.projectId,
-    songId: document.songId,
-    documentId: document.id,
-  });
+  publishDocumentChanged(ctx, { projectId: document.projectId, documentId: document.id });
   return {
     assetId: r.asset.id,
     trackId: null,

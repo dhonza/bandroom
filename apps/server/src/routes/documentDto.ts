@@ -8,7 +8,6 @@ import {
   type DocumentRow,
   type DocumentVersionRow,
   type ProjectRow,
-  type SongRow,
 } from "@bandroom/server-core";
 import {
   canActOn,
@@ -20,12 +19,11 @@ import {
 } from "@bandroom/shared";
 import { documentDownloadAllowed } from "../http/scope";
 
-/** The viewer's relation to a document's scope (song or project). */
+/** The viewer's relation to a document's project. */
 export interface DocumentViewer {
   userId: string;
   role: EffectiveRole;
   project: ProjectRow;
-  song: SongRow | null;
 }
 
 function probeOf(raw: string | null) {
@@ -80,8 +78,6 @@ export function toDocument(
   return {
     id: doc.id,
     projectId: doc.projectId,
-    songId: doc.songId,
-    songTitle: viewer.song?.title ?? null,
     title: doc.title,
     kind: doc.kind,
     sortOrder: doc.sortOrder,

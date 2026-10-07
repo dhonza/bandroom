@@ -181,7 +181,11 @@ export function NodeRow({
                 value={node.targetId ?? PROJECT_TARGET}
                 data={[
                   { value: PROJECT_TARGET, label: t("admin.import.review.attachProject") },
-                  ...targets.map((s) => ({ value: s.id, label: songLabel(s) })),
+                  // Documents belong to the project; a song only names them (SPEC §28.4).
+                  ...targets.map((s) => ({
+                    value: s.id,
+                    label: t("admin.import.review.attachSong", { song: songLabel(s) }),
+                  })),
                 ]}
                 onChange={(v) => {
                   onChange((m) =>

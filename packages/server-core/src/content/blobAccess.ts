@@ -18,8 +18,6 @@ export const DOWNLOAD_ONLY_VARIANTS: ReadonlySet<string> = new Set([
 export type BlobReferrer =
   /** A variant of a track version's audio asset. */
   | { kind: "song"; songId: string; variant: string }
-  /** A song-level document (same access as the song's stream capability). */
-  | { kind: "songDocument"; songId: string; variant: string }
   | { kind: "project"; projectId: string; variant: string }
   /** A project-level document: needs at least `viewer` on the project (SPEC §3.3). */
   | { kind: "projectDocument"; projectId: string; variant: string };
@@ -58,11 +56,7 @@ export function blobReferrers(db: Db, hash: string): BlobReferrer[] {
       out.push({ kind: "project", projectId: p.id, variant: v.variant });
     }
     for (const d of documentReferrersOfAsset(db, v.assetId)) {
-      out.push(
-        d.songId
-          ? { kind: "songDocument", songId: d.songId, variant: v.variant }
-          : { kind: "projectDocument", projectId: d.projectId, variant: v.variant },
-      );
+      out.push({ kind: "projectDocument", projectId: d.projectId, variant: v.variant });
     }
   }
   return out;

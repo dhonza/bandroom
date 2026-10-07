@@ -98,14 +98,8 @@ export function authorizeTarget(
       return checkScope(ctx.db, user, "track", target.trackId, "upload");
     case "projectImage":
       return checkScope(ctx.db, user, "project", target.projectId, "settings.manage");
-    case "newDocument": {
-      if (target.songId === null) {
-        return checkScope(ctx.db, user, "project", target.projectId, "upload");
-      }
-      const access = checkScope(ctx.db, user, "song", target.songId, "upload");
-      if (access.project.id !== target.projectId) throw new AppError("NOT_FOUND", "Song not found");
-      return access;
-    }
+    case "newDocument":
+      return checkScope(ctx.db, user, "project", target.projectId, "upload");
     case "documentVersion": {
       const access = checkScope(ctx.db, user, "document", target.documentId, "upload");
       if (!getDocumentRow(ctx.db, target.documentId))
