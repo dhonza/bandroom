@@ -29,6 +29,7 @@ describe.each([
     expect(get("api/v1/uploads/abc")).toBe("bypass");
     expect(get("api/v1/track-versions/1/download?format=wav", "navigate")).toBe("bypass");
     expect(get("api/v1/document-versions/1/download")).toBe("bypass");
+    expect(get("api/v1/projects/1/export/download?format=wav")).toBe("bypass");
     expect(get(`api/v1/l/tok/blobs/${H}`)).toBe("bypass");
     expect(get("api/v1/l/tok/songs/1")).toBe("bypass");
     expect(get("healthz")).toBe("bypass");

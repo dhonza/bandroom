@@ -460,6 +460,28 @@
     "noArchived": "No archived projects."
   },
   "projects": {
+    "export": {
+      "button": "Export",
+      "title": "Export project",
+      "format": "Format",
+      "formats": {
+        "flac": "FLAC (lossless)",
+        "wav": "WAV",
+        "opus": "Opus (small)",
+        "original": "Uploaded files"
+      },
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
+      "summary": "{{files}} in {{songs}} · {{size}}",
+      "skippedSongs_one": "{{count}} song is left out: its download policy does not allow you.",
+      "skippedSongs_other": "{{count}} songs are left out: their download policy does not allow you.",
+      "opusFallback_one": "{{count}} track has no full-quality files and comes as Opus.",
+      "opusFallback_other": "{{count}} tracks have no full-quality files and come as Opus.",
+      "originalFallback_one": "{{count}} track was uploaded lossy and comes as the uploaded file.",
+      "originalFallback_other": "{{count}} tracks were uploaded lossy and come as the uploaded files.",
+      "download": "Download ZIP",
+      "busy": "WAV files are rebuilt while downloading; one WAV export or download runs at a time."
+    },
     "create": "New project",
     "reduced": "selected songs",
     "archivedBadge": "archived",

@@ -26,6 +26,7 @@ import { ProjectImage } from "../../components/ProjectImage";
 import { NotFoundPage } from "../../pages/NotFoundPage";
 import { useFormatters } from "../../i18n/format";
 import { useProject } from "../library/queries";
+import { ExportProjectButton } from "./ExportProjectDialog";
 import { PlayAllButton } from "./PlayAllButton";
 import { ProjectSettings } from "./ProjectSettings";
 import { SongsList } from "./SongsList";
@@ -119,6 +120,7 @@ export function ProjectPage() {
         <PlayAllButton project={project} />
         <FollowButton target="project" id={project.id} />
         <OfflineButton kind="project" id={project.id} title={project.name} projectId={project.id} />
+        {caps.has("download") && <ExportProjectButton project={project} />}
         {canLink && (
           <Button
             variant="default"

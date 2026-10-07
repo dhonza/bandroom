@@ -472,6 +472,36 @@
     "noArchived": "Žádné archivované projekty."
   },
   "projects": {
+    "export": {
+      "button": "Exportovat",
+      "title": "Export projektu",
+      "format": "Formát",
+      "formats": {
+        "flac": "FLAC (bezztrátový)",
+        "wav": "WAV",
+        "opus": "Opus (malý)",
+        "original": "Nahrané soubory"
+      },
+      "files_one": "{{count}} soubor",
+      "files_few": "{{count}} soubory",
+      "files_many": "{{count}} souborů",
+      "files_other": "{{count}} souborů",
+      "summary": "{{files}} · {{songs}} · {{size}}",
+      "skippedSongs_one": "{{count}} píseň chybí: její pravidla stahování vám to nedovolují.",
+      "skippedSongs_few": "{{count}} písně chybí: jejich pravidla stahování vám to nedovolují.",
+      "skippedSongs_many": "{{count}} písní chybí: jejich pravidla stahování vám to nedovolují.",
+      "skippedSongs_other": "{{count}} písní chybí: jejich pravidla stahování vám to nedovolují.",
+      "opusFallback_one": "{{count}} stopa nemá soubory v plné kvalitě a bude jako Opus.",
+      "opusFallback_few": "{{count}} stopy nemají soubory v plné kvalitě a budou jako Opus.",
+      "opusFallback_many": "{{count}} stop nemá soubory v plné kvalitě a bude jako Opus.",
+      "opusFallback_other": "{{count}} stop nemá soubory v plné kvalitě a bude jako Opus.",
+      "originalFallback_one": "{{count}} stopa byla nahrána ztrátově a bude jako nahraný soubor.",
+      "originalFallback_few": "{{count}} stopy byly nahrány ztrátově a budou jako nahrané soubory.",
+      "originalFallback_many": "{{count}} stop bylo nahráno ztrátově a bude jako nahrané soubory.",
+      "originalFallback_other": "{{count}} stop bylo nahráno ztrátově a bude jako nahrané soubory.",
+      "download": "Stáhnout ZIP",
+      "busy": "Soubory WAV se skládají během stahování; najednou běží jen jeden export nebo stažení WAV."
+    },
     "create": "Nový projekt",
     "reduced": "vybrané písně",
     "archivedBadge": "archiv",

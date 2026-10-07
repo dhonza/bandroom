@@ -22,6 +22,14 @@ export function brandingLogoUrl(hash: string): string {
   return joinBasePath(basePath ?? basePathFromDocument(), `${API_PREFIX}${brandingLogoPath(hash)}`);
 }
 
+/** A project as a ZIP (SPEC §28.7); the service worker leaves `…/download` alone. */
+export function exportUrl(projectId: string, format: string): string {
+  return joinBasePath(
+    basePath ?? basePathFromDocument(),
+    `${API_PREFIX}/projects/${projectId}/export/download?format=${format}`,
+  );
+}
+
 export function downloadUrl(versionId: string, format: string): string {
   return joinBasePath(
     basePath ?? basePathFromDocument(),
