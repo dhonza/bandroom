@@ -1,5 +1,6 @@
 import type { TrackVersion } from "@bandroom/shared";
-import { ActionIcon, Button, FileButton, Group, Menu } from "@mantine/core";
+import { ActionIcon, Button, FileButton, Group, Menu, Tooltip } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import {
   IconDots,
   IconDownload,
@@ -10,6 +11,7 @@ import {
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { downloadUrl } from "../../lib/media";
+import { PHONE_QUERY } from "../../shell/mediaQueries";
 
 /** "New version" upload button and the track's "⋯" menu (edit, downloads, retry, delete). */
 export function TrackMenu({
@@ -34,6 +36,8 @@ export function TrackMenu({
   onUpload: (f: File | null) => void;
 }) {
   const { t } = useTranslation();
+  // Phones: "New version" is an icon, so the track name keeps its room (360 px).
+  const phone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   const downloads = version?.downloads ?? [];
   if (!canDelete && !canRetry && !canUpload && !canEditTrack && downloads.length === 0) return null;
   return (
@@ -43,18 +47,32 @@ export function TrackMenu({
           onChange={onUpload}
           accept="audio/*,.wav,.aif,.aiff,.flac,.mp3,.m4a,.ogg,.opus,.wv"
         >
-          {(props) => (
-            <Button
-              {...props}
-              variant="subtle"
-              size="compact-sm"
-              mih={44}
-              leftSection={<IconUpload size={16} />}
-              data-testid="upload-version"
-            >
-              {t("tracks.newVersion")}
-            </Button>
-          )}
+          {(props) =>
+            phone ? (
+              <Tooltip label={t("tracks.newVersion")}>
+                <ActionIcon
+                  {...props}
+                  variant="subtle"
+                  size={44}
+                  aria-label={t("tracks.newVersion")}
+                  data-testid="upload-version"
+                >
+                  <IconUpload size={20} />
+                </ActionIcon>
+              </Tooltip>
+            ) : (
+              <Button
+                {...props}
+                variant="subtle"
+                size="compact-sm"
+                mih={44}
+                leftSection={<IconUpload size={16} />}
+                data-testid="upload-version"
+              >
+                {t("tracks.newVersion")}
+              </Button>
+            )
+          }
         </FileButton>
       )}
       <Menu position="bottom-end" withinPortal>

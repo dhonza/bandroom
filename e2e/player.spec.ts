@@ -230,3 +230,28 @@ test("a long song title wraps by words next to the header buttons (portrait and 
     expect(buttons.x + buttons.width).toBeLessThanOrEqual(size.width);
   }
 });
+
+test("track rows keep the track name readable at 360 px", async ({ page, request }, testInfo) => {
+  test.setTimeout(120_000);
+  await loginAsNewUser(page, request, testInfo, "member");
+  await newProject(page, testInfo);
+  await newSong(page, "Narrow rows");
+  await page.getByTestId("track-dropzone").locator('input[type="file"]').setInputFiles(TONE_FILE());
+  const row = page.getByTestId("track-row").first();
+  await expect(row.getByTestId("version-button")).toBeVisible({ timeout: 60_000 });
+  await page.setViewportSize({ width: 360, height: 740 });
+  const name = row.getByTestId("track-name");
+  await expect(name).toHaveText("tone_48000_s16_stereo");
+  // It was cut to one letter ("t…") next to the version badge and the actions; now it shows
+  // several characters (about 9 with desktop Chrome's scrollbar, more on phones).
+  expect((await box(name)).width).toBeGreaterThanOrEqual(60);
+  // "New version" is an icon on phones; the actions keep 44 px touch targets.
+  for (const id of ["upload-version", "track-actions"]) {
+    const b = await box(row.getByTestId(id));
+    expect(Math.min(b.width, b.height), id).toBeGreaterThanOrEqual(44);
+  }
+  const rowBox = await box(row);
+  const actions = await box(row.getByTestId("track-actions"));
+  expect(actions.x + actions.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 0.5);
+  await noHorizontalOverflow(page);
+});

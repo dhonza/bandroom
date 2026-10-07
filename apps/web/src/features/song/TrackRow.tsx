@@ -137,8 +137,8 @@ export function TrackRow({
         )}
         <Stack gap={6} p="sm" style={{ flex: 1, minWidth: 0 }}>
           <Group justify="space-between" wrap="nowrap" gap="xs">
-            <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
-              <Text fw={600} truncate>
+            <Group gap={6} wrap="nowrap" style={{ minWidth: 0, flex: "1 1 auto" }}>
+              <Text fw={600} truncate data-testid="track-name">
                 {track.name}
               </Text>
               {v && (
@@ -153,6 +153,7 @@ export function TrackRow({
                   }}
                   aria-label={t("versions.open", { track: track.name })}
                   data-testid="version-button"
+                  style={{ flex: "none" }}
                 >
                   {t("tracks.versionBadge", { number: v.number })}
                   {track.versionCount > 1 ? ` / ${String(track.versionCount)}` : ""}
