@@ -97,6 +97,9 @@ export async function finishUpload(
   }
 
   const kind = target.type === "projectImage" ? "image" : "audio";
+  // Lossy on upload and the Opus preset (SPEC §28.2), kept on the asset for retries.
+  const options =
+    target.type === "newTrack" || target.type === "newVersion" ? target.options : undefined;
   const now = Date.now();
   const commit = (): UploadResult & { projectId: string; songId: string | null } => {
     const asset = createOriginalAsset(
@@ -107,6 +110,7 @@ export async function finishUpload(
         sizeBytes: blob.sizeBytes,
         originalHash: hash,
         uploadedBy: user.id,
+        ingestOptions: options ?? null,
       },
       blob,
       now,
@@ -232,7 +236,12 @@ function recordUploadEvent(
       action: "version.uploaded",
       targetType: "trackVersion",
       targetId: r.trackVersionId,
-      details: { trackId: r.trackId, assetId: r.assetId },
+      details: {
+        trackId: r.trackId,
+        assetId: r.assetId,
+        ...((target.type === "newTrack" || target.type === "newVersion") &&
+          target.options && { options: target.options }),
+      },
     });
   }
 }

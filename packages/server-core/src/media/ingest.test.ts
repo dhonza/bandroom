@@ -41,6 +41,13 @@ import {
 } from "./wav";
 import { DEFAULT_TOOLS, ffmpegArgs, runTool } from "./tools";
 import { insertUser } from "../auth/users";
+import type { UploadOptions } from "@bandroom/shared";
+import { eq } from "drizzle-orm";
+import { createProjectRow } from "../content/projects";
+import { createSongRow } from "../content/songs";
+import { addTrackVersion, createTrackWithVersion, getTrackVersionRow } from "../content/tracks";
+import { assets } from "../db/schema";
+import { listEvents } from "../events/record";
 import { Readable } from "node:stream";
 
 let t: ReturnType<typeof createTestDb>;
@@ -310,4 +317,121 @@ describe("audio.ingest details", () => {
     );
     expect(v && getBlob(db, v.blobHash)).toBeDefined();
   }, 60_000);
+});
+
+describe("audio.ingest upload options (SPEC §28.2)", () => {
+  /** An uploaded file on a track version (two versions share it: a copy), with options. */
+  async function versionWith(file: string, options: UploadOptions | null) {
+    const asset = await addOriginal(h, file, uploader);
+    if (options)
+      db.update(assets)
+        .set({ ingestOptions: JSON.stringify(options) })
+        .where(eq(assets.id, asset.id))
+        .run();
+    const project = createProjectRow(db, { name: "P", createdBy: uploader });
+    const song = createSongRow(db, { projectId: project.id, title: "S", createdBy: uploader });
+    const { track, version } = createTrackWithVersion(db, {
+      songId: song.id,
+      name: "Bass",
+      assetId: asset.id,
+      uploadedBy: uploader,
+    });
+    const copy = addTrackVersion(db, {
+      trackId: track.id,
+      assetId: asset.id,
+      uploadedBy: uploader,
+    });
+    return { asset, song, versions: [version.id, copy.id] };
+  }
+
+  it(
+    "lossy only: Opus at the preset, no FLAC or original, versions archived on upload",
+    {
+      timeout: 60_000,
+    },
+    async () => {
+      const { asset, song, versions } = await versionWith(BWF_FILE(), {
+        lossyOnly: true,
+        quality: "high",
+      });
+      const before = h.events.length;
+      const original = getBlob(db, getVariant(db, asset.id, "original")?.blobHash ?? "");
+      const usageBefore = getUsage(db, uploader) - (original?.sizeBytes ?? 0);
+      const { status } = await runOneJob(h, "audio.ingest", { assetId: asset.id });
+      expect(status).toBe("done");
+      expect(getAsset(db, asset.id)?.status).toBe("ready");
+      const names = listVariants(db, asset.id)
+        .map((v) => v.variant)
+        .sort();
+      expect(names).toEqual(["opus", "opus_low", "peaks", "seekindex_opus", "seekindex_opus_low"]);
+      expect(meta(asset.id, "opus")).toMatchObject({ bitrate: 128, quality: "high" });
+      expect(meta(asset.id, "opus_low")).toMatchObject({ bitrate: 48 });
+      expect(meta(asset.id, "opus_low").quality).toBeUndefined();
+      // Usage: only what is kept.
+      const kept = listVariants(db, asset.id).reduce(
+        (sum, v) => sum + (getBlob(db, v.blobHash)?.sizeBytes ?? 0),
+        0,
+      );
+      expect(getUsage(db, uploader)).toBe(usageBefore + kept);
+      for (const id of versions) {
+        const v = getTrackVersionRow(db, id);
+        expect(v).toMatchObject({ archivedBy: uploader, archivedReason: "upload" });
+        expect(v?.archivedAt).not.toBeNull();
+      }
+      const events = listEvents(db, { action: "version.lossless_removed" }).filter((e) =>
+        versions.includes(e.targetId ?? ""),
+      );
+      expect(events).toHaveLength(2);
+      expect(events[0]).toMatchObject({ actorType: "worker", actorUserId: uploader });
+      expect(JSON.parse(events[0]?.details ?? "{}")).toMatchObject({
+        onUpload: true,
+        quality: "high",
+        kbps: 128,
+      });
+      expect(h.events.slice(before)).toContainEqual(
+        expect.objectContaining({
+          type: "version.lossless_removed",
+          songId: song.id,
+          data: { versionIds: versions },
+        }),
+      );
+      // A retry never redoes the full quality.
+      const again = await runOneJob(h, "audio.ingest", { assetId: asset.id });
+      expect(again.status).toBe("done");
+      expect(listVariants(db, asset.id).some((v) => v.variant === "flac")).toBe(false);
+    },
+  );
+
+  it(
+    "standard quality follows the audio.opusBitrates setting and keeps the FLAC",
+    {
+      timeout: 60_000,
+    },
+    async () => {
+      setSetting(db, "audio.opusBitrates", {
+        trackStereo: 112,
+        trackMono: 72,
+        lowStereo: 48,
+        lowMono: 32,
+      });
+      try {
+        const { asset, versions } = await versionWith(FLAC_FILE(), {
+          lossyOnly: false,
+          quality: "standard",
+        });
+        await runOneJob(h, "audio.ingest", { assetId: asset.id });
+        expect(meta(asset.id, "opus")).toMatchObject({ quality: "standard" });
+        expect([112, 72]).toContain(meta(asset.id, "opus").bitrate);
+        expect(getVariant(db, asset.id, "flac")).toBeTruthy();
+        expect(getTrackVersionRow(db, versions[0] ?? "")?.archivedAt).toBeNull();
+      } finally {
+        setSetting(db, "audio.opusBitrates", {
+          trackStereo: 96,
+          trackMono: 64,
+          lowStereo: 48,
+          lowMono: 32,
+        });
+      }
+    },
+  );
 });

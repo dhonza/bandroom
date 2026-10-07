@@ -264,6 +264,33 @@ describe("bounce options (SPEC §5.5)", () => {
     },
   );
 
+  it(
+    "renders lossy only at the chosen preset when asked (SPEC §28.2)",
+    { timeout: 180_000 },
+    async () => {
+      const res = await bounce({
+        title: "Lossy",
+        mix: { tracks: { [trackId]: s() } },
+        copyTempo: false,
+        copyMarkers: false,
+        options: { lossyOnly: true, quality: "veryHigh" },
+      });
+      expect(res.statusCode).toBe(200);
+      const id = res.json<{ song: { id: string } }>().song.id;
+      expect(await runQueuedJobs(t)).toEqual(["done", "done"]);
+      const [track] = await songTracks(id);
+      // The fixture is mono: the mono rate of the preset.
+      expect(track?.current).toMatchObject({
+        archived: { reason: "upload" },
+        variants: { flac: null, opus: { bitrate: 96, quality: "veryHigh" } },
+      });
+      const [bounced] = listEvents(t.db, { action: "song.bounced" }).filter((e) => e.songId === id);
+      expect(JSON.parse(bounced?.details ?? "{}")).toMatchObject({
+        options: { lossyOnly: true, quality: "veryHigh" },
+      });
+    },
+  );
+
   it("refuses the click without a tempo map", async () => {
     expect(
       (await call(t, deleteSongTempo, { params: { id: songId } }, admin)).statusCode,

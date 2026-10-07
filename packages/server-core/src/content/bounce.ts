@@ -146,7 +146,7 @@ export function createBounce(
     inputs: BounceInput[];
     click?: BounceClick | null;
     request: Pick<BounceRequest, "mix" | "versions"> &
-      Partial<Pick<BounceRequest, "copyTempo" | "copyMarkers" | "includeClick">>;
+      Partial<Pick<BounceRequest, "copyTempo" | "copyMarkers" | "includeClick" | "options">>;
     event?: { sessionId?: string | null; ip?: string | null; userAgent?: string | null };
   },
   now: number = Date.now(),
@@ -184,6 +184,8 @@ export function createBounce(
         sizeBytes: 0, // set when rendered
         originalHash: "",
         uploadedBy: input.userId,
+        // The ingest after the render follows them (SPEC §28.2).
+        ingestOptions: input.request.options ?? null,
       },
       now,
     );
@@ -233,6 +235,7 @@ export function createBounce(
         copyMarkers,
         includeClick: input.click != null,
         ...(input.click && { click: input.request.mix.click ?? {} }),
+        ...(input.request.options && { options: input.request.options }),
       },
     });
     if (copied.tempoRevisionId !== null) {

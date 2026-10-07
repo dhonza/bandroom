@@ -14,6 +14,7 @@ import { call, loginAs, runQueuedJobs, seedUser, tusUpload } from "../testing/te
 import {
   admin,
   member,
+  memberId,
   projectId,
   setupUploadFixtures,
   songId,
@@ -315,5 +316,45 @@ describe("download rate limit", () => {
     const limited = await t.app.inject({ url, headers: { cookie: member } });
     expect(codes).toContain(429);
     expect(ApiErrorSchema.parse(limited.json()).code).toBe("RATE_LIMITED");
+  });
+});
+
+describe("lossy on upload (SPEC §28.2)", () => {
+  it("keeps only Opus at the chosen preset and archives the version on upload", async () => {
+    const data = await fs.readFile(BWF_FILE());
+    const res = await tusUpload(t, member, data, "Song_Keys.wav", {
+      type: "newTrack",
+      songId,
+      name: "Keys",
+      options: { lossyOnly: true, quality: "low" },
+    });
+    expect(res.status).toBe(200);
+    const result = UploadResultSchema.parse(JSON.parse(res.body));
+    const [uploaded] = listEvents(t.db, {
+      action: "version.uploaded",
+      targetId: result.trackVersionId ?? "",
+    });
+    expect(JSON.parse(uploaded?.details ?? "{}")).toMatchObject({
+      options: { lossyOnly: true, quality: "low" },
+    });
+    await runQueuedJobs(t);
+    const keys = (await tracksOf(member)).find((tr) => tr.id === result.trackId);
+    expect(keys?.current).toMatchObject({
+      status: "ready",
+      downloads: ["opus"],
+      archived: { reason: "upload", by: { id: memberId } },
+      variants: { flac: null, opus: { bitrate: 64, quality: "low" } },
+    });
+    expect(getVariant(t.db, result.assetId, "original")).toBeUndefined();
+  }, 60_000);
+
+  it("refuses unknown options", async () => {
+    const res = await tusUpload(t, member, Buffer.from("x"), "a.wav", {
+      type: "newTrack",
+      songId,
+      name: "X",
+      options: { lossyOnly: true, quality: "ultra" },
+    });
+    expect(res.createStatus).toBe(400);
   });
 });

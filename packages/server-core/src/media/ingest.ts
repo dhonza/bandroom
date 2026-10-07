@@ -1,11 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { opusKbps, type AudioQuality } from "@bandroom/shared";
 import { z } from "zod";
-import { assetLosslessRemoved } from "../content/lossless";
+import type { Db } from "../db/connection";
+import { archiveVersionsOfAssets, assetLosslessRemoved } from "../content/lossless";
+import { recordEvent } from "../events/record";
 import { PermanentJobError, type JobContext, type JobHandler } from "../jobs/types";
 import { getSetting } from "../settings/registry";
 import { audioMd5, detectDualMono, measureLoudness } from "./analysis";
-import { getAsset, setAssetProbe, setAssetStatus } from "./assets";
+import { assetIngestOptions, getAsset, setAssetProbe, setAssetStatus } from "./assets";
 import { encodeFlac, encodeOpus } from "./encode";
 import { flacSeekIndex } from "./flacIndex";
 import { readOggOpus } from "./ogg";
@@ -29,6 +32,17 @@ export interface AudioIngestResult {
   dualMono: boolean;
   originalKept: boolean;
   variants: string[];
+  /** Converted to lossy on upload (SPEC §28.2): the original is gone, the versions archived. */
+  lossyOnly?: boolean;
+}
+
+/**
+ * The `opus` bitrate of a preset (SPEC §28.2); `standard` is the instance's
+ * `audio.opusBitrates` setting.
+ */
+export function opusKbpsFor(db: Db, quality: AudioQuality, mono: boolean): number {
+  const b = getSetting(db, "audio.opusBitrates");
+  return opusKbps(quality, mono, { stereo: b.trackStereo, mono: b.trackMono });
 }
 
 /** Expected sample count after resampling to 48 kHz (SPEC §5.3 step 5). */
@@ -62,7 +76,11 @@ export const audioIngestHandler: JobHandler<
   async run(ctx, payload) {
     const { db, tools } = ctx;
     const assetId = payload.assetId;
-    if (!getAsset(db, assetId)) throw new PermanentJobError(`Asset ${assetId} not found`);
+    const asset = getAsset(db, assetId);
+    if (!asset) throw new PermanentJobError(`Asset ${assetId} not found`);
+    // Lossy on upload and the Opus preset (SPEC §28.2).
+    const options = assetIngestOptions(asset);
+    const lossyOnly = options.lossyOnly;
     // Never recreate full-quality files that were removed on purpose (SPEC §26.4); the asset
     // keeps its Opus and peaks and stays ready.
     if (assetLosslessRemoved(db, assetId)) return { skipped: "full quality was removed" };
@@ -94,8 +112,8 @@ export const audioIngestHandler: JobHandler<
     // Best full-quality source for the derived variants: the FLAC if we made one.
     let bestSource = src;
 
-    // 4: lossless storage variant.
-    if (probe.lossless) {
+    // 4: lossless storage variant (none when converting to lossy on upload).
+    if (probe.lossless && !lossyOnly) {
       if (/wav/.test(probe.container) && /^pcm_/.test(probe.codec)) {
         try {
           const meta = await buildWavMeta(src);
@@ -151,12 +169,12 @@ export const audioIngestHandler: JobHandler<
     const bitrates = getSetting(db, "audio.opusBitrates");
     const expected = durationSamples48k(probe.durationSamples, probe.sampleRate);
     const mono = playbackChannels === 1;
-    // One bitrate profile for every track (SPEC §5.3 step 5, M21).
-    const high = mono ? bitrates.trackMono : bitrates.trackStereo;
+    // One bitrate per preset for every track (SPEC §5.3 step 5, §28.2); opus_low is fixed.
+    const high = opusKbpsFor(db, options.quality, mono);
     const low = mono ? bitrates.lowMono : bitrates.lowStereo;
-    for (const [variant, kbps, share] of [
-      ["opus", high, 0.6],
-      ["opus_low", low, 0.75],
+    for (const [variant, kbps, share, quality] of [
+      ["opus", high, 0.6, options.quality],
+      ["opus_low", low, 0.75, null],
     ] as const) {
       const out = path.join(ctx.tmpDir, `${variant}.opus`);
       await encodeOpus(
@@ -179,6 +197,7 @@ export const audioIngestHandler: JobHandler<
         preSkip: info.preSkip,
         durationSamples48k: expected,
         decodedSamples: info.totalSamples,
+        ...(quality && { quality }),
       });
       const indexFile = await writeJson(ctx, `seek-${variant}.json`, info.seekIndex);
       await ctx.output(ref(`seekindex_${variant}`), indexFile, {
@@ -211,6 +230,16 @@ export const audioIngestHandler: JobHandler<
     const loudness = await measureLoudness(src, tools, signal);
     setAssetProbe(db, assetId, { ...probe, loudness });
 
+    if (lossyOnly) {
+      finishLossyOnly(ctx, payload, {
+        uploadedBy: asset.uploadedBy,
+        quality: options.quality,
+        kbps: high,
+      });
+      ctx.progress(1, "ready");
+      return { lossless: probe.lossless, dualMono, originalKept: false, variants, lossyOnly };
+    }
+
     // 10: done. The original's blob stays until GC (24 h); the verified FLAC reconstructs it exactly.
     if (!originalKept) removeVariant(db, assetId, "original");
     setAssetStatus(db, assetId, "ready");
@@ -218,3 +247,58 @@ export const audioIngestHandler: JobHandler<
     return { lossless: probe.lossless, dualMono, originalKept, variants };
   },
 };
+
+/**
+ * Lossy on upload (SPEC §28.2): in one transaction the original goes (usage drops; the blob is a
+ * GC candidate), every version of the asset is archived by the uploader with reason "upload",
+ * `version.lossless_removed` is logged per version, and the asset is ready. Open pages refresh
+ * through `version.lossless_removed` per song.
+ */
+function finishLossyOnly(
+  ctx: JobContext,
+  payload: AudioIngestPayload,
+  info: { uploadedBy: string | null; quality: AudioQuality; kbps: number },
+): void {
+  const { db } = ctx;
+  const now = Date.now();
+  const archived = db.transaction(() => {
+    removeVariant(db, payload.assetId, "original", now);
+    const rows = archiveVersionsOfAssets(db, [payload.assetId], info.uploadedBy, "upload", now);
+    for (const v of rows) {
+      recordEvent(db, {
+        actorType: "worker",
+        actorUserId: info.uploadedBy,
+        action: "version.lossless_removed",
+        projectId: v.projectId,
+        songId: v.songId,
+        targetType: "trackVersion",
+        targetId: v.versionId,
+        details: {
+          trackId: v.trackId,
+          number: v.number,
+          assetId: payload.assetId,
+          onUpload: true,
+          quality: info.quality,
+          kbps: info.kbps,
+        },
+        ts: now,
+      });
+    }
+    setAssetStatus(db, payload.assetId, "ready");
+    return rows;
+  });
+  const bySong = new Map<string, { projectId: string; versionIds: string[] }>();
+  for (const v of archived) {
+    const e = bySong.get(v.songId) ?? { projectId: v.projectId, versionIds: [] };
+    e.versionIds.push(v.versionId);
+    bySong.set(v.songId, e);
+  }
+  for (const [songId, e] of bySong) {
+    ctx.emit({
+      type: "version.lossless_removed",
+      projectId: e.projectId,
+      songId,
+      data: { versionIds: e.versionIds },
+    });
+  }
+}

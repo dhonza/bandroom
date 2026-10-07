@@ -1,4 +1,5 @@
 import {
+  type ArchivedReason,
   LOSSLESS_PREVIEW_LIST_MAX,
   LOSSLESS_VARIANTS,
   songLossyOf,
@@ -218,12 +219,31 @@ export function applyLosslessRemoval(
   plan: LosslessPlan,
   userId: string,
   now: number = Date.now(),
+  reason: ArchivedReason = "removed",
 ): ArchivedVersion[] {
   for (const assetId of plan.assetIds) {
     for (const variant of REMOVED) removeVariant(db, assetId, variant, now);
   }
-  if (plan.assetIds.length === 0) return [];
   const selected = new Set(plan.targets.map((t) => t.version.id));
+  return archiveVersionsOfAssets(db, plan.assetIds, userId, reason, now).map((v) => ({
+    ...v,
+    copy: !selected.has(v.versionId),
+  }));
+}
+
+/**
+ * Marks every not yet archived version using the assets as archived (SPEC §26.4, §28.2):
+ * when, by whom and why. `copy` is false here; callers that know the selection set it. Call
+ * inside a transaction.
+ */
+export function archiveVersionsOfAssets(
+  db: Db,
+  assetIds: readonly string[],
+  by: string | null,
+  reason: ArchivedReason,
+  now: number = Date.now(),
+): ArchivedVersion[] {
+  if (assetIds.length === 0) return [];
   const rows = db
     .select({
       id: trackVersions.id,
@@ -236,12 +256,12 @@ export function applyLosslessRemoval(
     .from(trackVersions)
     .innerJoin(tracks, eq(tracks.id, trackVersions.trackId))
     .innerJoin(songs, eq(songs.id, tracks.songId))
-    .where(inArray(trackVersions.assetId, plan.assetIds))
+    .where(inArray(trackVersions.assetId, [...assetIds]))
     .all()
     .filter((r) => r.archivedAt === null);
   if (rows.length === 0) return [];
   db.update(trackVersions)
-    .set({ archivedAt: now, archivedBy: userId })
+    .set({ archivedAt: now, archivedBy: by, archivedReason: reason })
     .where(
       inArray(
         trackVersions.id,
@@ -255,7 +275,7 @@ export function applyLosslessRemoval(
     songId: r.songId,
     projectId: r.projectId,
     number: r.number,
-    copy: !selected.has(r.id),
+    copy: false,
   }));
 }
 

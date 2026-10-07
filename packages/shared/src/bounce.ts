@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { dbToGain } from "./audio/pan";
+import { UploadOptionsSchema } from "./audioQuality";
 import { SongTitleSchema } from "./content";
 import { dimmedTrackIds, MixerStateSchema, type MixerState, type MixerTrackState } from "./mixer";
 
@@ -33,6 +34,8 @@ export const BounceRequestSchema = z
     copyMarkers: z.boolean().default(true),
     /** Render the click track (needs a tempo map). */
     includeClick: z.boolean().default(false),
+    /** Lossy only and the Opus preset for the rendered file (SPEC §28.2); absent = defaults. */
+    options: UploadOptionsSchema.optional(),
   })
   .refine((r) => Object.keys(r.versions).length + (r.includeClick ? 1 : 0) <= BOUNCE_MAX_TRACKS, {
     message: `At most ${BOUNCE_MAX_TRACKS} inputs, the click included`,
