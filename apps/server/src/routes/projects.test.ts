@@ -159,8 +159,13 @@ describe("songs", () => {
     const c = await newSong(admin, p.id, "Closer");
     expect((await songsOf(admin, p.id)).map((s) => s.title)).toEqual(["Intro", "Ballad", "Closer"]);
 
+    const frames: string[] = [];
+    const off = t.hub.subscribe({ canSee: () => true, send: (f) => frames.push(f) }, null);
     await call(t, reorderSongs, { params: { id: p.id }, body: { songIds: [c.id, a.id] } }, admin);
     expect((await songsOf(admin, p.id)).map((s) => s.title)).toEqual(["Closer", "Intro", "Ballad"]);
+    // Other open project pages follow live.
+    expect(frames.some((f) => f.includes('"type":"project.updated"'))).toBe(true);
+    off();
 
     const upd = await call(
       t,

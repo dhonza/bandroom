@@ -182,6 +182,12 @@ export function registerProjectRoutes(app: FastifyInstance, ctx: AppContext): vo
       targetType: "project",
       targetId: access.project.id,
     });
+    // Other open project pages follow the new order (like track reorders, SPEC §28.5).
+    ctx.hub.publish({
+      type: "project.updated",
+      projectId: access.project.id,
+      data: { projectId: access.project.id },
+    });
     return { ok: true as const };
   });
 
