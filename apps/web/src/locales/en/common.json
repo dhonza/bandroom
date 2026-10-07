@@ -518,6 +518,8 @@
     "create": "New song",
     "empty": "No songs yet.",
     "dragHandle": "Move {{title}}",
+    "playSong": "Play {{title}}",
+    "pauseSong": "Pause {{title}}",
     "edit": "Edit song",
     "delete": "Delete song",
     "deleteExplain": "The song goes to the trash and disappears for everyone.",

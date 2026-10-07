@@ -530,6 +530,8 @@
     "create": "Nová píseň",
     "empty": "Zatím žádné písně.",
     "dragHandle": "Přesunout {{title}}",
+    "playSong": "Přehrát {{title}}",
+    "pauseSong": "Pozastavit {{title}}",
     "edit": "Upravit píseň",
     "delete": "Smazat píseň",
     "deleteExplain": "Píseň se přesune do koše a všem zmizí.",

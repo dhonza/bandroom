@@ -56,12 +56,14 @@ import {
   IconStack2,
 } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { api } from "../../api/client";
 import { useApiError } from "../../api/useApiError";
-import { projectKeys, useProjectSongs } from "../library/queries";
+import { projectKeys, queueKey, useProjectSongs } from "../library/queries";
+import { useProjectPlay } from "./PlayAllButton";
+import { SongPlayButton } from "./SongPlayButton";
 import { CreateSongModal } from "./CreateSongModal";
 import { FolderDrop } from "./FolderDrop";
 import { offlineItemFor, useOffline } from "../../offline/controller";
@@ -100,6 +102,9 @@ export function SongsList({ project }: { project: Project }) {
   const apiError = useApiError();
   const qc = useQueryClient();
   const songs = useProjectSongs(project.id);
+  // The row play buttons start the engine queue (SPEC §6.10); readiness comes from the queue.
+  const { queue, play } = useProjectPlay(project);
+  useRefreshQueue(project.id, songs.dataUpdatedAt);
   const [createOpen, create] = useDisclosure(false);
   const caps = new Set(project.access.capabilities);
   const canReorder = caps.has("edit.any");
@@ -240,6 +245,8 @@ export function SongsList({ project }: { project: Project }) {
                   onToggle={() => {
                     selection.toggle(s.id);
                   }}
+                  ready={queue.data?.some((e) => e.songId === s.id && e.ready) ?? false}
+                  onPlay={play}
                 />
               ))}
             </Stack>
@@ -366,6 +373,8 @@ function SongRow({
   selected,
   showCheckbox,
   onToggle,
+  ready,
+  onPlay,
 }: {
   song: SongSummary;
   index: number;
@@ -375,6 +384,9 @@ function SongRow({
   selected: boolean;
   showCheckbox: boolean;
   onToggle: () => void;
+  /** Has audio to play (the queue's `ready`). */
+  ready: boolean;
+  onPlay: (songId: string) => void;
 }) {
   const { t } = useTranslation();
   // Long-press on touch starts selection with this song (SPEC §26.1).
@@ -433,11 +445,15 @@ function SongRow({
             <IconGripVertical size={18} />
           </ActionIcon>
         )}
+        {/* Selecting: a tap selects, so the row has no play button then (SPEC §26.1). */}
+        {!selecting && (
+          <SongPlayButton songId={song.id} title={song.title} ready={ready} onPlay={onPlay} />
+        )}
         <UnstyledButton
           component={Link}
           to={`/songs/${song.id}`}
           p="sm"
-          pl={draggable || showCheckbox ? 0 : "sm"}
+          pl={0}
           style={{ flex: 1, minWidth: 0, WebkitTouchCallout: "none" }}
           {...longPress}
           onClick={(e) => {
@@ -482,4 +498,21 @@ function SongRow({
       </Group>
     </Paper>
   );
+}
+
+/**
+ * The queue's readiness follows the song list: when the list refreshes (a song finished
+ * processing, polled or pushed), the queue items are fetched again.
+ */
+function useRefreshQueue(projectId: string, songsUpdatedAt: number) {
+  const qc = useQueryClient();
+  const first = useRef(true);
+  useEffect(() => {
+    if (songsUpdatedAt === 0) return;
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    void qc.invalidateQueries({ queryKey: queueKey(projectId), exact: true });
+  }, [qc, projectId, songsUpdatedAt]);
 }
