@@ -612,26 +612,9 @@
     "pause": "Pause",
     "next": "Next song",
     "stop": "Stop and close player",
-    "autoMix": "automatic mix",
-    "preparing": "Mix is being prepared…",
-    "noMix": "No mix yet",
-    "rehearseHint": "Open the Mixer to mute tracks and use click and count-in.",
     "playAll": "Play all",
     "nothingToPlay": "No song in this project has audio ready to play yet.",
     "openSong": "Open {{title}}",
-    "repeat": {
-      "off": "Repeat off",
-      "all": "Repeat all songs",
-      "one": "Repeat this song"
-    },
-    "quality": {
-      "title": "Stream quality",
-      "label": "Quality: {{quality}}",
-      "high": "High",
-      "low": "Low",
-      "highLong": "High (best sound)",
-      "lowLong": "Low (saves mobile data)"
-    },
     "songDeleted": "The song was deleted, so playback stopped.",
     "projectDeleted": "The project was deleted, so playback stopped."
   },
@@ -670,8 +653,7 @@
     "struggling": "Audio is struggling",
     "strugglingTip": "Try a lower quality or mute tracks you don't need.",
     "interrupted": "Playback was interrupted. Tap play to continue.",
-    "lockHint": "The mixer pauses when the screen locks. To keep listening with the screen locked, play the mix.",
-    "lockHintSwitch": "Continue with the mix",
+    "lockHint": "Playback stops when the screen locks or you switch apps. To keep the screen on while playing, use “Keep screen on” in the ⋯ menu.",
     "noTracks": "No tracks are ready to play yet.",
     "startFailed": "Audio could not be started on this device.",
     "trackError": "{{track}} could not be played.",
@@ -736,8 +718,7 @@
     "defaultsSaved": "Default mix saved."
   },
   "mixer": {
-    "playerTitle": "Player",
-    "defaultMixPreparing": "Default mix being prepared. Meanwhile the tracks play here at their default levels."
+    "playerTitle": "Player"
   },
   "markers": {
     "sections": "Sections",
@@ -943,7 +924,6 @@
     "bars_one": "{{count}} bar",
     "bars_other": "{{count}} bars",
     "everyRepeat": "Count-in before every repeat",
-    "listenHint": "Click and count-in: open the Mixer",
     "countingIn": "Count-in {{beat}} of {{clicks}}"
   },
   "comments": {
@@ -1263,7 +1243,7 @@
       "downloads": "Downloads",
       "downloadTrack": "Download {{name}}",
       "playSong": "Play {{title}}",
-      "mixPreparing": "There is nothing to listen to yet: the mix is still being prepared. Try again in a few minutes."
+      "nothingYet": "There is nothing to listen to yet."
     },
     "visitor": {
       "name": "Your name",

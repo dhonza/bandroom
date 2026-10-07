@@ -96,10 +96,14 @@ test("Public links: a password link plays and takes anonymous comments until it 
   await visitor.getByTestId("link-unlock").click();
   await expect(visitor.getByTestId("link-song-title")).toHaveText("Share me");
 
-  // Every link gets the player with the Mixer button (SPEC §27); a one-track song opens with the
-  // Mixer closed, and the engine plays it.
-  await expect(visitor.getByTestId("default-mix-panel")).toBeVisible({ timeout: 30_000 });
+  // Every link gets the Player with the Mixer button in the header (SPEC §27); the song opens
+  // with the Mixer closed, and the engine plays it.
+  await expect(visitor.getByTestId("rehearse-panel")).toBeVisible({ timeout: 30_000 });
   await expect(visitor.getByTestId("mixer-toggle")).toHaveAttribute("aria-pressed", "false");
+  await expect(visitor.getByTestId("rehearse-panel").getByTestId("timeline")).toHaveAttribute(
+    "data-lanes",
+    "0",
+  );
   await expect
     .poll(async () => (await debug(visitor))?.status, { timeout: 60_000 })
     .toBe("stopped");
@@ -110,9 +114,15 @@ test("Public links: a password link plays and takes anonymous comments until it 
   const p1 = (await debug(visitor))?.position ?? 0;
   await expect.poll(async () => (await debug(visitor))?.position ?? 0).toBeGreaterThan(p1 + 12_000);
   await visitor.getByTestId("rehearse-play").click();
-  // Band-only tools are not there.
+  // The visitor opens the Mixer: the track lanes, but no band-only tools.
+  await visitor.getByTestId("mixer-toggle").click();
+  await expect(visitor.getByTestId("mixer-toggle")).toHaveAttribute("aria-pressed", "true");
+  await expect(visitor.getByTestId("track-strip")).toHaveCount(1);
+  await expect(visitor.getByTestId("mixer-reset")).toBeVisible();
   await expect(visitor.getByTestId("mixer-save-defaults")).toHaveCount(0);
   if (phone) await noHorizontalOverflow(visitor);
+  await visitor.getByTestId("mixer-toggle").click();
+  await expect(visitor.getByTestId("track-strip")).toHaveCount(0);
 
   // An anonymous comment at the playhead, under a display name.
   await visitor.getByTestId("comment-at-playhead").click();
@@ -185,8 +195,10 @@ test("Public links: a project link lists the songs without a password", async ({
   await expect(visitor.getByTestId("link-song-title")).toHaveText("Opener");
   // Every link gets the player with the Mixer button (SPEC §27); without comments allowed there
   // are no comment tools.
-  await expect(visitor.getByTestId("default-mix-panel")).toBeVisible({ timeout: 240_000 });
-  await expect(visitor.getByTestId("mixer-toggle")).toBeVisible();
+  await expect(visitor.getByTestId("rehearse-panel").getByTestId("rehearse-play")).toBeVisible({
+    timeout: 240_000,
+  });
+  await expect(visitor.getByTestId("mixer-toggle")).toHaveAttribute("aria-pressed", "false");
   await expect(visitor.getByTestId("comment-toolbar")).toHaveCount(0);
   if (isMobile(testInfo)) await noHorizontalOverflow(visitor);
 

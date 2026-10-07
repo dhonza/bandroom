@@ -18,12 +18,12 @@ import {
   IconPlayerTrackNextFilled,
   IconPlayerTrackPrevFilled,
 } from "@tabler/icons-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
 import { setPanelOpen, useCommentsUi } from "../comments/store";
 import { activePlayer, goNext, goPrev, playPause } from "../markers/store";
-import { useListen } from "../player/listenStore";
+import { useRehearse } from "../rehearse/controller";
 import { DESKTOP_QUERY } from "../shell/mediaQueries";
 import { DocumentList, DocumentToolbar } from "./DocumentList";
 import { DocumentPane } from "./DocumentPane";
@@ -67,34 +67,10 @@ export function DocsButton({ song }: { song: Song }) {
   );
 }
 
-const TRANSPORT = '[data-testid="rehearse-transport"]';
-
-/** Height of the phone Rehearse transport (0 in Listen mode), so the sheet ends above it. */
-function useTransportHeight(active: boolean): number {
-  const [h, setH] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    const measure = () => {
-      setH(document.querySelector<HTMLElement>(TRANSPORT)?.offsetHeight ?? 0);
-    };
-    const ro = new ResizeObserver(measure);
-    const el = document.querySelector<HTMLElement>(TRANSPORT);
-    if (el) ro.observe(el);
-    const timer = setTimeout(measure, 0);
-    window.addEventListener("resize", measure);
-    return () => {
-      clearTimeout(timer);
-      ro.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [active]);
-  return active ? h : 0;
-}
-
 /**
  * Documents next to the player (SPEC §10, §11.3): on desktop a resizable panel beside the page
- * (the page moves aside, so the timeline stays usable), on phones and tablets a sheet that ends
- * above the fixed transport. Comments and documents share the right side: opening one closes
+ * (the page moves aside, so the timeline stays usable), on phones and tablets a sheet with its
+ * own play/pause (it covers the Player's transport). Comments and documents share the right side: opening one closes
  * the other. `?doc=<id>` (notification links) opens a document.
  */
 export function DocsPanel({ song }: { song: Song }) {
@@ -104,7 +80,6 @@ export function DocsPanel({ song }: { song: Song }) {
   const documentId = useDocsUi((s) => s.documentId);
   const width = useDocsUi((s) => s.width);
   const commentsOpen = useCommentsUi((s) => s.panelOpen);
-  const transportH = useTransportHeight(open && !desktop);
   const [params, setParams] = useSearchParams();
   const deepLink = params.get("doc");
 
@@ -145,7 +120,7 @@ export function DocsPanel({ song }: { song: Song }) {
       <Title order={2} size="h4">
         {t("documents.panelTitle")}
       </Title>
-      {!desktop && transportH === 0 && <SheetTransport />}
+      {!desktop && <SheetTransport />}
       <CloseButton
         size={44}
         onClick={closeDocsPanel}
@@ -196,7 +171,7 @@ export function DocsPanel({ song }: { song: Song }) {
         left: 0,
         right: 0,
         top: "calc(var(--app-shell-header-offset, 56px) + 8px)",
-        bottom: `calc(var(--app-shell-footer-offset, 0px) + ${String(transportH)}px)`,
+        bottom: "var(--app-shell-footer-offset, 0px)",
         zIndex: 150,
         display: "flex",
         flexDirection: "column",
@@ -219,12 +194,12 @@ export function DocsPanel({ song }: { song: Song }) {
 }
 
 /**
- * Listen mode has no fixed transport bar: the sheet carries previous / play-pause / next, so
- * the transport stays within thumb reach while reading (SPEC §10, §11.1).
+ * The sheet covers the Player's transport: it carries previous / play-pause / next, so they stay
+ * within thumb reach while reading (SPEC §10, §11.1).
  */
 function SheetTransport() {
   const { t } = useTranslation();
-  const playing = useListen((s) => s.status === "playing");
+  const playing = useRehearse((s) => s.status === "playing" || s.status === "buffering");
   if (!activePlayer()) return null;
   return (
     <Group gap={4} wrap="nowrap" data-testid="docs-sheet-transport">

@@ -6,7 +6,7 @@ import {
   type Track,
   type TrackVersion,
 } from "@bandroom/shared";
-import { Alert, Button, Group, Loader, Stack, Text } from "@mantine/core";
+import { Alert, Group, Loader, Text } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo } from "react";
@@ -18,9 +18,7 @@ import { useOptionalUser } from "../auth/session";
 import { isLinkMode, loadLocalMix } from "../links/linkMode";
 import { Section } from "../components/Section";
 import { songKeys } from "../features/library/queries";
-import { MixerButton } from "../features/song/MixerButton";
-import type { MixerToggle } from "../features/song/useMixerToggle";
-import { COARSE_POINTER_QUERY, PHONE_QUERY, WIDE_QUERY } from "../shell/mediaQueries";
+import { COARSE_POINTER_QUERY, PHONE_QUERY } from "../shell/mediaQueries";
 import { Timeline } from "../timeline/Timeline";
 import { MIN_LANE_H, useLaneHeight } from "../timeline/laneHeight";
 import { usePeaks } from "../timeline/usePeaks";
@@ -59,34 +57,33 @@ import { touchMinLaneHeight } from "./headerTier";
 import { MixerTools } from "./MixerTools";
 import { dimmedTrackIds } from "./model";
 import { TrackStrip } from "./TrackStrip";
-import { PositionText, Transport, TransportState } from "./Transport";
+import { Transport, TransportState } from "./Transport";
 
 const HEADER_W = 320;
 /** Phones: name above M/S (DECISIONS 2026-10-07). */
 const HEADER_W_NARROW = 116;
+/** Default height of the overview strip (SPEC §25.9: the vertical zoom with the Mixer closed). */
+export const OVERVIEW_DEFAULT_H = 80;
 
 /**
- * The song player with the Mixer open (SPEC §6, §11.3; DECISIONS 2026-09-29): the multitrack
- * engine with the personal mixer, version A/B and the transport. `mixer` switches back to the mix.
- * Every screen shows one lane per track with its header; phones get a narrow header (DECISIONS
- * 2026-10-06). With `defaultMix` it is the closed Mixer of a song whose mix is not ready yet
- * (SPEC §25.5): the tracks play with the default mix, shown as one mix lane without controls.
+ * The song Player (SPEC §6, §11.3, §27.4): the engine plays the tracks with the personal mix in
+ * both Mixer states. The transport sits at the top, then the overview (the audible tracks summed;
+ * its height is the vertical zoom with the Mixer closed). `mixerOpen` adds the mixer tools below
+ * the overview and one lane per track with its header (narrow on phones, DECISIONS 2026-10-06);
+ * nothing above them moves and the engine keeps playing.
  */
 export function RehearsePanel({
   song,
   tracks,
-  mixer: toggle,
-  defaultMix = false,
+  mixerOpen,
 }: {
   song: Song;
   tracks: Track[];
-  mixer?: MixerToggle | undefined;
-  defaultMix?: boolean;
+  mixerOpen: boolean;
 }) {
   const { t } = useTranslation();
   const user = useOptionalUser();
   const instrumentTag = user?.instrumentTag ?? "";
-  const wide = useMediaQuery(WIDE_QUERY, false, { getInitialValueInEffect: false });
   const isPhone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   const coarse = useMediaQuery(COARSE_POINTER_QUERY, false, { getInitialValueInEffect: false });
   const mixerQuery = useQuery({
@@ -129,15 +126,8 @@ export function RehearsePanel({
   const ready = !mixerQuery.isPending && versionsReady;
   useEffect(() => {
     if (!ready) return;
-    void openSong(
-      song.id,
-      tracks,
-      saved,
-      listened,
-      instrumentTag,
-      defaultMix ? "default" : "mixer",
-    );
-  }, [ready, song.id, tracks, saved, listened, instrumentTag, defaultMix]);
+    void openSong(song.id, tracks, saved, listened, instrumentTag);
+  }, [ready, song.id, tracks, saved, listened, instrumentTag]);
   useEffect(() => closeSong, [song.id]);
 
   useEffect(
@@ -153,7 +143,7 @@ export function RehearsePanel({
       }),
     [],
   );
-  useRehearseKeys(song, defaultMix);
+  useRehearseKeys(song);
 
   const playing = useRehearse((s) => s.tracks);
   // Only mute/solo matter to the lanes: a fader move must not rebuild them (and redraw the
@@ -163,60 +153,48 @@ export function RehearsePanel({
   const lengthSec = useRehearse((s) => s.lengthSec);
   const lockHint = useRehearse((s) => s.lockHint);
 
-  // The closed Mixer shows only what plays: the mix (DECISIONS 2026-10-07).
-  const summed = defaultMix;
-  // No rendered mix since M21 (SPEC §27): until group C draws the summed overview, the closed
-  // Mixer's one lane shows the first audible track.
-  const audible = playing.find((p) => !dimmedKey.split("\n").includes(p.track.id)) ?? playing[0];
-  const hashes = summed
-    ? [audible?.version.variants.peaks?.hash ?? null]
-    : playing.map((p) => p.version.variants.peaks?.hash ?? null);
+  const hashes = playing.map((p) => p.version.variants.peaks?.hash ?? null);
   const pyramids = usePeaks(hashes);
   const lanes = useMemo(
     () =>
-      summed
-        ? [{ id: "mix", color: song.project.color, offsetSamples: 0, peaks: pyramids[0] ?? null }]
-        : playing.map((p, i) => ({
-            id: p.track.id,
-            color: p.track.color,
-            offsetSamples: p.version.offsetSamples,
-            peaks: pyramids[i] ?? null,
-            dimmed: dimmedKey.split("\n").includes(p.track.id),
-            // The version's gain shows in the waveform; the personal fader does not (§25.6).
-            scale: dbToGain(p.version.gainDb),
-            tint: true,
-          })),
-    [summed, playing, pyramids, dimmedKey, song.project.color],
+      playing.map((p, i) => ({
+        id: p.track.id,
+        color: p.track.color,
+        offsetSamples: p.version.offsetSamples,
+        peaks: pyramids[i] ?? null,
+        dimmed: dimmedKey.split("\n").includes(p.track.id),
+        // The version's gain shows in the waveform; the personal fader does not (§25.6).
+        scale: dbToGain(p.version.gainDb),
+        tint: true,
+      })),
+    [playing, pyramids, dimmedKey],
   );
   const getPosition = useCallback(() => positionSec(), []);
-  // Vertical zoom (SPEC §25.9), per view; these are the defaults.
-  // On touch screens the lanes stay tall enough for 44 px M/S buttons.
-  const minLaneHeight = !summed && coarse ? touchMinLaneHeight(isPhone) : MIN_LANE_H;
-  const [laneHeight, setLaneHeight] = useLaneHeight(
-    summed ? "listen.summed" : "rehearse",
-    summed ? 56 : isPhone ? 66 : 100,
+  // Vertical zoom (SPEC §25.9), per device: the overview strip with the Mixer closed (it keeps
+  // that height when the Mixer opens), the track lanes with it open. On touch screens the lanes
+  // stay tall enough for 44 px M/S buttons.
+  const minLaneHeight = coarse ? touchMinLaneHeight(isPhone) : MIN_LANE_H;
+  const [overviewHeight, setOverviewHeight] = useLaneHeight("listen.summed", OVERVIEW_DEFAULT_H);
+  const [trackLaneHeight, setTrackLaneHeight] = useLaneHeight(
+    "rehearse",
+    isPhone ? 66 : 100,
     minLaneHeight,
   );
-  const timelineMarkers = useTimelineMarkers(song, lengthSec, lanes.length, laneHeight);
-
-  // Mixer off: the mix continues from here (inside the tap, iOS).
-  const canPlayMix = toggle?.mixPlayable === true;
-  const playMix = (play?: boolean) => {
-    toggle?.turnOff(play === undefined ? {} : { play });
-  };
+  const laneHeight = mixerOpen ? trackLaneHeight : overviewHeight;
+  const timelineMarkers = useTimelineMarkers(
+    song,
+    lengthSec,
+    mixerOpen ? lanes.length : 0,
+    trackLaneHeight,
+  );
 
   if (!ready) return <Loader size="sm" />;
 
   const snapshots = mixerQuery.data?.snapshots ?? [];
   const canSetDefaults = song.access.capabilities.includes("edit.any");
-  // Below 900 px the Mixer button sits above the timeline (the transport has no room for it).
-  const buttonRow = !wide;
 
   return (
-    <Section
-      title={t("mixer.playerTitle")}
-      testId={defaultMix ? "default-mix-panel" : "rehearse-panel"}
-    >
+    <Section title={t("mixer.playerTitle")} testId="rehearse-panel">
       {lockHint && (
         <Alert
           color="blue"
@@ -224,55 +202,20 @@ export function RehearsePanel({
           onClose={dismissLockHint}
           data-testid="rehearse-lock-hint"
         >
-          <Stack gap="xs">
-            <Text size="sm">{t("rehearse.lockHint")}</Text>
-            {canPlayMix && (
-              <Group>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    playMix(true);
-                  }}
-                >
-                  {t("rehearse.lockHintSwitch")}
-                </Button>
-              </Group>
-            )}
-          </Stack>
+          <Text size="sm">{t("rehearse.lockHint")}</Text>
         </Alert>
       )}
       {playing.length === 0 ? (
         <Text c="dimmed">{t("rehearse.noTracks")}</Text>
       ) : (
         <>
-          {!defaultMix && (
-            <MixerTools
-              songId={song.id}
-              snapshots={snapshots}
-              canSetDefaults={canSetDefaults}
-              defaultsLocked={song.locked !== null}
-            />
-          )}
+          <Transport phone={isPhone} />
           {isPhone && (
-            <Group justify="space-between" wrap="nowrap" data-testid="rehearse-readout">
-              <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
-                <CountInCountdown />
-                <PositionText size="32px" />
-                <BarBeatText size="lg" c="dimmed" />
-                <SectionReadout />
-              </Group>
+            <Group gap="sm" wrap="wrap" data-testid="rehearse-readout" style={{ rowGap: 0 }}>
+              <CountInCountdown />
+              <BarBeatText size="lg" c="dimmed" />
+              <SectionReadout />
               <TransportState />
-            </Group>
-          )}
-          {buttonRow && toggle && (
-            <Group wrap="nowrap">
-              <MixerButton
-                open={!defaultMix}
-                onClick={() => {
-                  if (defaultMix) toggle.turnOn();
-                  else playMix();
-                }}
-              />
             </Group>
           )}
           {lengthSec > 0 && (
@@ -282,11 +225,21 @@ export function RehearsePanel({
               getPosition={getPosition}
               playing={status === "playing"}
               onSeek={seekSec}
+              hideLanes={!mixerOpen}
+              overviewHeight={overviewHeight}
               laneHeight={laneHeight}
-              onLaneHeight={setLaneHeight}
-              minLaneHeight={minLaneHeight}
+              onLaneHeight={mixerOpen ? setTrackLaneHeight : setOverviewHeight}
+              minLaneHeight={mixerOpen ? minLaneHeight : MIN_LANE_H}
               {...timelineMarkers.props}
-              {...(!defaultMix && {
+              {...(mixerOpen && {
+                belowOverview: (
+                  <MixerTools
+                    songId={song.id}
+                    snapshots={snapshots}
+                    canSetDefaults={canSetDefaults}
+                    defaultsLocked={song.locked !== null}
+                  />
+                ),
                 headerWidth: isPhone ? HEADER_W_NARROW : HEADER_W,
                 renderHeader: (i: number) => {
                   const p = playing[i];
@@ -301,21 +254,6 @@ export function RehearsePanel({
           <SectionChips />
           <MarkerToolbar song={song} />
           <SongComments song={song} />
-          <Transport
-            phone={isPhone}
-            {...(toggle &&
-              !buttonRow && {
-                mixer: (
-                  <MixerButton
-                    open={!defaultMix}
-                    onClick={() => {
-                      if (defaultMix) toggle.turnOn();
-                      else playMix();
-                    }}
-                  />
-                ),
-              })}
-          />
           <TimelineMenu
             song={song}
             menu={timelineMarkers.menu}
@@ -334,7 +272,7 @@ export function RehearsePanel({
  * Keyboard and pedal shortcuts (SPEC §11.4); Rehearse adds `V` (A/B of the selected track, else
  * the latest pair) and `1–9` (select; Alt: mute; Shift: solo).
  */
-function useRehearseKeys(song: Song, defaultMix: boolean) {
+function useRehearseKeys(song: Song) {
   const qc = useQueryClient();
   const onAB = useCallback(() => {
     const s = useRehearse.getState();
@@ -356,11 +294,5 @@ function useRehearseKeys(song: Song, defaultMix: boolean) {
     if (op === "mute") setTrack(p.track.id, { mute: !cur.mute });
     if (op === "solo") setTrack(p.track.id, { solo: !cur.solo });
   }, []);
-  // The default mix has no mixer: no A/B, no track mute/solo (SPEC §25.5).
-  useSongShortcuts(
-    song,
-    defaultMix
-      ? { onCountIn: toggleCountIn, onClick: toggleClick }
-      : { onAB, onTrack, onCountIn: toggleCountIn, onClick: toggleClick },
-  );
+  useSongShortcuts(song, { onAB, onTrack, onCountIn: toggleCountIn, onClick: toggleClick });
 }

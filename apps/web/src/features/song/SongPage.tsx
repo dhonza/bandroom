@@ -34,13 +34,11 @@ import { zodValidator } from "../../api/validate";
 import { ConfirmDeleteModal } from "../../components/ConfirmDeleteModal";
 import { GrantsEditor } from "../../components/GrantsEditor";
 import { Section } from "../../components/Section";
-import { initialMixerOpen, loadMixerOpen } from "./mixerMode";
-import { useMixerToggle } from "./useMixerToggle";
-import { useDefaultMix } from "./defaultMix";
+import { useMixerToggle, type MixerToggle } from "./useMixerToggle";
+import { MixerButton } from "./MixerButton";
 import { RehearsePanel } from "../../rehearse/RehearsePanel";
 import { WhatsNewBanner } from "../../markers/WhatsNewBanner";
 import { SongTempoSummary } from "../../tempo/TempoDialog";
-import { ListenPanel } from "./ListenPanel";
 import { TracksSection } from "./TracksSection";
 import { NotFoundPage } from "../../pages/NotFoundPage";
 import { songKeys, useInvalidateContent, useSong, useSongTracks } from "../library/queries";
@@ -53,11 +51,13 @@ import { BackLink } from "../../components/BackLink";
 import { dropDeletedFromQueue } from "../../player/dropDeleted";
 import { SongLockBanner, SongLockButton } from "./songLock";
 
-/** Song page (SPEC §11.3): metadata, the player (mix or Mixer), tracks, notes and access. */
+/** Song page (SPEC §11.3): metadata, the Player (Mixer in the header), tracks, notes and access. */
 export function SongPage() {
   const { t } = useTranslation();
   const { songId = "" } = useParams();
   const query = useSong(songId);
+  const tracks = useSongTracks(songId);
+  const mixer = useMixerToggle(true);
   const [editOpen, edit] = useDisclosure(false);
 
   if (query.isPending) {
@@ -78,9 +78,10 @@ export function SongPage() {
   return (
     <Stack gap="lg">
       <BackLink to={`/projects/${song.project.id}`}>{song.project.name}</BackLink>
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <Stack gap={2} style={{ minWidth: 0 }}>
-          <Title order={2} style={{ overflowWrap: "anywhere" }}>
+      {/* Long titles wrap by words; on narrow screens the buttons wrap below (SPEC §11.3). */}
+      <Group justify="space-between" align="flex-start" wrap="wrap" data-testid="song-header">
+        <Stack gap={2} style={{ flex: "1 1 12rem", minWidth: 0 }}>
+          <Title order={2} style={{ overflowWrap: "break-word" }} data-testid="song-title">
             {song.title}
           </Title>
           {(song.subtitle || song.key) && (
@@ -92,7 +93,8 @@ export function SongPage() {
           )}
           <SongTempoSummary songId={song.id} />
         </Stack>
-        <Group gap="xs" wrap="wrap" justify="flex-end" style={{ flex: "none" }}>
+        <Group gap="xs" wrap="wrap" justify="flex-end" style={{ flex: "0 1 auto" }}>
+          <MixerButton mixer={mixer} disabled={tracks.data?.tracks.length === 0} />
           <OfflineButton kind="song" id={song.id} title={song.title} projectId={song.project.id} />
           <FollowButton target="song" id={song.id} />
           <SongLockButton song={song} />
@@ -112,7 +114,7 @@ export function SongPage() {
 
       <SongLockBanner song={song} />
       <WhatsNewBanner song={song} />
-      <SongPlayer song={song} />
+      <SongPlayer song={song} mixer={mixer} />
       <TracksSection song={song} />
       <SongDocumentsSection song={song} />
       <DocsPanel song={song} />
@@ -281,24 +283,13 @@ function DeleteSongSection({ song }: { song: Song }) {
 }
 
 /**
- * The song player (SPEC §11.3, DECISIONS 2026-09-29): the mix, or the multitrack engine with the
- * Mixer open. The Mixer choice is remembered per device.
+ * The song Player (SPEC §11.3, §27.4): the engine with the personal mix; the header's Mixer
+ * button shows or hides the mixer tools and the track lanes while the engine plays on.
  */
-function SongPlayer({ song }: { song: Song }) {
+function SongPlayer({ song, mixer }: { song: Song; mixer: MixerToggle }) {
   const tracks = useSongTracks(song.id);
+  if (tracks.isPending) return <Loader size="sm" />;
   const list = tracks.data?.tracks ?? [];
-  const mixer = useMixerToggle(song, {
-    ready: !tracks.isPending,
-    remember: true,
-    decide: (f) => initialMixerOpen({ ...f, stored: loadMixerOpen(), trackCount: list.length }),
-  });
-  const defaultMix = useDefaultMix(song, mixer, list);
-  if (mixer.open === null) return <Loader size="sm" />;
-  // One engine panel for the Mixer and for the default mix (SPEC §25.5), so switching between
-  // them keeps the audio playing.
-  return (mixer.open || defaultMix) && list.length > 0 ? (
-    <RehearsePanel song={song} tracks={list} mixer={mixer} defaultMix={defaultMix} />
-  ) : (
-    <ListenPanel song={song} tracks={list} mixer={list.length > 0 ? mixer : undefined} />
-  );
+  if (list.length === 0) return null;
+  return <RehearsePanel song={song} tracks={list} mixerOpen={mixer.open} />;
 }

@@ -163,23 +163,19 @@ test("Documents: write, edit, PDF pages with pedal keys, images, split view, pro
   await expect(page.getByTestId("track-row").filter({ hasText: "kHz" })).toHaveCount(1, {
     timeout: 180_000,
   });
-  // Listen mode on phones: the sheet carries play/pause (there is no fixed transport bar).
+  // Phones: the sheet covers the Player's transport, so it carries play/pause itself.
   if (phone) await expect(panel.getByTestId("docs-sheet-play")).toBeVisible();
-  // On phones the sheet covers the page: close it, switch mode, reopen from "Docs (N)".
+  // On phones the sheet covers the page: close it, open the Mixer, reopen from "Docs (N)".
   if (phone) await page.getByTestId("docs-close").click();
   await openMixer(page);
   if (phone) {
-    await expect(page.getByTestId("rehearse-transport")).toBeVisible({ timeout: 30_000 });
     await page.getByTestId("open-docs").click();
     await expect(panel).toBeVisible();
   }
   const panelBox = await panel.boundingBox();
   if (!panelBox) throw new Error("no panel");
   if (phone) {
-    const transport = await page.getByTestId("rehearse-transport").boundingBox();
-    if (!transport) throw new Error("no transport");
-    expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(transport.y + 1);
-    await expect(page.getByTestId("rehearse-play")).toBeInViewport();
+    await expect(panel.getByTestId("docs-sheet-play")).toBeInViewport();
     await noHorizontalOverflow(page);
   } else {
     await expect(page.getByTestId("timeline-detail")).toBeVisible({ timeout: 30_000 });

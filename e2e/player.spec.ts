@@ -1,4 +1,4 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { generateFixtures, TONE_FILE } from "@bandroom/fixtures";
 import { isMobile, loginAsNewUser, TAP_NAME, uniqueUsername } from "./helpers";
 
@@ -17,161 +17,41 @@ const engine = (page: Page) =>
       ).__bandroomRehearse?.state() ?? null,
   );
 
-/** The mix player's position readout ("0:02.345"), in seconds. */
-async function mixClock(page: Page): Promise<number> {
-  const text = (await page.getByTestId("listen-position").textContent()) ?? "0:00.000";
-  const [m, s] = text.split(":").map(Number);
-  return (m ?? 0) * 60 + (s ?? 0);
-}
-
-/** A song with one processed track (10 s tone); the closed Mixer plays it through the engine. */
-async function songWithMix(page: Page, testInfo: TestInfo): Promise<void> {
+async function newProject(page: Page, testInfo: TestInfo): Promise<void> {
   await page.goto("library");
   await page.getByTestId("new-project").click();
   await page.getByLabel("Name").fill(`Player ${uniqueUsername(testInfo)}`);
   await page.getByTestId("create-project-submit").click();
   await page.getByTestId("project-settings-tab").waitFor();
+}
+
+async function newSong(page: Page, title: string): Promise<void> {
   await page.getByTestId("new-song").click();
-  await page.getByLabel("Title", { exact: true }).fill("Hand-off");
+  await page.getByLabel("Title", { exact: true }).fill(title);
   await page.getByTestId("create-song-submit").click();
-  await page.getByTestId("song-row").filter({ hasText: "Hand-off" }).getByRole("link").click();
+  await page.getByTestId("song-row").filter({ hasText: title }).getByRole("link").click();
+}
+
+/** A song with one processed track (10 s tone), opened with the Mixer closed. */
+async function songWithTrack(page: Page, testInfo: TestInfo): Promise<void> {
+  await newProject(page, testInfo);
+  await newSong(page, "One player");
   await page.getByTestId("track-dropzone").locator('input[type="file"]').setInputFiles(TONE_FILE());
   // One worker processes every test's uploads on this server, so under full-suite load this can
-  // take minutes. No rendered mix since M21 (SPEC §27): the closed Mixer plays the engine.
-  await expect(page.getByTestId("default-mix-panel").getByTestId("rehearse-play")).toBeEnabled({
+  // take minutes.
+  await expect(page.getByTestId("rehearse-panel").getByTestId("rehearse-play")).toBeEnabled({
     timeout: 420_000,
   });
   await expect(page.getByTestId("mixer-toggle")).toHaveAttribute("aria-pressed", "false");
 }
 
-test("Mixer toggle hands playback over at the same position and is remembered", async ({
-  page,
-  request,
-}, testInfo) => {
-  // M21 group B removed the mix player (<audio>) this hand-off goes to; group C replaces the
-  // test with the one-player checks (PROGRESS, M21).
-  test.fixme(true, "Listen mode removed (SPEC §27); rewritten in M21 group C");
-  test.skip(testInfo.project.name.includes("webkit") || testInfo.project.name.includes("iphone"));
-  test.setTimeout(540_000);
-  await loginAsNewUser(page, request, testInfo, "member");
-  await songWithMix(page, testInfo);
-  const toggle = page.getByTestId("mixer-toggle");
-  const mixOff = async () => {
-    await toggle.click();
-    await expect(page.getByTestId("listen-panel")).toBeVisible();
-  };
-  const mixerOn = async () => {
-    await toggle.click();
-    await expect(page.getByTestId("rehearse-panel")).toBeVisible();
-    await expect(page.getByTestId("track-strip")).toHaveCount(1);
-  };
+async function box(locator: Locator) {
+  const b = await locator.boundingBox();
+  if (!b) throw new Error("not visible");
+  return b;
+}
 
-  // The mix plays from 2 s (a tap on the timeline cues it there).
-  const detail = page.getByTestId("timeline-detail");
-  const box = await detail.boundingBox();
-  if (!box) throw new Error("no timeline");
-  await detail.click({ position: { x: box.width * 0.2, y: box.height / 2 } });
-  await expect.poll(() => mixClock(page)).toBeGreaterThanOrEqual(1);
-  await page.getByTestId("listen-play").click();
-  await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible({
-    timeout: 15_000,
-  });
-  await expect.poll(() => mixClock(page), { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
-
-  // Mixer on while playing: the engine continues from there, playing.
-  let before = await mixClock(page);
-  let t0 = Date.now();
-  await mixerOn();
-  await expect.poll(async () => (await engine(page))?.status, { timeout: 30_000 }).toBe("playing");
-  let at = ((await engine(page))?.position ?? 0) / 48_000;
-  expect(at).toBeGreaterThanOrEqual(before - 1);
-  expect(at).toBeLessThanOrEqual(before + 1 + (Date.now() - t0) / 1000);
-
-  // Mixer off while playing: the mix continues from the engine's position.
-  at = ((await engine(page))?.position ?? 0) / 48_000;
-  t0 = Date.now();
-  await mixOff();
-  await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible({
-    timeout: 15_000,
-  });
-  const after = await mixClock(page);
-  expect(after).toBeGreaterThanOrEqual(at - 1);
-  expect(after).toBeLessThanOrEqual(at + 1 + (Date.now() - t0) / 1000);
-  // The engine's pause is reported back from the worklet asynchronously; a short poll still
-  // catches an engine that keeps playing next to the mix.
-  await expect
-    .poll(async () => (await engine(page))?.status, { timeout: 2_000 })
-    .not.toBe("playing");
-
-  // Paused hand-off stays paused at the same position, both ways.
-  await page.getByRole("button", { name: "Pause", exact: true }).click();
-  await expect(page.getByTestId("listen-play")).toHaveAccessibleName("Play");
-  before = await mixClock(page);
-  await mixerOn();
-  await expect.poll(async () => (await engine(page))?.status, { timeout: 30_000 }).toBe("stopped");
-  at = ((await engine(page))?.position ?? 0) / 48_000;
-  expect(Math.abs(at - before)).toBeLessThan(0.3);
-  await expect(page.getByTestId("rehearse-play")).toHaveAccessibleName("Play");
-  // Negative check: nothing starts playback late. A fixed observation window is inherent here.
-  await page.waitForTimeout(1000);
-  expect((await engine(page))?.status).toBe("stopped");
-
-  // Reload: the open Mixer is remembered on this device.
-  await page.reload();
-  await expect(page.getByTestId("rehearse-panel")).toBeVisible({ timeout: 30_000 });
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  await expect.poll(async () => (await engine(page))?.status, { timeout: 30_000 }).toBe("stopped");
-  // Seek the engine to ~50 % (paused), then close the Mixer: the mix is cued there, paused.
-  const lanes = page.getByTestId("timeline-detail");
-  const lb = await lanes.boundingBox();
-  if (!lb) throw new Error("no timeline");
-  await lanes.click({ position: { x: lb.width * 0.5, y: 10 } });
-  await expect.poll(async () => ((await engine(page))?.position ?? 0) / 48_000).toBeGreaterThan(3);
-  at = ((await engine(page))?.position ?? 0) / 48_000;
-  await mixOff();
-  await expect(page.getByTestId("listen-play")).toHaveAccessibleName("Play");
-  expect(Math.abs((await mixClock(page)) - at)).toBeLessThan(0.1);
-
-  await page.reload();
-  await expect(page.getByTestId("listen-panel")).toBeVisible({ timeout: 30_000 });
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
-});
-
-test("Mixer on phones: track lanes with narrow headers; the toggle returns to the mix", async ({
-  page,
-  request,
-}, testInfo) => {
-  test.skip(!isMobile(testInfo), "phone layout");
-  test.setTimeout(540_000);
-  await loginAsNewUser(page, request, testInfo, "member");
-  await songWithMix(page, testInfo);
-  const toggle = page.getByTestId("mixer-toggle");
-  // The closed Mixer shows one waveform (DECISIONS 2026-10-07).
-  await expect(page.getByTestId("default-mix-panel").getByTestId("timeline")).toHaveAttribute(
-    "data-lanes",
-    "1",
-  );
-
-  // Off → on: a header per track beside its lane, M/S at full touch size.
-  await toggle.click();
-  await expect(page.getByTestId("rehearse-panel")).toBeVisible({ timeout: 30_000 });
-  const strip = page.getByTestId("track-strip");
-  await expect(strip).toHaveCount(1, { timeout: 30_000 });
-  const mute = strip.getByTestId("track-mute");
-  await expect(mute).toBeVisible();
-  expect((await mute.boundingBox())?.height).toBeGreaterThanOrEqual(44);
-  await expect(page.getByTestId("rehearse-transport")).toBeVisible();
-  // The name opens the track's settings with the fader.
-  await strip.getByTestId("track-settings").click(TAP_NAME);
-  await expect(page.getByTestId("track-settings-panel").getByTestId("track-fader")).toBeVisible();
-  await page.keyboard.press("Escape");
-
-  // On → off: the same button closes the Mixer again.
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  await toggle.click();
-  await expect(page.getByTestId("default-mix-panel")).toBeVisible();
-  await expect(page.getByTestId("rehearse-panel")).toHaveCount(0);
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+async function noHorizontalOverflow(page: Page) {
   await expect
     .poll(() =>
       page.evaluate(
@@ -179,4 +59,174 @@ test("Mixer on phones: track lanes with narrow headers; the toggle returns to th
       ),
     )
     .toBeLessThanOrEqual(0);
+}
+
+test("one Player: one waveform with the Mixer closed; toggling moves nothing above the lanes", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(540_000);
+  await loginAsNewUser(page, request, testInfo, "member");
+  await songWithTrack(page, testInfo);
+  const toggle = page.getByTestId("mixer-toggle");
+  const panel = page.getByTestId("rehearse-panel");
+  const timeline = panel.getByTestId("timeline");
+  const overview = panel.getByTestId("timeline-overview");
+  const transport = page.getByTestId("rehearse-transport");
+
+  // Mixer closed: the overview strip is the only waveform (80 px by default), no track lanes.
+  await expect(timeline).toHaveAttribute("data-lanes", "0");
+  await expect(timeline).toHaveAttribute("data-overview-height", "80");
+  await expect(panel.getByTestId("track-strip")).toHaveCount(0);
+  await expect(panel.getByTestId("track-headers")).toHaveCount(0);
+  expect(Math.round((await box(overview)).height)).toBe(80);
+  // The transport sits above the overview, with count-in and click (desktop) or in "⋯" (phones).
+  expect((await box(transport)).y).toBeLessThan((await box(overview)).y);
+  if (!isMobile(testInfo)) await expect(page.getByTestId("click-toggle")).toBeVisible();
+
+  const before = {
+    toggle: await box(toggle),
+    transport: await box(transport),
+    overview: await box(overview),
+  };
+  const same = async () => {
+    const now = {
+      toggle: await box(toggle),
+      transport: await box(transport),
+      overview: await box(overview),
+    };
+    for (const k of ["toggle", "transport", "overview"] as const) {
+      expect(Math.abs(now[k].x - before[k].x), k).toBeLessThanOrEqual(1);
+      expect(Math.abs(now[k].y - before[k].y), k).toBeLessThanOrEqual(1);
+      expect(Math.abs(now[k].width - before[k].width), k).toBeLessThanOrEqual(1);
+      expect(Math.abs(now[k].height - before[k].height), k).toBeLessThanOrEqual(1);
+    }
+  };
+
+  // Play, then open the Mixer: the same engine plays on; lanes and headers appear below.
+  await page.getByTestId("rehearse-play").click();
+  await expect.poll(async () => (await engine(page))?.status, { timeout: 30_000 }).toBe("playing");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(panel.getByTestId("track-strip")).toHaveCount(1);
+  await expect(timeline).toHaveAttribute("data-lanes", "1");
+  await expect(timeline).toHaveAttribute("data-overview-height", "80");
+  expect((await engine(page))?.status).toBe("playing");
+  await same();
+
+  // Close it again: still playing, still in place.
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(panel.getByTestId("track-strip")).toHaveCount(0);
+  expect((await engine(page))?.status).toBe("playing");
+  await same();
+  await page.getByTestId("rehearse-play").click();
+  await expect.poll(async () => (await engine(page))?.status).toBe("stopped");
+  await noHorizontalOverflow(page);
+
+  // The vertical zoom sets the overview's height and keeps it when the Mixer opens.
+  await panel.getByTestId("lanes-taller").click();
+  await expect(timeline).toHaveAttribute("data-overview-height", "100");
+  await toggle.click();
+  await expect(timeline).toHaveAttribute("data-overview-height", "100");
+
+  // Reload: the open Mixer is remembered on this device.
+  await page.reload();
+  await expect(panel.getByTestId("track-strip")).toHaveCount(1, { timeout: 30_000 });
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await toggle.click();
+  await page.reload();
+  await expect(panel.getByTestId("rehearse-play")).toBeEnabled({ timeout: 30_000 });
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(timeline).toHaveAttribute("data-lanes", "0");
+});
+
+test("Mixer on phones: track lanes with narrow headers; the transport stays sticky on top", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.skip(!isMobile(testInfo), "phone layout");
+  test.setTimeout(540_000);
+  await loginAsNewUser(page, request, testInfo, "member");
+  await songWithTrack(page, testInfo);
+  const toggle = page.getByTestId("mixer-toggle");
+
+  // Off → on: a header per track beside its lane, M/S at full touch size.
+  await toggle.click();
+  const strip = page.getByTestId("track-strip");
+  await expect(strip).toHaveCount(1, { timeout: 30_000 });
+  const mute = strip.getByTestId("track-mute");
+  await expect(mute).toBeVisible();
+  expect((await mute.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  // The name opens the track's settings with the fader.
+  await strip.getByTestId("track-settings").click(TAP_NAME);
+  await expect(page.getByTestId("track-settings-panel").getByTestId("track-fader")).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // Scrolled down within the Player, the transport sticks under the app header.
+  const header = await box(page.getByTestId("app-header"));
+  const headerBottom = Math.round(header.y + header.height);
+  const top = (await box(page.getByTestId("rehearse-transport"))).y;
+  await page.evaluate(
+    (by) => {
+      window.scrollBy(0, by);
+    },
+    top - headerBottom + 120,
+  );
+  await expect
+    .poll(async () => Math.round((await box(page.getByTestId("rehearse-transport"))).y))
+    .toBe(headerBottom);
+  await expect(page.getByTestId("rehearse-play")).toBeInViewport();
+
+  // On → off: the same button closes the Mixer again.
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+  });
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByTestId("track-strip")).toHaveCount(0);
+  await noHorizontalOverflow(page);
+});
+
+test("a long song title wraps by words next to the header buttons (portrait and landscape)", async ({
+  page,
+  request,
+}, testInfo) => {
+  await loginAsNewUser(page, request, testInfo, "member");
+  await newProject(page, testInfo);
+  const title = "The Doors - LA Woman";
+  await newSong(page, title);
+  const heading = page.getByTestId("song-title");
+  await expect(heading).toHaveText(title);
+  await expect(page.getByTestId("mixer-toggle")).toBeVisible();
+
+  for (const size of [
+    { width: 360, height: 740 },
+    { width: 740, height: 360 },
+    { width: 852, height: 393 },
+  ]) {
+    await page.setViewportSize(size);
+    await noHorizontalOverflow(page);
+    // Every word stays whole: the title is at least as wide as its longest word and takes at
+    // most two lines (it broke into one character per line before).
+    const lines = await heading.evaluate((el) => {
+      const lh = parseFloat(getComputedStyle(el).lineHeight);
+      return Math.round(el.getBoundingClientRect().height / lh);
+    });
+    expect(lines, `${String(size.width)}×${String(size.height)}`).toBeLessThanOrEqual(2);
+    const word = await heading.evaluate((el) => {
+      const range = document.createRange();
+      const text = el.firstChild;
+      if (!text) return 0;
+      const at = el.textContent.indexOf("Woman");
+      range.setStart(text, at);
+      range.setEnd(text, at + "Woman".length);
+      return range.getClientRects().length;
+    });
+    expect(word).toBe(1);
+    // The header buttons stay within the screen (they wrap below the title when needed).
+    const buttons = await box(page.getByTestId("mixer-toggle"));
+    expect(buttons.x + buttons.width).toBeLessThanOrEqual(size.width);
+  }
 });

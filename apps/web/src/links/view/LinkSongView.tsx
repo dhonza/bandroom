@@ -6,9 +6,8 @@ import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../../api/client";
 import { Section } from "../../components/Section";
 import { songKeys, useSong, useSongTracks } from "../../features/library/queries";
-import { ListenPanel } from "../../features/song/ListenPanel";
+import { MixerButton } from "../../features/song/MixerButton";
 import { useMixerToggle } from "../../features/song/useMixerToggle";
-import { useDefaultMix } from "../../features/song/defaultMix";
 import { downloadUrl, formatDuration } from "../../lib/media";
 import { RehearsePanel } from "../../rehearse/RehearsePanel";
 import { SongTempoSummary } from "../../tempo/TempoDialog";
@@ -25,6 +24,8 @@ export function LinkSongView({ songId, token }: { songId: string; token: string 
   const view = useLinkMode((s) => s.view);
   const q = useSong(songId);
   const tracksQ = useSongTracks(songId);
+  // Every visitor may open the Mixer (SPEC §27); it starts closed and is not remembered.
+  const mixer = useMixerToggle(false);
 
   if (q.isPending || tracksQ.isPending || !view) {
     return (
@@ -46,71 +47,38 @@ export function LinkSongView({ songId, token }: { songId: string; token: string 
   return (
     <Stack gap="lg" data-testid="link-song">
       {view.songId === null && <BackLink to={`/l/${token}`}>{view.project.name}</BackLink>}
-      <Stack gap={2}>
-        <Title order={2} style={{ overflowWrap: "anywhere" }} data-testid="link-song-title">
-          {song.title}
-        </Title>
-        {(song.subtitle || song.key) && (
-          <Text c="dimmed">
-            {[song.subtitle, song.key && t("songs.keyLabel", { key: song.key })]
-              .filter(Boolean)
-              .join(" · ")}
-          </Text>
-        )}
-        <SongTempoSummary songId={song.id} />
-      </Stack>
-      <LinkPlayer
-        key={song.id}
-        song={song}
-        tracks={tracks}
-        // Several tracks start with the Mixer open, as the former all-tracks links did; group C
-        // makes the closed Mixer the start state everywhere (SPEC §27).
-        initial={tracks.length > 1 ? "rehearse" : "listen"}
-        canSwitch={tracks.length > 0}
-      />
+      {/* Long titles wrap by words; on narrow screens the button wraps below (SPEC §11.3). */}
+      <Group justify="space-between" align="flex-start" wrap="wrap" data-testid="song-header">
+        <Stack gap={2} style={{ flex: "1 1 12rem", minWidth: 0 }}>
+          <Title order={2} style={{ overflowWrap: "break-word" }} data-testid="link-song-title">
+            {song.title}
+          </Title>
+          {(song.subtitle || song.key) && (
+            <Text c="dimmed">
+              {[song.subtitle, song.key && t("songs.keyLabel", { key: song.key })]
+                .filter(Boolean)
+                .join(" · ")}
+            </Text>
+          )}
+          <SongTempoSummary songId={song.id} />
+        </Stack>
+        <Group gap="xs" wrap="wrap" justify="flex-end" style={{ flex: "0 1 auto" }}>
+          <MixerButton mixer={mixer} disabled={tracks.length === 0} />
+        </Group>
+      </Group>
+      {tracks.length > 0 ? (
+        <RehearsePanel key={song.id} song={song} tracks={tracks} mixerOpen={mixer.open} />
+      ) : (
+        // Nothing to hear yet (no tracks).
+        <Alert color="gray" data-testid="link-mix-preparing">
+          {t("links.view.nothingYet")}
+        </Alert>
+      )}
       {song.access.capabilities.includes("download") && tracks.length > 0 && (
         <LinkDownloads song={song} tracks={tracks} allVersions={view.versions === "all"} />
       )}
     </Stack>
   );
-}
-
-/**
- * The song page's player for link visitors, with the Mixer button for everyone (SPEC §27); the
- * initial state is not stored for visitors.
- */
-function LinkPlayer({
-  song,
-  tracks,
-  initial,
-  canSwitch,
-}: {
-  song: Song;
-  tracks: Track[];
-  initial: "listen" | "rehearse";
-  canSwitch: boolean;
-}) {
-  const { t } = useTranslation();
-  const mixer = useMixerToggle(song, {
-    ready: true,
-    remember: false,
-    decide: () => initial === "rehearse",
-  });
-  const defaultMix = useDefaultMix(song, mixer, tracks);
-  if (mixer.open === null) return <Loader size="sm" />;
-  const toggle = canSwitch ? mixer : undefined;
-  if ((mixer.open || defaultMix) && tracks.length > 0) {
-    return <RehearsePanel song={song} tracks={tracks} mixer={toggle} defaultMix={defaultMix} />;
-  }
-  // Nothing to hear yet (no tracks).
-  if (tracks.length === 0) {
-    return (
-      <Alert color="gray" data-testid="link-mix-preparing">
-        {t("links.view.mixPreparing")}
-      </Alert>
-    );
-  }
-  return <ListenPanel song={song} tracks={tracks} mixer={toggle} />;
 }
 
 /** Downloads allowed by the link and the download policy (SPEC §3.4, §3.5). */

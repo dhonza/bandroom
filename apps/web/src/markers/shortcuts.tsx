@@ -129,7 +129,7 @@ export function useSongShortcuts(song: Song, extras: ShortcutExtras = {}): void 
         case "toggleClick": {
           const fn = r.action === "toggleClick" ? onClick : onCountIn;
           if (!fn) {
-            notifications.show({ id: "click-mode", message: t("click.listenHint") });
+            handled = false;
           } else if (!fn()) {
             notifications.show({ id: "click-mode", message: t("click.noTempo") });
           }

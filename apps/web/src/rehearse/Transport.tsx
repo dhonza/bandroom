@@ -39,20 +39,28 @@ import {
 import { LoopButton, SectionReadout } from "../markers/SongMarkers";
 import { goNext, goPrev, playPause, setHelpOpen, setSnap, useTimelineUi } from "../markers/store";
 import { positionSec, retryAudio, seekSec, setPrefs, skip, useRehearse } from "./controller";
-import { useDocsSheetOpen } from "../documents/store";
 import type { QualityPref } from "./model";
 
 const QUALITIES: QualityPref[] = ["auto", "lossless", "high", "low"];
 const WAKE: ("off" | "playing" | "songOpen")[] = ["off", "playing", "songOpen"];
 
-/** Position text updated every animation frame straight in the DOM (no React re-render). */
-export function PositionText({ size }: { size: "xl" | "lg" | "32px" }) {
+/**
+ * Position text updated every animation frame straight in the DOM (no React re-render).
+ * `withMs: false` shows m:ss (the phone transport row has no room for milliseconds).
+ */
+export function PositionText({
+  size,
+  withMs = true,
+}: {
+  size: "xl" | "lg" | "32px";
+  withMs?: boolean;
+}) {
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     let raf = 0;
     let last = "";
     const tick = () => {
-      const text = formatClock(positionSec());
+      const text = formatClock(positionSec(), withMs);
       if (text !== last && ref.current) {
         ref.current.textContent = text;
         last = text;
@@ -63,7 +71,7 @@ export function PositionText({ size }: { size: "xl" | "lg" | "32px" }) {
     return () => {
       cancelAnimationFrame(raf);
     };
-  }, []);
+  }, [withMs]);
   return (
     <Text
       component="span"
@@ -73,16 +81,11 @@ export function PositionText({ size }: { size: "xl" | "lg" | "32px" }) {
       className="tabular-nums"
       data-testid="rehearse-position"
     >
-      {formatClock(0)}
+      {formatClock(0, withMs)}
     </Text>
   );
 }
 
-/**
- * Rehearse transport (SPEC §11.1, §11.3): start, −5 s, play/pause, +5 s, big position readout,
- * buffering/struggling/interrupted states and the "⋯" options (quality, keep screen on).
- * On phones it is a fixed bar above the tab bar, reachable one-handed.
- */
 /** Loading/struggling badges (shown next to the readout). */
 export function TransportState() {
   const { t } = useTranslation();
@@ -112,7 +115,14 @@ export function TransportState() {
   );
 }
 
-export function Transport({ phone, mixer }: { phone: boolean; mixer?: React.ReactNode }) {
+/**
+ * The Player's transport (SPEC §11.1, §11.3): at the top of the Player in both Mixer states,
+ * sticky under the app header. Desktop and tablet: start, previous, −5 s, play/pause, +5 s, next,
+ * loop, the position readout, count-in, click, click settings and "⋯" (quality, snap, keep screen
+ * on). Phones: loop, previous, play/pause, next, the position and "⋯", which also holds click and
+ * count-in.
+ */
+export function Transport({ phone }: { phone: boolean }) {
   const { t } = useTranslation();
   const status = useRehearse((s) => s.status);
   const quality = useRehearse((s) => s.quality);
@@ -122,8 +132,6 @@ export function Transport({ phone, mixer }: { phone: boolean; mixer?: React.Reac
   );
   const playing = status === "playing" || status === "buffering";
   const duration = useRehearse((s) => s.lengthSec);
-  // While the documents sheet is open (phones, tablets), the transport stays pinned below it.
-  const docsSheet = useDocsSheetOpen();
 
   const snap = useTimelineUi((s) => s.snap);
   const hasTempo = useTempoUi((s) => s.grid !== null);
@@ -156,7 +164,7 @@ export function Transport({ phone, mixer }: { phone: boolean; mixer?: React.Reac
   );
   const prev = icon(t("markers.prev"), goPrev, <IconPlayerTrackPrevFilled size={20} />, "go-prev");
   const next = icon(t("markers.next"), goNext, <IconPlayerTrackNextFilled size={20} />, "go-next");
-  // Phone (SPEC §11.3): ⟲ |◀◀ ▶/❚❚ ▶▶| ⋯ — the rest sits in "⋯" and on the page.
+  // Phone (SPEC §11.3): ⟲ |◀◀ ▶/❚❚ ▶▶| 0:49 ⋯ — the rest sits in "⋯" and on the page.
   const buttons = phone ? (
     <Group gap={4} wrap="nowrap">
       {loop}
@@ -197,7 +205,7 @@ export function Transport({ phone, mixer }: { phone: boolean; mixer?: React.Reac
   const state = <TransportState />;
 
   const options = (
-    <Menu position="top-end" withinPortal closeOnItemClick={false}>
+    <Menu position="bottom-end" withinPortal closeOnItemClick={false}>
       <Menu.Target>
         <ActionIcon size={44} variant="subtle" color="gray" aria-label={t("rehearse.options")}>
           <IconDots size={20} />
@@ -298,27 +306,30 @@ export function Transport({ phone, mixer }: { phone: boolean; mixer?: React.Reac
     </Group>
   );
 
+  // Sticky under the app header (SPEC §11.1): opening the Mixer never moves it.
+  const sticky = {
+    position: "sticky",
+    top: "var(--app-shell-header-offset, 0px)",
+    zIndex: 5,
+    background: "var(--mantine-color-body)",
+    borderBottom: "1px solid var(--mantine-color-default-border)",
+  } as const;
+
   if (phone) {
     return (
       <Box
         data-testid="rehearse-transport"
-        pos={docsSheet ? "fixed" : "sticky"}
-        px="xs"
+        px={4}
         py={6}
-        style={{
-          bottom: "var(--app-shell-footer-offset, 0px)",
-          zIndex: docsSheet ? 151 : 5,
-          background: "var(--mantine-color-body)",
-          borderTop: "1px solid var(--mantine-color-default-border)",
-          ...(docsSheet
-            ? { left: 0, right: 0 }
-            : { marginInline: "calc(var(--mantine-spacing-md) * -1)" }),
-        }}
+        style={{ ...sticky, marginInline: "calc(var(--mantine-spacing-md) * -1)" }}
       >
         {interrupted}
         {startFailed}
         <Group justify="space-between" wrap="nowrap" gap={4}>
           {buttons}
+          <Box style={{ flex: "1 1 auto", minWidth: 0, overflow: "hidden", textAlign: "center" }}>
+            <PositionText size="lg" withMs={false} />
+          </Box>
           {options}
         </Group>
         <ClickSettingsModal
@@ -331,19 +342,7 @@ export function Transport({ phone, mixer }: { phone: boolean; mixer?: React.Reac
     );
   }
   return (
-    <Box
-      data-testid="rehearse-transport"
-      pos={docsSheet ? "fixed" : "sticky"}
-      py="xs"
-      px={docsSheet ? "md" : undefined}
-      style={{
-        bottom: docsSheet ? "var(--app-shell-footer-offset, 0px)" : 0,
-        zIndex: docsSheet ? 151 : 5,
-        background: "var(--mantine-color-body)",
-        borderTop: "1px solid var(--mantine-color-default-border)",
-        ...(docsSheet && { left: "var(--app-shell-navbar-offset, 0px)", right: 0 }),
-      }}
-    >
+    <Box data-testid="rehearse-transport" py="xs" style={sticky}>
       {interrupted}
       {startFailed}
       <Group justify="space-between" wrap="wrap" gap="xs">
@@ -363,7 +362,6 @@ export function Transport({ phone, mixer }: { phone: boolean; mixer?: React.Reac
           {state}
         </Group>
         <Group gap={4} wrap="nowrap">
-          {mixer}
           <ClickToggles />
           {options}
         </Group>

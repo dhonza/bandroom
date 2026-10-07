@@ -49,29 +49,29 @@ export function isMobile(testInfo: TestInfo): boolean {
 }
 
 /**
- * Opens the song player's Mixer (the multitrack engine, with a header per track on every screen)
- * unless it is open already, and waits for the track headers.
+ * Opens the Mixer (the header's Mixer button; SPEC §11.3) unless it is open already, and waits for
+ * the track headers.
  */
 export async function openMixer(page: Page): Promise<void> {
   const toggle = page.getByTestId("mixer-toggle");
   await toggle.waitFor({ timeout: 30_000 });
-  if ((await toggle.getAttribute("aria-pressed")) === "true") return;
-  await toggle.click();
+  if ((await toggle.getAttribute("aria-pressed")) !== "true") await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
   await page.getByTestId("rehearse-panel").waitFor({ timeout: 30_000 });
   await page.getByTestId("track-strip").first().waitFor({ timeout: 30_000 });
 }
 
 /**
- * Closes the Mixer, waiting until a track is ready: the closed Mixer plays the tracks through the
- * engine (no rendered mix since M21, SPEC §27; group C makes this the only player panel).
+ * Closes the Mixer and waits for the Player, which needs a track ready to play: the Player always
+ * plays the tracks through the engine (SPEC §27.4).
  */
 export async function closeMixer(page: Page, timeout = 120_000): Promise<void> {
-  const toggle = page.getByTestId("mixer-toggle").first();
-  const closed = page.getByTestId("default-mix-panel");
-  // Until a track is ready there is nothing to play yet.
-  await expect(toggle.or(closed).first()).toBeVisible({ timeout });
+  const toggle = page.getByTestId("mixer-toggle");
+  await toggle.waitFor({ timeout });
   if ((await toggle.getAttribute("aria-pressed")) === "true") await toggle.click();
-  await closed.waitFor({ timeout });
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByTestId("rehearse-play")).toBeEnabled({ timeout });
+  await expect(page.getByTestId("track-strip")).toHaveCount(0);
 }
 
 /**

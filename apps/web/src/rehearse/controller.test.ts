@@ -352,34 +352,3 @@ describe("offline with a listened version", () => {
     }
   });
 });
-
-describe("default mix while the song's mix is prepared (SPEC §25.5)", () => {
-  const saved = { tracks: { a: { gainDb: 3, pan: 0, mute: false, solo: false } } };
-  const quiet = { ...track("a"), defaultGainDb: -6 };
-
-  it("plays the track defaults, never saves them, and switches mixes over the same audio", async () => {
-    const songId = nextSong();
-    apiMock.mockClear();
-    await openSong(songId, [quiet], saved, {}, "", "default");
-    expect(useRehearse.getState().mix.tracks.a?.gainDb).toBe(-6);
-    expect(engine().loads).toHaveLength(1);
-    controller.closeSong();
-    expect(apiMock).not.toHaveBeenCalled();
-
-    // Mixer on: the personal mix over the loaded audio, without a reload.
-    await openSong(songId, [quiet], saved, {}, "", "mixer");
-    expect(engine().loads).toHaveLength(1);
-    expect(useRehearse.getState().mix.tracks.a?.gainDb).toBe(3);
-    expect(engine().gains.at(-1)).toEqual({ trackId: "a", gainDb: 3 });
-
-    // Mixer off again: the personal mix is saved first, then the defaults play.
-    controller.setTrack("a", { gainDb: 1 });
-    await openSong(songId, [quiet], saved, {}, "", "default");
-    expect(apiMock).toHaveBeenCalledTimes(1);
-    expect(useRehearse.getState().mix.tracks.a?.gainDb).toBe(-6);
-    expect(engine().gains.at(-1)).toEqual({ trackId: "a", gainDb: -6 });
-    controller.setTrack("a", { gainDb: 0 });
-    controller.closeSong();
-    expect(apiMock).toHaveBeenCalledTimes(1);
-  });
-});

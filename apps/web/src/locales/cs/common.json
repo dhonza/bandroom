@@ -628,26 +628,9 @@
     "pause": "Pozastavit",
     "next": "Další píseň",
     "stop": "Zastavit a zavřít přehrávač",
-    "autoMix": "automatický mix",
-    "preparing": "Mix se připravuje…",
-    "noMix": "Zatím bez mixu",
-    "rehearseHint": "Ztlumení stop, metronom a předtaktí najdete v mixpultu.",
     "playAll": "Přehrát vše",
     "nothingToPlay": "V tomto projektu zatím žádná píseň nemá připravený zvuk.",
     "openSong": "Otevřít {{title}}",
-    "repeat": {
-      "off": "Neopakovat",
-      "all": "Opakovat všechny písně",
-      "one": "Opakovat tuto píseň"
-    },
-    "quality": {
-      "title": "Kvalita přehrávání",
-      "label": "Kvalita: {{quality}}",
-      "high": "Vysoká",
-      "low": "Nízká",
-      "highLong": "Vysoká (nejlepší zvuk)",
-      "lowLong": "Nízká (šetří mobilní data)"
-    },
     "songDeleted": "Píseň byla smazána, přehrávání se zastavilo.",
     "projectDeleted": "Projekt byl smazán, přehrávání se zastavilo."
   },
@@ -686,8 +669,7 @@
     "struggling": "Přehrávání nestíhá",
     "strugglingTip": "Zkuste nižší kvalitu nebo ztlumte stopy, které nepotřebujete.",
     "interrupted": "Přehrávání bylo přerušeno. Klepnutím na Přehrát pokračujte.",
-    "lockHint": "Mixpult se při zamčení obrazovky pozastaví. Chcete-li poslouchat se zamčenou obrazovkou, přehrajte mix.",
-    "lockHintSwitch": "Pokračovat s mixem",
+    "lockHint": "Při zamčení obrazovky nebo přepnutí do jiné aplikace se přehrávání zastaví. Aby obrazovka při přehrávání nezhasla, použijte v nabídce ⋯ volbu „Nezhasínat obrazovku“.",
     "noTracks": "Zatím nejsou připravené žádné stopy k přehrání.",
     "startFailed": "Zvuk se na tomto zařízení nepodařilo spustit.",
     "trackError": "Stopu {{track}} se nepodařilo přehrát.",
@@ -752,8 +734,7 @@
     "defaultsSaved": "Výchozí mix uložen."
   },
   "mixer": {
-    "playerTitle": "Přehrávač",
-    "defaultMixPreparing": "Výchozí mix se připravuje. Zatím tu hrají stopy ve výchozích úrovních."
+    "playerTitle": "Přehrávač"
   },
   "markers": {
     "sections": "Části",
@@ -969,7 +950,6 @@
     "bars_many": "{{count}} taktu",
     "bars_other": "{{count}} taktů",
     "everyRepeat": "Předtaktí před každým opakováním",
-    "listenHint": "Metronom a předtaktí: otevřete mixpult",
     "countingIn": "Předtaktí {{beat}} z {{clicks}}"
   },
   "comments": {
@@ -1323,7 +1303,7 @@
       "downloads": "Ke stažení",
       "downloadTrack": "Stáhnout {{name}}",
       "playSong": "Přehrát {{title}}",
-      "mixPreparing": "Zatím není co poslouchat: mix se ještě připravuje. Zkuste to za pár minut."
+      "nothingYet": "Zatím tu není co poslouchat."
     },
     "visitor": {
       "name": "Vaše jméno",

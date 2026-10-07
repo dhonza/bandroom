@@ -77,7 +77,7 @@ export interface RehearseState {
   /** A/B pair per track: the two version ids being compared. */
   ab: Record<string, { a: string; b: string }>;
   loudnessMatch: boolean;
-  /** Playback was cut by a hidden page; suggest Listen mode (SPEC §6.8). */
+  /** Playback was cut by a hidden page or a locked screen (SPEC §6.8). */
   lockHint: boolean;
   /** Song end reached. */
   ended: boolean;
@@ -108,10 +108,6 @@ let engine: Engine | null = null;
 let wake: WakeLockController | null = null;
 let loadKey = "";
 let pendingPlay = false;
-/** The song whose audio the engine holds (set once `openSong` starts loading it). */
-let loadedSongId: string | null = null;
-/** Where and whether to start once the song is loaded (hand-off from the mix player). */
-let pendingStart: { songId: string; frames: number; play: boolean } | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let struggleTimer: ReturnType<typeof setTimeout> | null = null;
 let allTracks: Track[] = [];
@@ -120,12 +116,6 @@ let userTag = "";
 let loopSec: { start: number; end: number } | null = null;
 /** The last `openSong` call, repeated by `retryAudio` after the engine failed to start. */
 let lastOpen: Parameters<typeof openSong> | null = null;
-/**
- * "mixer": the personal mix (saved). "default": the song's default mix while its rendered mix is
- * being prepared (SPEC §25.5): track defaults, current versions, never saved.
- */
-export type MixMode = "mixer" | "default";
-let mixMode: MixMode = "mixer";
 
 function getEngine(): Engine {
   if (engine) return engine;
@@ -212,22 +202,14 @@ export async function openSong(
   saved: MixerState | null,
   listenedVersions: Record<string, TrackVersion | undefined>,
   instrumentTag: string,
-  mode: MixMode = "mixer",
 ): Promise<void> {
-  lastOpen = [songId, tracks, saved, listenedVersions, instrumentTag, mode];
+  lastOpen = [songId, tracks, saved, listenedVersions, instrumentTag];
   allTracks = tracks;
   userTag = instrumentTag;
   const e = getEngine();
   const s = useRehearse.getState();
   const sameSong = s.songId === songId;
-  const modeChanged = sameSong && mode !== mixMode;
-  // Leaving the personal mix: save it before the default mix replaces the state.
-  if (modeChanged && mixMode === "mixer") flushSave();
-  mixMode = mode;
-  const mix =
-    mode === "default"
-      ? mergeMix(tracks, null)
-      : mergeMix(tracks, sameSong && !modeChanged ? s.mix : saved);
+  const mix = mergeMix(tracks, sameSong ? s.mix : saved);
   const quality = currentQuality(songId, tracks, mix);
   // Listened versions follow the local mix (A/B choices not saved yet included): the saved mix
   // and its version data lag behind by the save debounce and a refetch.
@@ -260,17 +242,9 @@ export async function openSong(
   if (key === loadKey) {
     // Same audio: a changed version gain applies in place (SPEC §25.6).
     for (const c of trims) e.setTrackState(c.trackId, { trimDb: c.trimDb });
-    // Another mix over the same audio (default ↔ personal, or new track defaults): in place.
-    if (modeChanged || mode === "default") {
-      syncClick();
-      for (const [id, t] of Object.entries(mix.tracks)) {
-        e.setTrackState(id, { gainDb: t.gainDb, pan: t.pan, mute: t.mute, solo: t.solo });
-      }
-    }
     return;
   }
   loadKey = key;
-  loadedSongId = songId;
   const wasPlaying = sameSong && (e.state === "playing" || e.state === "buffering");
   const kept = sameSong ? e.getPositionFrames() : 0;
   const timeline = buildTimeline(playable, mix);
@@ -283,61 +257,16 @@ export async function openSong(
     if (loadKey === key) loadKey = "";
     return;
   }
-  const start = pendingStart?.songId === songId ? pendingStart : null;
-  pendingStart = null;
-  const at = start ? start.frames : kept;
-  if (at > 0) e.seek(at);
+  if (kept > 0) e.seek(kept);
   applyLoop();
   syncClick();
-  if (start ? start.play : wasPlaying || pendingPlay) {
-    // A hand-off continues the music: no count-in.
-    const countIn = !start && pendingPlay ? countInForPlay() : null;
+  if (wasPlaying || pendingPlay) {
+    // A reload continues the music: no count-in.
+    const countIn = pendingPlay ? countInForPlay() : null;
     pendingPlay = false;
     claimAudio("rehearse");
     e.play({ countIn });
   }
-}
-
-/**
- * Hand-off from the mix player (Mixer toggle): start this song at `atSec`, playing or paused.
- * Synchronous on purpose, inside the tap (iOS): when the engine already holds the song it seeks
- * and plays right away; otherwise `openSong` applies it once the song is loaded.
- */
-export function setPendingStart(songId: string, atSec: number, play: boolean): void {
-  const e = getEngine();
-  unlockAudio(e);
-  const frames = Math.max(0, Math.round(atSec * SAMPLE_RATE));
-  pendingPlay = false;
-  const st = e.state;
-  if (loadedSongId === songId && e.lengthFrames > 0 && st !== "loading" && st !== "idle") {
-    pendingStart = null;
-    e.seek(Math.min(frames, e.lengthFrames));
-    useRehearse.setState({ ended: false, lockHint: false });
-    if (play) {
-      claimAudio("rehearse");
-      e.play({ countIn: null });
-    } else if (st === "playing" || st === "buffering") e.pause();
-    return;
-  }
-  pendingStart = { songId, frames, play };
-}
-
-/**
- * Hand-off to the mix player: where this song is and whether it plays (including a start that
- * is still waiting for the song to load), then stops the engine.
- */
-export function releasePlayback(songId: string): { atSec: number; playing: boolean } {
-  let out = { atSec: 0, playing: false };
-  if (pendingStart?.songId === songId) {
-    out = { atSec: pendingStart.frames / SAMPLE_RATE, playing: pendingStart.play };
-  } else if (useRehearse.getState().songId === songId) {
-    out = { atSec: positionSec(), playing: isPlaying() || pendingPlay };
-  }
-  pendingStart = null;
-  pendingPlay = false;
-  engine?.pause();
-  useRehearse.setState({ lockHint: false });
-  return out;
 }
 
 /**
@@ -554,8 +483,6 @@ function scheduleSave() {
 function flushSave() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = null;
-  // The default mix is not the user's: nothing to save.
-  if (mixMode === "default") return;
   const { songId, mix } = useRehearse.getState();
   if (!songId || Object.keys(mix.tracks).length === 0) return;
   if (isLinkMode()) saveLocalMix(songId, mix);

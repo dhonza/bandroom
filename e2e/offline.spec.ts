@@ -47,9 +47,6 @@ async function songWithMix(page: Page, name: string): Promise<{ songPath: string
   await row.getByRole("link").click();
   // One worker processes every test's uploads on this server: wait for the track.
   await closeMixer(page, 240_000);
-  await expect(page.getByTestId("default-mix-panel").getByTestId("rehearse-play")).toBeEnabled({
-    timeout: 240_000,
-  });
   return { songPath: new URL(page.url()).pathname };
 }
 
@@ -81,7 +78,7 @@ async function noHorizontalOverflow(page: Page) {
     .toBeLessThanOrEqual(0);
 }
 
-test("Offline song: Listen and Rehearse in airplane mode, comment and marker sync on reconnect", async ({
+test("Offline song: the Player with the Mixer closed and open in airplane mode, comment and marker sync on reconnect", async ({
   page,
   context,
   request,
@@ -108,8 +105,9 @@ test("Offline song: Listen and Rehearse in airplane mode, comment and marker syn
   await expect(page.getByTestId("offline-indicator")).toBeVisible();
   await expect(page.getByTestId("offline-button")).toHaveAttribute("data-status", "ready");
 
-  // The closed Mixer plays the engine from the cache too (no rendered mix since M21, SPEC §27).
-  const closed = page.getByTestId("default-mix-panel");
+  // The Player plays the engine from the cache with the Mixer closed (SPEC §27.6) …
+  await expect(page.getByTestId("mixer-toggle")).toHaveAttribute("aria-pressed", "false");
+  const closed = page.getByTestId("rehearse-panel");
   await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("stopped");
   await closed.getByTestId("rehearse-play").click();
   await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("playing");
@@ -120,7 +118,7 @@ test("Offline song: Listen and Rehearse in airplane mode, comment and marker syn
   await closed.getByTestId("rehearse-play").click();
   await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("stopped");
 
-  // The Mixer (decoder worker: full and Range reads from the cache).
+  // … and open (decoder worker: full and Range reads from the cache).
   await openMixer(page);
   await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("stopped");
   expect((await debug(page))?.tracks).toHaveLength(1);

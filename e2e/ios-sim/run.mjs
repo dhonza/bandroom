@@ -319,11 +319,11 @@ async function step(name, fn) {
   return Date.now() - t0;
 }
 
+// The Player is the engine (SPEC §27.4): its debug state gives the position (48 kHz frames).
 const position = `
-  const t = document.querySelector('[data-testid="listen-position"]')?.textContent ?? "";
-  const m = t.match(/(\\d+):(\\d+)\\.(\\d+)/);
-  return m ? Number(m[1]) * 60 + Number(m[2]) + Number(m[3]) / 1000 : -1;`;
-const playing = `return !!document.querySelector('[data-testid="listen-play"][aria-label="Pause"]');`;
+  const s = window.__bandroomRehearse?.state();
+  return s ? s.position / 48000 : -1;`;
+const playing = `return !!document.querySelector('[data-testid="rehearse-play"][aria-label="Pause"]');`;
 
 // --- Scenario ---------------------------------------------------------------------------------
 
@@ -362,8 +362,8 @@ async function run() {
   await step("browser capabilities", async () => {
     await wd("POST", "/url", { url: `${BASE}songs/${songs[0].id}` });
     await waitFor(
-      "listen panel",
-      `return !!document.querySelector('[data-testid="listen-play"]:not([disabled])');`,
+      "player",
+      `return !!document.querySelector('[data-testid="rehearse-play"]:not([disabled])');`,
       30_000,
     );
     const c = await js(`
@@ -386,7 +386,7 @@ async function run() {
 
   await step("play starts from a tap", async () => {
     await js(instrument);
-    await click('[data-testid="listen-play"]');
+    await click('[data-testid="rehearse-play"]');
     try {
       await waitFor("playing", playing, 20_000);
     } catch (err) {
@@ -436,15 +436,12 @@ async function run() {
 
   await step("quality switch keeps playing", async () => {
     const before = await js(position);
-    await click('[data-testid="listen-quality"]');
+    await click('[data-testid="rehearse-transport"] button[aria-label="Playback options"]');
     await waitFor("menu", `return [...document.querySelectorAll('[role="menuitem"]')].length > 0;`);
     await js(
-      `[...document.querySelectorAll('[role="menuitem"]')].find(e => /Low/.test(e.textContent)).click();`,
+      `[...document.querySelectorAll('[role="menuitem"]')].find(e => /^Low/.test(e.textContent.trim())).click();`,
     );
-    await waitFor(
-      "low quality",
-      `return /Low/.test(document.querySelector('[data-testid="listen-quality"]')?.textContent ?? "");`,
-    );
+    await waitFor("low quality", `return window.__bandroomRehearse?.state().quality === "low";`);
     await waitFor("still playing", playing, 15_000);
     await sleep(1500);
     const after = await js(position);

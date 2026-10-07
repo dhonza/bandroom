@@ -97,14 +97,14 @@ test("Song lock: frozen controls, refused changes, live for other tabs, unlock",
   await other.close();
 });
 
-test("Closed Mixer: the engine plays the tracks (no automatic mix, SPEC §27)", async ({
+test("Player with the Mixer closed: the engine plays the tracks (SPEC §27)", async ({
   page,
 }, testInfo) => {
   test.setTimeout(720_000);
   await loginAsNewUser(page, page.request, testInfo, "member");
   await songWithTrack(page, testInfo);
 
-  const panel = page.getByTestId("default-mix-panel");
+  const panel = page.getByTestId("rehearse-panel");
   await expect(panel).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("mixer-toggle")).toHaveAttribute("aria-pressed", "false");
   await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("stopped");
@@ -112,6 +112,5 @@ test("Closed Mixer: the engine plays the tracks (no automatic mix, SPEC §27)", 
   await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("playing");
   await page.getByTestId("rehearse-play").click();
   await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("stopped");
-  // No mix player takes over any more.
-  await expect(page.getByTestId("listen-panel")).toHaveCount(0);
+  await expect(panel.getByTestId("track-strip")).toHaveCount(0);
 });
