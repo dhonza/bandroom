@@ -10,6 +10,7 @@ import {
   SongTitleSchema,
 } from "../content";
 import { ContentRoleSchema, DownloadPolicySchema } from "../permissions/content";
+import { DownloadFormatSchema } from "../tracks";
 import { OkSchema } from "./auth";
 import { defineContract } from "./contract";
 
@@ -147,3 +148,38 @@ export const PROJECT_IMAGE_FETCH_PATH = "/projects/:id/image/fetch";
 export const ImageUrlFetchSchema = z.object({ url: z.string().trim().min(1).max(2048) });
 /** Largest image fetched from a URL. */
 export const IMAGE_URL_MAX_BYTES = 20 * 1024 * 1024;
+
+/** Query of the project export (SPEC §28.7); FLAC by default. */
+export const ProjectExportQuerySchema = z.object({
+  format: DownloadFormatSchema.default("flac"),
+});
+
+export const ProjectExportPreviewSchema = z.object({
+  /** Audio files and documents in the archive. */
+  files: z.number().int(),
+  /** Songs with at least one file. */
+  songs: z.number().int(),
+  /** Songs left out because their download policy forbids the user. */
+  skippedSongs: z.number().int(),
+  documents: z.number().int(),
+  /** Versions exported as Opus (full quality removed). */
+  opusFallbacks: z.number().int(),
+  /** Versions exported as the uploaded file (lossy source: no FLAC or WAV). */
+  originalFallbacks: z.number().int(),
+  /** Exact size of the ZIP. */
+  bytes: z.number(),
+});
+export type ProjectExportPreview = z.infer<typeof ProjectExportPreviewSchema>;
+
+/**
+ * What a project export would hold (SPEC §28.7). The archive itself is
+ * `GET /projects/:id/export/download?format=` (same auth, streamed, not a contract).
+ */
+export const getProjectExportPreview = defineContract({
+  method: "GET",
+  path: "/projects/:id/export/preview",
+  params: IdParams,
+  query: ProjectExportQuerySchema,
+  response: ProjectExportPreviewSchema,
+  auth: { capability: "download", scope: "project" },
+});

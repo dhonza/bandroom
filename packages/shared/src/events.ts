@@ -34,6 +34,8 @@ export const EVENT_ACTIONS = [
   "project.restored",
   "project.purged",
   "project.ownership_transferred",
+  /** A project downloaded as a ZIP (SPEC §28.7), once per completed export. */
+  "project.exported",
   "grant.changed",
   "song.created",
   "song.updated",

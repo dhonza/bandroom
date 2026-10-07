@@ -1,4 +1,5 @@
 import {
+  writeZip,
   bytesByProject,
   bytesBySong,
   createProjectRow,
@@ -39,12 +40,19 @@ import {
   transferProjectOwnership,
   updateProject,
   type EffectiveRole,
+  getProjectExportPreview,
+  ProjectExportQuerySchema,
 } from "@bandroom/shared";
+import { Readable } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context";
 import { audit } from "../http/audit";
-import { registerContract } from "../http/contracts";
+import { contentDisposition } from "../http/blobs";
+import { registerAuthorizedRoute, registerContract, userOrIpKey } from "../http/contracts";
 import { AppError } from "../http/errors";
+import { planProjectExport, zipEntries } from "../http/projectExport";
+import type { ProjectScopeAccess } from "../http/scope";
+import { acquireFfmpegSlot } from "../http/versionDownload";
 import { notifyGranted, notifyNewSong } from "../notify";
 
 function projectDto(
@@ -206,6 +214,60 @@ export function registerProjectRoutes(app: FastifyInstance, ctx: AppContext): vo
     });
     return { ok: true as const };
   });
+
+  // --- Project export (SPEC §28.7) ------------------------------------------------------------
+
+  registerContract(app, getProjectExportPreview, async ({ user, access, query }) => {
+    const plan = await planProjectExport(ctx, user, access, query.format);
+    return plan.preview;
+  });
+
+  registerAuthorizedRoute(
+    app,
+    {
+      method: "GET",
+      url: "/projects/:id/export/download",
+      auth: { capability: "download", scope: "project" },
+    },
+    async (request, reply) => {
+      const access = request.access as ProjectScopeAccess;
+      const user = request.user;
+      if (!user) throw new AppError("UNAUTHENTICATED", "Not signed in");
+      const { format } = ProjectExportQuerySchema.parse(request.query);
+      const plan = await planProjectExport(ctx, user, access, format);
+      // A WAV export holds the API's single ffmpeg slot for its whole duration (SPEC §19.6).
+      const release = plan.entries.some((e) => e.source.kind === "wav")
+        ? acquireFfmpegSlot(ctx, "Another WAV export or download is being prepared")
+        : () => undefined;
+      const abort = new AbortController();
+      reply.raw.once("close", () => {
+        abort.abort();
+        release();
+      });
+      // One event per completed export; none when the client went away.
+      reply.raw.once("finish", () => {
+        audit(db, request, {
+          action: "project.exported",
+          projectId: access.project.id,
+          targetType: "project",
+          targetId: access.project.id,
+          details: {
+            format,
+            songs: plan.preview.songs,
+            files: plan.preview.files,
+            bytes: plan.preview.bytes,
+          },
+        });
+      });
+      reply
+        .header("Content-Type", "application/zip")
+        .header("Content-Length", plan.preview.bytes)
+        .header("Content-Disposition", contentDisposition(`${plan.root}.zip`))
+        .header("Cache-Control", "no-store");
+      return reply.send(Readable.from(writeZip(zipEntries(ctx, plan, request.log), abort.signal)));
+    },
+    { rateLimit: { max: 5, timeWindow: "1 minute", keyGenerator: userOrIpKey } },
+  );
 
   registerContract(app, listProjectGrants, ({ access }) => ({
     grants: projectGrantRows(db, access.project.id),

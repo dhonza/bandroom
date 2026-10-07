@@ -54,20 +54,36 @@ function syntheticWavMeta(
   };
 }
 
+/** A version's file in one format, ready to stream (SPEC §5.6). */
+export type DownloadSource =
+  | {
+      kind: "blob";
+      hash: string;
+      storageKey: string;
+      size: number;
+      filename: string;
+      contentType: string;
+    }
+  | {
+      /** A WAV rebuilt from the FLAC with ffmpeg (needs `ctx.ffmpegSlots`). */
+      kind: "wav";
+      size: number;
+      filename: string;
+      meta: ParsedWavMeta;
+      flacPath: string;
+      /** Dual-mono FLAC expanded back to stereo. */
+      expand: boolean;
+    };
+
 /**
- * Sends a track version as original/FLAC/WAV/Opus (SPEC §5.6). WAV is the kept original when it
- * was a WAV, else rebuilt from the FLAC with the stored header. `logDownload` records the event.
- * A rebuild runs ffmpeg in the API, so it needs the process-wide slot (`ctx.ffmpegSlots`, SPEC
- * §19.6); while it is taken the request answers `RATE_LIMITED`.
+ * Resolves a track version to its file in `format`: original/FLAC/Opus are stored blobs; WAV is
+ * the kept original when it was a WAV, else rebuilt from the FLAC with the stored header.
  */
-export async function sendVersionDownload(
+export async function resolveDownload(
   ctx: AppContext,
-  request: FastifyRequest,
-  reply: FastifyReply,
   versionId: string,
   format: DownloadFormat,
-  logDownload: (bytes: number | null) => void,
-) {
+): Promise<DownloadSource> {
   const version = getTrackVersionRow(ctx.db, versionId);
   const asset = version && getAsset(ctx.db, version.assetId);
   if (!version || !asset || asset.status !== "ready")
@@ -79,11 +95,18 @@ export async function sendVersionDownload(
   const probe = assetProbe(asset);
   const base = asset.originalFilename.replace(/\.[^.]+$/, "") || "audio";
 
-  const direct = (variant: string, filename: string, type: string) => {
+  const direct = (variant: string, filename: string, contentType: string): DownloadSource => {
     const v = vars.get(variant);
-    if (!v) throw new AppError("NOT_FOUND", `No ${format} available`);
-    logDownload(getBlob(ctx.db, v.blobHash)?.sizeBytes ?? null);
-    return sendBlob(ctx, request, reply, v.blobHash, type, contentDisposition(filename));
+    const blob = v && getBlob(ctx.db, v.blobHash);
+    if (!v || !blob) throw new AppError("NOT_FOUND", `No ${format} available`);
+    return {
+      kind: "blob",
+      hash: v.blobHash,
+      storageKey: blob.storageKey,
+      size: blob.sizeBytes,
+      filename,
+      contentType,
+    };
   };
 
   if (format === "original") return direct("original", asset.originalFilename, asset.mimeType);
@@ -99,57 +122,53 @@ export async function sendVersionDownload(
   const flacBlob = flac && getBlob(ctx.db, flac.blobHash);
   if (!flac || !flacBlob || !probe) throw new AppError("NOT_FOUND", "No WAV available");
   const flacMeta = JSON.parse(flac.meta) as { channels?: number; bitDepth?: number };
-  // ffmpeg runs in the API process: one rebuild at a time (SPEC §19.6), no queue.
-  const release = ctx.ffmpegSlots.tryAcquire();
-  if (!release) {
-    throw new AppError("RATE_LIMITED", "Another WAV download is being prepared", {
-      retryAfterSec: WAV_BUSY_RETRY_SEC,
-    });
-  }
-  const abort = new AbortController();
-  const stop = () => {
-    abort.abort();
-    release();
-  };
-  // The response closes when it finished or the client went away: stop ffmpeg, free the slot.
-  request.raw.once("close", () => {
-    abort.abort();
-  });
-  reply.raw.once("close", stop);
+  const wavmeta = vars.get("wavmeta");
+  const wavmetaBlob = wavmeta && getBlob(ctx.db, wavmeta.blobHash);
   let meta: ParsedWavMeta;
-  let flacPath: string;
-  try {
-    const wavmeta = vars.get("wavmeta");
-    const wavmetaBlob = wavmeta && getBlob(ctx.db, wavmeta.blobHash);
-    if (wavmetaBlob) {
-      const chunks: Buffer[] = [];
-      for await (const c of ctx.storage.getStream(wavmetaBlob.storageKey)) chunks.push(c as Buffer);
-      meta = parseWavMeta(Buffer.concat(chunks));
-    } else {
-      meta = syntheticWavMeta(
-        probe.channels,
-        probe.sampleRate,
-        flacMeta.bitDepth ?? 24,
-        probe.durationSamples,
-      );
-    }
-    flacPath = await ctx.storage.localPath(flacBlob.storageKey);
-  } catch (err) {
-    stop();
-    throw err;
+  if (wavmetaBlob) {
+    const chunks: Buffer[] = [];
+    for await (const c of ctx.storage.getStream(wavmetaBlob.storageKey)) chunks.push(c as Buffer);
+    meta = parseWavMeta(Buffer.concat(chunks));
+  } else {
+    meta = syntheticWavMeta(
+      probe.channels,
+      probe.sampleRate,
+      flacMeta.bitDepth ?? 24,
+      probe.durationSamples,
+    );
   }
+  return {
+    kind: "wav",
+    size: reconstructedWavSize(meta),
+    filename: path.basename(wavName),
+    meta,
+    flacPath: await ctx.storage.localPath(flacBlob.storageKey),
+    expand: meta.index.fmt.channels === 2 && flacMeta.channels === 1,
+  };
+}
+
+/**
+ * Streams a rebuilt WAV: ffmpeg decodes the FLAC to raw PCM, the stored header and chunks go
+ * around it. The caller holds the ffmpeg slot (SPEC §19.6); `signal` stops ffmpeg. A failed
+ * decode errors the stream (never a short, zero-padded WAV).
+ */
+export function streamWav(
+  ctx: AppContext,
+  src: Extract<DownloadSource, { kind: "wav" }>,
+  signal: AbortSignal,
+  log: FastifyRequest["log"],
+): { stream: AsyncIterable<Buffer>; done: Promise<void> } {
   const { format: raw, codec } = rawFormatFor(
-    meta.index.fmt.encoding,
-    meta.index.fmt.bitsPerSample,
+    src.meta.index.fmt.encoding,
+    src.meta.index.fmt.bitsPerSample,
   );
-  const expand = meta.index.fmt.channels === 2 && flacMeta.channels === 1; // dual-mono → stereo
   const pcm = new PassThrough();
-  runTool(
+  const done = runTool(
     ctx.tools.ffmpeg,
     ffmpegArgs(
       "-i",
-      flacPath,
-      ...(expand ? ["-af", "pan=stereo|c0=c0|c1=c0"] : []),
+      src.flacPath,
+      ...(src.expand ? ["-af", "pan=stereo|c0=c0|c1=c0"] : []),
       "-c:a",
       codec,
       "-f",
@@ -157,31 +176,76 @@ export async function sendVersionDownload(
       "-",
     ),
     {
-      // `pcm` ends only when ffmpeg succeeded; a failure must not look like a short, zero-padded
-      // but complete WAV (review M7).
+      // `pcm` ends only when ffmpeg succeeded (review M7).
       stdout: (out) => {
         out.pipe(pcm, { end: false });
         return finished(out);
       },
-      signal: abort.signal,
+      signal,
     },
-  )
-    .then(
-      () => pcm.end(),
-      (err: unknown) => {
-        if (!abort.signal.aborted) request.log.error({ err }, "wav reconstruction failed");
-        pcm.destroy(err instanceof Error ? err : new Error(String(err)));
-      },
-    )
-    .finally(release);
-  const size = reconstructedWavSize(meta);
+  ).then(
+    () => {
+      pcm.end();
+    },
+    (err: unknown) => {
+      if (!signal.aborted) log.error({ err }, "wav reconstruction failed");
+      pcm.destroy(err instanceof Error ? err : new Error(String(err)));
+    },
+  );
+  return { stream: reconstructWav(src.meta, pcm), done };
+}
+
+/** Takes the API's single ffmpeg slot, or answers `RATE_LIMITED` (no queue). */
+export function acquireFfmpegSlot(ctx: AppContext, message: string): () => void {
+  const release = ctx.ffmpegSlots.tryAcquire();
+  if (!release) throw new AppError("RATE_LIMITED", message, { retryAfterSec: WAV_BUSY_RETRY_SEC });
+  return release;
+}
+
+/**
+ * Sends a track version as original/FLAC/WAV/Opus (SPEC §5.6). `logDownload` records the event.
+ * A WAV rebuild runs ffmpeg in the API, so it needs the process-wide slot (`ctx.ffmpegSlots`,
+ * SPEC §19.6); while it is taken the request answers `RATE_LIMITED`.
+ */
+export async function sendVersionDownload(
+  ctx: AppContext,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  versionId: string,
+  format: DownloadFormat,
+  logDownload: (bytes: number | null) => void,
+) {
+  const src = await resolveDownload(ctx, versionId, format);
+  if (src.kind === "blob") {
+    logDownload(src.size);
+    return sendBlob(
+      ctx,
+      request,
+      reply,
+      src.hash,
+      src.contentType,
+      contentDisposition(src.filename),
+    );
+  }
+  const release = acquireFfmpegSlot(ctx, "Another WAV download is being prepared");
+  const abort = new AbortController();
+  // The response closes when it finished or the client went away: stop ffmpeg, free the slot.
+  request.raw.once("close", () => {
+    abort.abort();
+  });
+  reply.raw.once("close", () => {
+    abort.abort();
+    release();
+  });
+  const { stream, done } = streamWav(ctx, src, abort.signal, request.log);
+  void done.finally(release);
   // Logged only once the whole file was handed to the client.
   reply.raw.once("finish", () => {
-    logDownload(size);
+    logDownload(src.size);
   });
   reply
     .header("Content-Type", "audio/wav")
-    .header("Content-Length", size)
-    .header("Content-Disposition", contentDisposition(path.basename(wavName)));
-  return reply.send(Readable.from(reconstructWav(meta, pcm)));
+    .header("Content-Length", src.size)
+    .header("Content-Disposition", contentDisposition(src.filename));
+  return reply.send(Readable.from(stream));
 }
