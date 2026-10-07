@@ -79,6 +79,23 @@ export function focusSong(q: PlayQueue | null, entry: QueueEntry, source: QueueS
   return { entries: [{ ...entry, ready: true }], index: 0, source: { ...source, kind: "song" } };
 }
 
+/** Songs after `index` the queue knew as not ready yet (they may have finished processing). */
+export function waitingAfter(q: PlayQueue): boolean {
+  return q.entries.slice(q.index + 1).some((e) => !e.ready);
+}
+
+/**
+ * The queue's entries with the ready flags of a fresh `getProjectQueue` answer; a song no longer
+ * in it (deleted, hidden) cannot play.
+ */
+export function withFreshReady(
+  entries: readonly QueueEntry[],
+  fresh: readonly QueueEntry[],
+): QueueEntry[] {
+  const ready = new Map(fresh.map((e) => [e.songId, e.ready]));
+  return entries.map((e) => ({ ...e, ready: ready.get(e.songId) ?? false }));
+}
+
 /**
  * Takes deleted songs out of the queue. `"stopped"`: the playing song is gone (the queue is null
  * then); `"removed"`: other entries went and the index follows the playing song; `"none"`.

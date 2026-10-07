@@ -41,6 +41,8 @@ import {
   type PlayQueue,
   type QueueEntry,
   type QueueSource,
+  waitingAfter,
+  withFreshReady,
 } from "../player/queue";
 import type { QueueLoader } from "../player/queueLoader";
 import { setSongTempo, useTempoUi } from "../tempo/store";
@@ -222,7 +224,33 @@ function onEnded() {
     playQueueIndex(next);
     return;
   }
-  if (s.songId !== attachedSongId) closeSong();
+  const q = s.queue;
+  const loader = queueLoader;
+  if (q?.source.kind === "project" && loader && waitingAfter(q)) {
+    // Songs that were still processing when the queue started may be ready now.
+    const token = ++queueLoad;
+    loader
+      .entries(q.source.projectId)
+      .then((fresh) => {
+        const cur = useRehearse.getState().queue;
+        if (token !== queueLoad || !cur) return;
+        const entries = withFreshReady(cur.entries, fresh);
+        useRehearse.setState({ queue: { ...cur, entries } });
+        const i = nextReadyIndex(entries, cur.index, 1);
+        if (i !== null) playQueueIndex(i);
+        else endOfQueue();
+      })
+      .catch(() => {
+        if (token === queueLoad) endOfQueue();
+      });
+    return;
+  }
+  endOfQueue();
+}
+
+/** Nothing more to play: a song left alone (the user is elsewhere) closes. */
+function endOfQueue() {
+  if (useRehearse.getState().songId !== attachedSongId) closeSong();
 }
 
 function onVisibility() {
@@ -469,7 +497,7 @@ function playQueueIndex(index: number): void {
       if (next !== null) playQueueIndex(next);
       else {
         pendingPlay = null;
-        if (useRehearse.getState().songId !== attachedSongId) closeSong();
+        endOfQueue();
       }
     });
 }

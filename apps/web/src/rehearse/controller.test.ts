@@ -360,9 +360,10 @@ describe("song lifecycle and queue (SPEC §6.10)", () => {
       subtitle: "",
       project: { id: "p", name: "P", color: "blue", imageHash: null },
     }) as unknown as Song;
-  const loaderFor = (fail: string[] = []) => {
+  const loaderFor = (fail: string[] = [], fresh: ReturnType<typeof entry>[] = []) => {
     const loaded: string[] = [];
     const loader: QueueLoader = {
+      entries: () => Promise.resolve(fresh),
       load(id) {
         loaded.push(id);
         if (fail.includes(id)) return Promise.reject(new Error("gone"));
@@ -443,6 +444,21 @@ describe("song lifecycle and queue (SPEC §6.10)", () => {
     await vi.waitFor(() => {
       expect(useRehearse.getState().queue?.index).toBe(3);
     });
+  });
+
+  it("asks again at the end for songs that were still processing", async () => {
+    const { loader } = loaderFor([], [entry("r1"), entry("r2")]);
+    controller.startQueue([entry("r1"), entry("r2", false)], source, loader);
+    await vi.waitFor(() => {
+      expect(useRehearse.getState().songId).toBe("r1");
+    });
+    expect(controller.hasNextSong()).toBe(false);
+    engine().setState("stopped");
+    engine().emit("ended", undefined);
+    await vi.waitFor(() => {
+      expect(useRehearse.getState().songId).toBe("r2");
+    });
+    expect(useRehearse.getState().queue?.entries.every((e) => e.ready)).toBe(true);
   });
 
   it("nothing ready: does not start", () => {

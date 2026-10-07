@@ -1,4 +1,5 @@
 import {
+  getProjectQueue,
   getSong,
   getSongMixer,
   getSongTempo,
@@ -12,11 +13,12 @@ import {
 } from "@bandroom/shared";
 import type { QueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { songKeys } from "../features/library/queries";
+import { queueKey, songKeys } from "../features/library/queries";
 import { isLinkMode, loadLocalMix } from "../links/linkMode";
 import { useOffline } from "../offline/controller";
 import { pendingMixer } from "../offline/pending";
 import { tempoKeys } from "../tempo/queries";
+import type { QueueEntry } from "./queue";
 
 /** The personal mix and its snapshots, as the Player and the queue read them. */
 export async function fetchSongMixer(songId: string, signal?: AbortSignal): Promise<SongMixer> {
@@ -53,6 +55,8 @@ export interface LoadedSong {
 /** Loads a queued song; the app and the public-link view each bring their own. */
 export interface QueueLoader {
   load(songId: string): Promise<LoadedSong>;
+  /** The project's queue now (`getProjectQueue`): songs may have become ready since the start. */
+  entries(projectId: string): Promise<QueueEntry[]>;
 }
 
 /**
@@ -63,6 +67,14 @@ export interface QueueLoader {
  */
 export function queryQueueLoader(qc: QueryClient): QueueLoader {
   return {
+    async entries(projectId) {
+      const r = await qc.query({
+        queryKey: queueKey(projectId),
+        queryFn: ({ signal }) =>
+          api(getProjectQueue, { params: { id: projectId } }, { signal }).then((x) => x.items),
+      });
+      return r;
+    },
     async load(songId) {
       const [song, tracks, mixer, tempo] = await Promise.all([
         qc.query({

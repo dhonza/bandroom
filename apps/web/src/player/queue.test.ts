@@ -5,6 +5,8 @@ import {
   focusSong,
   nextReadyIndex,
   startIndex,
+  waitingAfter,
+  withFreshReady,
   type PlayQueue,
   type QueueEntry,
   type QueueSource,
@@ -42,6 +44,19 @@ describe("queue advance (SPEC §6.10)", () => {
   it("reads the current entry", () => {
     expect(currentEntry(q(entries, 2))?.songId).toBe("c");
     expect(currentEntry(null)).toBeNull();
+  });
+});
+
+describe("songs that finish processing while the queue plays", () => {
+  it("knows when songs after the current one were not ready", () => {
+    expect(waitingAfter(q([e("a"), e("b", false)]))).toBe(true);
+    expect(waitingAfter(q([e("a", false), e("b")], 1))).toBe(false);
+  });
+
+  it("takes the fresh ready flags; songs gone from the project cannot play", () => {
+    const fresh = withFreshReady([e("a"), e("b", false), e("c")], [e("a"), e("b")]);
+    expect(fresh.map((x) => x.ready)).toEqual([true, true, false]);
+    expect(fresh[1]?.title).toBe("B");
   });
 });
 
