@@ -1,4 +1,5 @@
-import type { Track, TrackVersion } from "@bandroom/shared";
+import type { Song, Track, TrackVersion } from "@bandroom/shared";
+import type { QueueLoader } from "../player/queueLoader";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -171,6 +172,15 @@ function track(id: string, current = version(`${id}-v1`, `${id}1`)): Track {
   };
 }
 
+const info = (songId: string) => ({
+  songId,
+  title: songId,
+  subtitle: "",
+  projectId: "p",
+  projectName: "P",
+  imageHash: null,
+});
+
 let song = 0;
 /** A fresh song id per test: the controller's module state persists across tests. */
 const nextSong = () => `song-${++song}`;
@@ -196,7 +206,7 @@ describe("engine start failure", () => {
     controller.prepareEngine(); // creates the engine
     engine().failInit = 2; // the tap and the load both fail
     controller.prepareEngine();
-    await openSong(songId, [track("a")], null, {}, "");
+    await openSong(songId, [track("a")], null, {}, "", info(songId));
     expect(useRehearse.getState().status).toBe("error");
     expect(engine().loads).toHaveLength(0);
     togglePlay(); // in the error state, play retries (inside the tap)
@@ -211,7 +221,7 @@ describe("engine start failure", () => {
 
   it("retryAudio reloads even when the song had loaded before", async () => {
     const songId = nextSong();
-    await openSong(songId, [track("a")], null, {}, "");
+    await openSong(songId, [track("a")], null, {}, "", info(songId));
     expect(engine().loads).toHaveLength(1);
     engine().setState("error"); // e.g. a context rebuild failed
     retryAudio();
@@ -224,28 +234,16 @@ describe("engine start failure", () => {
   });
 });
 
-describe("Listen mode takes the audio", () => {
-  it("suspends the engine", async () => {
-    const { claimAudio } = await import("../player/exclusive");
-    await openSong(nextSong(), [track("a")], null, {}, "");
-    togglePlay();
-    expect(engine().state).toBe("playing");
-    claimAudio("listen");
-    expect(engine().suspended).toBe(1);
-    expect(engine().state).toBe("stopped");
-  });
-});
-
 describe("A/B selection (listened versions)", () => {
   it("keeps the chosen version across a track refresh without reloading", async () => {
     const songId = nextSong();
     const b = version("a-v2", "a2");
-    await openSong(songId, [track("a")], null, {}, "");
+    await openSong(songId, [track("a")], null, {}, "", info(songId));
     expect(engine().loads).toHaveLength(1);
     controller.listenToVersion("a", b);
     expect(engine().switches).toEqual([{ trackId: "a", hash: "a2", trimDb: 0 }]);
     // An SSE "tracks" change refreshes the track list; the saved mix has not caught up yet.
-    await openSong(songId, [track("a")], null, {}, "");
+    await openSong(songId, [track("a")], null, {}, "", info(songId));
     expect(engine().loads).toHaveLength(1); // no reload, no rebuffer
     expect(useRehearse.getState().tracks[0]?.version.id).toBe("a-v2");
     expect(useRehearse.getState().mix.tracks.a?.listenedVersionId).toBe("a-v2");
@@ -253,9 +251,9 @@ describe("A/B selection (listened versions)", () => {
 
   it("reloads with the chosen version when the song's audio really changes", async () => {
     const songId = nextSong();
-    await openSong(songId, [track("a")], null, {}, "");
+    await openSong(songId, [track("a")], null, {}, "", info(songId));
     controller.listenToVersion("a", version("a-v2", "a2"));
-    await openSong(songId, [track("a"), track("b")], null, {}, ""); // a track was added
+    await openSong(songId, [track("a"), track("b")], null, {}, "", info(songId)); // a track was added
     expect(engine().loads).toHaveLength(2);
     const hashes = engine().loads[1]?.tracks.map((t) => t.clips[0]?.variant.hash);
     expect(hashes).toEqual(["a2", "b1"]);
@@ -266,7 +264,7 @@ describe("version gain (SPEC §25.6)", () => {
   it("loads with each version's gain and applies a changed gain without reloading", async () => {
     const songId = nextSong();
     const loud = { ...version("b-v1", "b1"), gainDb: 4.5 };
-    await openSong(songId, [track("a"), track("b", loud)], null, {}, "");
+    await openSong(songId, [track("a"), track("b", loud)], null, {}, "", info(songId));
     expect(
       engine()
         .loads.at(-1)
@@ -278,6 +276,7 @@ describe("version gain (SPEC §25.6)", () => {
       null,
       {},
       "",
+      info(songId),
     );
     expect(engine().loads).toHaveLength(1);
     expect(engine().trims).toEqual([{ trackId: "a", trimDb: -3 }]);
@@ -289,7 +288,7 @@ describe("version gain (SPEC §25.6)", () => {
 
 describe("per-track errors", () => {
   it("clears a track's error once it has audio buffered again", async () => {
-    await openSong(nextSong(), [track("a"), track("b")], null, {}, "");
+    await openSong("errors-song", [track("a"), track("b")], null, {}, "", info("errors-song"));
     engine().emit("error", { trackId: "a", message: "HTTP 503" });
     engine().emit("error", { trackId: "b", message: "HTTP 404" });
     expect(Object.keys(useRehearse.getState().errors)).toEqual(["a", "b"]);
@@ -336,19 +335,143 @@ describe("offline with a listened version", () => {
     });
     useOnlineState.setState({ online: false });
     try {
-      await openSong(songId, [track("a")], saved, { a: b }, "");
+      await openSong(songId, [track("a")], saved, { a: b }, "", info(songId));
       expect(engine().loads.at(-1)?.tracks[0]?.clips[0]?.variant.hash).toBe("a1");
       // The choice is kept for when the version is available again.
       expect(useRehearse.getState().mix.tracks.a?.listenedVersionId).toBe("a-v2");
       // With the version on the device, it plays.
       const item = useOffline.getState().items[0];
       if (item) useOffline.setState({ items: [{ ...item, blobs: ["a1", "a2"] }] });
-      await openSong(nextSong(), [track("a")], null, {}, "");
-      await openSong(songId, [track("a")], saved, { a: b }, "");
+      await openSong("other-song", [track("a")], null, {}, "", info("other-song"));
+      await openSong(songId, [track("a")], saved, { a: b }, "", info(songId));
       expect(engine().loads.at(-1)?.tracks[0]?.clips[0]?.variant.hash).toBe("a2");
     } finally {
       useOnlineState.setState({ online: true });
       useOffline.setState({ items: [] });
     }
+  });
+});
+
+describe("song lifecycle and queue (SPEC §6.10)", () => {
+  const songOf = (id: string) =>
+    ({
+      id,
+      title: `Title ${id}`,
+      subtitle: "",
+      project: { id: "p", name: "P", color: "blue", imageHash: null },
+    }) as unknown as Song;
+  const loaderFor = (fail: string[] = []) => {
+    const loaded: string[] = [];
+    const loader: QueueLoader = {
+      load(id) {
+        loaded.push(id);
+        if (fail.includes(id)) return Promise.reject(new Error("gone"));
+        return Promise.resolve({
+          song: songOf(id),
+          tracks: [track(`${id}-t`)],
+          saved: null,
+          listened: {},
+          tempo: null,
+        });
+      },
+    };
+    return { loader, loaded };
+  };
+  const entry = (songId: string, ready = true) => ({ songId, title: songId, subtitle: "", ready });
+  const source = { kind: "project" as const, projectId: "p", projectName: "P", imageHash: null };
+
+  it("leaving a stopped song closes it; a playing one plays on until the end", async () => {
+    const a = nextSong();
+    const detach = controller.attachPage(a);
+    await openSong(a, [track("a")], null, {}, "", info(a));
+    expect(useRehearse.getState().open).toBe(true);
+    detach();
+    expect(useRehearse.getState().open).toBe(false);
+
+    const b = nextSong();
+    const detachB = controller.attachPage(b);
+    await openSong(b, [track("b")], null, {}, "", info(b));
+    togglePlay();
+    detachB();
+    expect(useRehearse.getState().open).toBe(true);
+    expect(engine().state).toBe("playing");
+    // The song ends while the user is elsewhere and nothing follows: the player closes.
+    engine().setState("stopped");
+    engine().emit("ended", undefined);
+    expect(useRehearse.getState().open).toBe(false);
+  });
+
+  it("an ended song stays on its own page", async () => {
+    const a = nextSong();
+    const detach = controller.attachPage(a);
+    await openSong(a, [track("a")], null, {}, "", info(a));
+    engine().emit("ended", undefined);
+    expect(useRehearse.getState().open).toBe(true);
+    expect(useRehearse.getState().ended).toBe(true);
+    detach();
+  });
+
+  it("plays the queue's ready songs one after another, skipping unloadable ones", async () => {
+    const { loader, loaded } = loaderFor(["q3"]);
+    const entries = [entry("q1"), entry("q2", false), entry("q3"), entry("q4")];
+    expect(controller.startQueue(entries, source, loader)).toBe(true);
+    await vi.waitFor(() => {
+      expect(useRehearse.getState().songId).toBe("q1");
+    });
+    await vi.waitFor(() => {
+      expect(engine().state).toBe("playing");
+    });
+    expect(useRehearse.getState().info?.title).toBe("Title q1");
+    expect(controller.hasNextSong()).toBe(true);
+    expect(controller.hasPreviousSong()).toBe(false);
+    engine().setState("stopped");
+    engine().emit("ended", undefined);
+    await vi.waitFor(() => {
+      expect(useRehearse.getState().songId).toBe("q4");
+    });
+    await vi.waitFor(() => {
+      expect(engine().state).toBe("playing");
+    });
+    expect(loaded).toEqual(["q1", "q3", "q4"]);
+    expect(useRehearse.getState().queue?.index).toBe(3);
+    expect(controller.hasNextSong()).toBe(false);
+    // Previous tries the ready song before it (q3 still fails: q4, already loaded, plays from the start).
+    controller.previousSong();
+    await vi.waitFor(() => {
+      expect(loaded).toEqual(["q1", "q3", "q4", "q3"]);
+    });
+    await vi.waitFor(() => {
+      expect(useRehearse.getState().queue?.index).toBe(3);
+    });
+  });
+
+  it("nothing ready: does not start", () => {
+    const { loader, loaded } = loaderFor();
+    expect(controller.startQueue([entry("x", false)], source, loader)).toBe(false);
+    expect(loaded).toEqual([]);
+  });
+
+  it("a deleted song leaves the queue; deleting the loaded one stops", async () => {
+    const { loader } = loaderFor();
+    controller.startQueue([entry("d1"), entry("d2")], source, loader);
+    await vi.waitFor(() => {
+      expect(useRehearse.getState().songId).toBe("d1");
+    });
+    expect(controller.dropSongs({ songIds: ["d2"] })).toBe("removed");
+    expect(useRehearse.getState().queue?.entries.map((e) => e.songId)).toEqual(["d1"]);
+    expect(controller.dropSongs({ songIds: ["d1"] })).toBe("stopped");
+    expect(useRehearse.getState().open).toBe(false);
+    expect(useRehearse.getState().queue).toBeNull();
+  });
+
+  it("a song opened on its page joins the queue that holds it", async () => {
+    const { loader } = loaderFor();
+    controller.startQueue([entry("f1"), entry("f2")], source, loader);
+    await vi.waitFor(() => {
+      expect(useRehearse.getState().songId).toBe("f1");
+    });
+    await openSong("f2", [track("f2-t")], null, {}, "", { ...info("f2"), projectId: "p" });
+    expect(useRehearse.getState().queue?.index).toBe(1);
+    expect(useRehearse.getState().queue?.entries).toHaveLength(2);
   });
 });

@@ -3,7 +3,7 @@ import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useOnlineState, watchOnlineState } from "../offline/online";
-import type { GoneSongs } from "../player/listenEngine";
+import type { GoneSongs } from "../player/queue";
 import { RECONNECT_MAX_MS, useEventStream } from "./useEventStream";
 
 class FakeEventSource {

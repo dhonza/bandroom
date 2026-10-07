@@ -610,8 +610,10 @@
   "listen": {
     "play": "Play",
     "pause": "Pause",
+    "previous": "Previous song",
     "next": "Next song",
     "stop": "Stop and close player",
+    "interrupted": "Stopped. Tap play to continue.",
     "playAll": "Play all",
     "nothingToPlay": "No song in this project has audio ready to play yet.",
     "openSong": "Open {{title}}",

@@ -16,6 +16,7 @@ import {
   type ClickSettings,
   type MixerState,
   type MixerTrackState,
+  type Song,
   type TempoGrid,
   type Track,
   type TrackVersion,
@@ -30,8 +31,19 @@ import {
   shouldQueueOffline,
 } from "../offline/controller";
 import { isLinkMode, saveLocalMix } from "../links/linkMode";
-import { claimAudio, registerAudioOwner } from "../player/exclusive";
-import { useTempoUi } from "../tempo/store";
+import { installMediaActions, setMediaInfo, setMediaPlaying } from "../player/mediaSession";
+import {
+  dropGone,
+  focusSong,
+  nextReadyIndex,
+  startIndex,
+  type GoneSongs,
+  type PlayQueue,
+  type QueueEntry,
+  type QueueSource,
+} from "../player/queue";
+import type { QueueLoader } from "../player/queueLoader";
+import { setSongTempo, useTempoUi } from "../tempo/store";
 import { debugSnapshot, exposeDebug } from "./debug";
 import {
   abPartner,
@@ -62,8 +74,38 @@ import {
   type RehearsePrefs,
 } from "./prefs";
 
+/** What the mini-player and the media controls show about the loaded song. */
+export interface SongInfo {
+  songId: string;
+  title: string;
+  subtitle: string;
+  projectId: string;
+  projectName: string;
+  imageHash: string | null;
+}
+
+export function songInfoOf(song: Song): SongInfo {
+  return {
+    songId: song.id,
+    title: song.title,
+    subtitle: song.subtitle,
+    projectId: song.project.id,
+    projectName: song.project.name,
+    imageHash: song.project.imageHash,
+  };
+}
+
 export interface RehearseState {
   songId: string | null;
+  /** The loaded song's title and project (mini-player, Media Session). */
+  info: SongInfo | null;
+  /**
+   * A song session is open: on its page, or playing on (or paused) elsewhere with the
+   * mini-player (SPEC §6.10). Closed when the user leaves a stopped song or stops the player.
+   */
+  open: boolean;
+  /** The play queue (SPEC §6.10); a song opened on its page is a queue of its own. */
+  queue: PlayQueue | null;
   status: EngineState;
   mix: MixerState;
   tracks: PlayableTrack[];
@@ -88,6 +130,9 @@ export interface RehearseState {
 
 export const useRehearse = create<RehearseState>(() => ({
   songId: null,
+  info: null,
+  open: false,
+  queue: null,
   status: "idle",
   mix: { tracks: {} },
   tracks: [],
@@ -107,7 +152,8 @@ export const useRehearse = create<RehearseState>(() => ({
 let engine: Engine | null = null;
 let wake: WakeLockController | null = null;
 let loadKey = "";
-let pendingPlay = false;
+/** Play once the loading song is in: after a tap (with the count-in) or the queue (without). */
+let pendingPlay: "countIn" | "plain" | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let struggleTimer: ReturnType<typeof setTimeout> | null = null;
 let allTracks: Track[] = [];
@@ -116,6 +162,11 @@ let userTag = "";
 let loopSec: { start: number; end: number } | null = null;
 /** The last `openSong` call, repeated by `retryAudio` after the engine failed to start. */
 let lastOpen: Parameters<typeof openSong> | null = null;
+/** The song whose page shows the Player (SPEC §6.10: leaving it keeps a playing song). */
+let attachedSongId: string | null = null;
+let queueLoader: QueueLoader | null = null;
+/** Bumped by every queue load: a superseded load does not touch the engine. */
+let queueLoad = 0;
 
 function getEngine(): Engine {
   if (engine) return engine;
@@ -136,12 +187,14 @@ function getEngine(): Engine {
   e.on("error", (err) => {
     useRehearse.setState((s) => ({ errors: { ...s.errors, [err.trackId]: err.message } }));
   });
-  e.on("ended", () => {
-    useRehearse.setState({ ended: true });
-  });
-  // Listen mode takes the audio: pause and suspend the context (the worklet stops running).
-  registerAudioOwner("rehearse", () => {
-    e.suspend();
+  e.on("ended", onEnded);
+  installMediaActions({
+    play: () => {
+      if (!isPlaying()) togglePlay();
+    },
+    pause,
+    previous: previousSong,
+    next: nextSong,
   });
   useTempoUi.subscribe(() => {
     syncClick();
@@ -155,7 +208,21 @@ function getEngine(): Engine {
 
 function onEngineState(s: EngineState) {
   useRehearse.setState({ status: s, ...(s === "playing" ? { ended: false } : {}) });
-  wake?.setPlaying(s === "playing" || s === "buffering");
+  const playing = s === "playing" || s === "buffering";
+  wake?.setPlaying(playing);
+  if (useRehearse.getState().open) setMediaPlaying(playing);
+}
+
+/** The song ended: the queue's next ready song plays; at the queue's end a song left alone closes. */
+function onEnded() {
+  useRehearse.setState({ ended: true });
+  const s = useRehearse.getState();
+  const next = s.queue ? nextReadyIndex(s.queue.entries, s.queue.index, 1) : null;
+  if (next !== null) {
+    playQueueIndex(next);
+    return;
+  }
+  if (s.songId !== attachedSongId) closeSong();
 }
 
 function onVisibility() {
@@ -202,13 +269,19 @@ export async function openSong(
   saved: MixerState | null,
   listenedVersions: Record<string, TrackVersion | undefined>,
   instrumentTag: string,
+  info: SongInfo,
 ): Promise<void> {
-  lastOpen = [songId, tracks, saved, listenedVersions, instrumentTag];
+  lastOpen = [songId, tracks, saved, listenedVersions, instrumentTag, info];
   allTracks = tracks;
   userTag = instrumentTag;
   const e = getEngine();
   const s = useRehearse.getState();
   const sameSong = s.songId === songId;
+  if (!sameSong) {
+    // The previous song's mix is saved under its own id; its loop does not carry over.
+    flushSave();
+    loopSec = null;
+  }
   const mix = mergeMix(tracks, sameSong ? s.mix : saved);
   const quality = currentQuality(songId, tracks, mix);
   // Listened versions follow the local mix (A/B choices not saved yet included): the saved mix
@@ -229,8 +302,12 @@ export async function openSong(
   const playable = playableTracks(tracks, listened, quality, blobUrl);
   const key = loadKeyOf(songId, playable);
   const trims = sameSong ? changedTrims(s.tracks, playable) : [];
+  const entry: QueueEntry = { songId, title: info.title, subtitle: info.subtitle, ready: true };
   useRehearse.setState({
     songId,
+    info,
+    open: true,
+    queue: focusSong(s.queue, entry, queueSourceOf(info)),
     mix,
     tracks: playable,
     quality,
@@ -239,6 +316,7 @@ export async function openSong(
       : { ab: {}, errors: {}, ended: false, lockHint: false, selectedTrackId: null }),
   });
   wake?.setSongOpen(true);
+  setMediaInfo(info);
   if (key === loadKey) {
     // Same audio: a changed version gain applies in place (SPEC §25.6).
     for (const c of trims) e.setTrackState(c.trackId, { trimDb: c.trimDb });
@@ -261,10 +339,9 @@ export async function openSong(
   applyLoop();
   syncClick();
   if (wasPlaying || pendingPlay) {
-    // A reload continues the music: no count-in.
-    const countIn = pendingPlay ? countInForPlay() : null;
-    pendingPlay = false;
-    claimAudio("rehearse");
+    // A reload continues the music: no count-in; neither does the queue moving on.
+    const countIn = pendingPlay === "countIn" ? countInForPlay() : null;
+    pendingPlay = null;
     e.play({ countIn });
   }
 }
@@ -293,17 +370,150 @@ export function retryAudio(): void {
   const e = getEngine();
   unlockAudio(e);
   useRehearse.setState({ lockHint: false });
-  claimAudio("rehearse");
-  pendingPlay = true;
+  pendingPlay = "countIn";
   loadKey = "";
   if (lastOpen) void openSong(...lastOpen);
 }
 
-/** Leaving the song page: stop and save. */
+function queueSourceOf(info: SongInfo): QueueSource {
+  return {
+    kind: "song",
+    projectId: info.projectId,
+    projectName: info.projectName,
+    imageHash: info.imageHash,
+  };
+}
+
+/**
+ * Stops and saves; the mini-player goes and the queue ends. The engine keeps the song's audio,
+ * so opening its page again continues where it stood.
+ */
 export function closeSong(): void {
+  queueLoad++;
+  pendingPlay = null;
   engine?.pause();
   wake?.setSongOpen(false);
   flushSave();
+  if (useRehearse.getState().open) {
+    useRehearse.setState({ open: false, queue: null });
+    setMediaInfo(null);
+    setMediaPlaying(null);
+  }
+}
+
+/**
+ * The song page shows the Player for `songId`. Leaving the page keeps a playing song (the
+ * mini-player takes over, SPEC §6.10); a stopped one closes.
+ */
+export function attachPage(songId: string): () => void {
+  attachedSongId = songId;
+  return () => {
+    if (attachedSongId === songId) attachedSongId = null;
+    const s = useRehearse.getState();
+    if (s.songId === songId && !isPlaying() && pendingPlay === null) closeSong();
+  };
+}
+
+// ——— queue (SPEC §6.10) ———————————————————————————————————————————————————————————
+
+/**
+ * Starts a queue (a project's "Play all", a song row's play button) at `songId` or its first
+ * song; skips songs without audio. False when nothing can play. Call inside the tap: it unlocks
+ * the audio (iOS) before the song loads.
+ */
+export function startQueue(
+  entries: QueueEntry[],
+  source: QueueSource,
+  loader: QueueLoader,
+  songId?: string,
+): boolean {
+  const first = startIndex(entries, songId);
+  if (first === null) return false;
+  unlockAudio(getEngine());
+  queueLoader = loader;
+  useRehearse.setState({ queue: { entries, index: first, source }, lockHint: false });
+  playQueueIndex(first);
+  return true;
+}
+
+/** Loads the queue's entry at `index` with the personal mix and plays it from the start. */
+function playQueueIndex(index: number): void {
+  const s = useRehearse.getState();
+  const q = s.queue;
+  const entry = q?.entries[index];
+  if (!q || !entry) return;
+  const token = ++queueLoad;
+  useRehearse.setState({ queue: { ...q, index }, ended: false });
+  if (s.songId === entry.songId && s.open && loadKey !== "") {
+    // Already in the engine: from the start.
+    seekSec(0);
+    engine?.play();
+    return;
+  }
+  const loader = queueLoader;
+  if (!loader) return;
+  engine?.pause();
+  pendingPlay = "plain";
+  loader
+    .load(entry.songId)
+    .then(async (d) => {
+      if (token !== queueLoad) return;
+      setSongTempo(d.song.id, d.tempo);
+      await openSong(d.song.id, d.tracks, d.saved, d.listened, userTag, songInfoOf(d.song));
+    })
+    .catch(() => {
+      if (token !== queueLoad) return;
+      // Not loadable (gone, offline without it): on to the next song, or stop.
+      const cur = useRehearse.getState().queue;
+      const next = cur ? nextReadyIndex(cur.entries, index, 1) : null;
+      if (next !== null) playQueueIndex(next);
+      else {
+        pendingPlay = null;
+        if (useRehearse.getState().songId !== attachedSongId) closeSong();
+      }
+    });
+}
+
+/** Next song of the queue (mini-player, media controls). */
+export function nextSong(): void {
+  const q = useRehearse.getState().queue;
+  const next = q ? nextReadyIndex(q.entries, q.index, 1) : null;
+  if (next !== null) playQueueIndex(next);
+}
+
+/** Media-control convention: restart the song when more than 3 s in, else the previous song. */
+export function previousSong(): void {
+  const q = useRehearse.getState().queue;
+  const prev = q ? nextReadyIndex(q.entries, q.index, -1) : null;
+  if (positionSec() > 3 || prev === null) seekSec(0);
+  else playQueueIndex(prev);
+}
+
+export function hasNextSong(s: RehearseState = useRehearse.getState()): boolean {
+  return s.queue !== null && nextReadyIndex(s.queue.entries, s.queue.index, 1) !== null;
+}
+
+export function hasPreviousSong(s: RehearseState = useRehearse.getState()): boolean {
+  return s.queue !== null && nextReadyIndex(s.queue.entries, s.queue.index, -1) !== null;
+}
+
+/**
+ * Deleted songs leave the queue (SPEC §6.10). `"stopped"`: the loaded song is among them and
+ * playback stopped (the caller says why).
+ */
+export function dropSongs(gone: GoneSongs): "stopped" | "removed" | "none" {
+  const s = useRehearse.getState();
+  const loadedGone =
+    s.open &&
+    s.info !== null &&
+    ((gone.songIds ?? []).includes(s.info.songId) || gone.projectId === s.info.projectId);
+  const { result, queue } = dropGone(s.queue, gone);
+  if (loadedGone || result === "stopped") {
+    closeSong();
+    return "stopped";
+  }
+  if (result === "removed") useRehearse.setState({ queue });
+  return result;
 }
 
 /**
@@ -322,10 +532,9 @@ export function togglePlay(): void {
     e.pause();
     return;
   }
-  claimAudio("rehearse");
   useRehearse.setState({ lockHint: false });
   if (st === "loading" || st === "idle") {
-    pendingPlay = true;
+    pendingPlay = "countIn";
     return;
   }
   e.play({ countIn: countInForPlay() });

@@ -7,6 +7,9 @@ import { clickSettingsOf } from "./model";
 /** The engine and Rehearse state read by the e2e tests. */
 export function debugSnapshot(engine: Engine | null, s: RehearseState, hasTempo: boolean) {
   return {
+    songId: s.songId,
+    open: s.open,
+    queue: s.queue ? { songIds: s.queue.entries.map((e) => e.songId), index: s.queue.index } : null,
     status: s.status,
     position: engine ? engine.getPositionFrames() : 0,
     length: engine?.lengthFrames ?? 0,
@@ -20,6 +23,7 @@ export function debugSnapshot(engine: Engine | null, s: RehearseState, hasTempo:
     })),
     mix: s.mix,
     errors: s.errors,
+    buffer: s.buffer,
     loop: engine?.loopRange ?? null,
     loopCached: engine?.loopCached ?? false,
     lap: engine?.lapInBase ?? 0,

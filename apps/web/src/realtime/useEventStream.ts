@@ -11,7 +11,7 @@ import { apiUrl } from "../lib/media";
 import { docKeys } from "../documents/queries";
 import { onReconnect } from "../offline/online";
 import { processingKey } from "../processing/queries";
-import type { GoneSongs } from "../player/listenEngine";
+import type { GoneSongs } from "../player/queue";
 import { trashKeys } from "../trash/queries";
 
 /** Events that change what a Trash list shows (SPEC §26.3). */

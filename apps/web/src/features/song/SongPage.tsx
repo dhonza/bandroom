@@ -251,7 +251,7 @@ function DeleteSongSection({ song }: { song: Song }) {
       // in the confirm modal (`error`).
       qc.removeQueries({ queryKey: songKeys.detail(song.id) });
       invalidate();
-      // The mini player would take over the deleted song once the page is left (SPEC §6.10).
+      // The deleted song stops and leaves the queue (SPEC §6.10).
       dropDeletedFromQueue(t, { songIds: [song.id] });
       void navigate(`/projects/${song.project.id}`, { replace: true });
     },
@@ -291,5 +291,7 @@ function SongPlayer({ song, mixer }: { song: Song; mixer: MixerToggle }) {
   if (tracks.isPending) return <Loader size="sm" />;
   const list = tracks.data?.tracks ?? [];
   if (list.length === 0) return null;
-  return <RehearsePanel song={song} tracks={list} mixerOpen={mixer.open} />;
+  return <RehearsePanel song={song} tracks={list} mixerOpen={mixer.open} songPath={appSongPath} />;
 }
+
+const appSongPath = (id: string) => `/songs/${id}`;

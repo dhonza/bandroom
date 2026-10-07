@@ -1,6 +1,5 @@
 import {
   dbToGain,
-  getSongMixer,
   listTrackVersions,
   type Song,
   type Track,
@@ -9,13 +8,12 @@ import {
 import { Alert, Group, Loader, Text } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router";
 import { api } from "../api/client";
-import { useOffline } from "../offline/controller";
-import { pendingMixer } from "../offline/pending";
 import { useOptionalUser } from "../auth/session";
-import { isLinkMode, loadLocalMix } from "../links/linkMode";
+import { fetchSongMixer, tracksNeedingVersions } from "../player/queueLoader";
 import { Section } from "../components/Section";
 import { songKeys } from "../features/library/queries";
 import { COARSE_POINTER_QUERY, PHONE_QUERY } from "../shell/mediaQueries";
@@ -35,7 +33,7 @@ import { ShortcutHelp, useSongShortcuts } from "../markers/shortcuts";
 import { SongComments } from "../comments/CommentsPanel";
 import { registerPlayer } from "../markers/store";
 import {
-  closeSong,
+  attachPage,
   dismissLockHint,
   durationSec,
   isPlaying,
@@ -43,6 +41,7 @@ import {
   positionSec,
   seekSec,
   selectTrack,
+  songInfoOf,
   setLoopSec,
   setTrack,
   togglePlay,
@@ -76,10 +75,13 @@ export function RehearsePanel({
   song,
   tracks,
   mixerOpen,
+  songPath,
 }: {
   song: Song;
   tracks: Track[];
   mixerOpen: boolean;
+  /** Where the page of another song is: the page follows the queue moving on (SPEC §6.10). */
+  songPath?: (songId: string) => string;
 }) {
   const { t } = useTranslation();
   const user = useOptionalUser();
@@ -88,23 +90,12 @@ export function RehearsePanel({
   const coarse = useMediaQuery(COARSE_POINTER_QUERY, false, { getInitialValueInEffect: false });
   const mixerQuery = useQuery({
     queryKey: songKeys.mixer(song.id),
-    // Link visitors have no account: their mix is kept in this browser.
-    queryFn: ({ signal }) =>
-      isLinkMode()
-        ? Promise.resolve({ state: loadLocalMix(song.id), snapshots: [] })
-        : api(getSongMixer, { params: { id: song.id } }, { signal }).then((r) => ({
-            ...r,
-            // A mix changed offline and not sent yet wins (SPEC §13 outbox).
-            state: pendingMixer(useOffline.getState().outbox, song.id) ?? r.state,
-          })),
+    queryFn: ({ signal }) => fetchSongMixer(song.id, signal),
   });
 
   // Personal listened versions that are not the current one need their version data.
   const saved = mixerQuery.data?.state ?? null;
-  const needVersions = tracks.filter((tr) => {
-    const id = saved?.tracks[tr.id]?.listenedVersionId;
-    return id && id !== tr.current?.id;
-  });
+  const needVersions = tracksNeedingVersions(tracks, saved);
   const versionQueries = useQueries({
     queries: needVersions.map((tr) => ({
       queryKey: songKeys.versions(song.id, tr.id),
@@ -126,9 +117,11 @@ export function RehearsePanel({
   const ready = !mixerQuery.isPending && versionsReady;
   useEffect(() => {
     if (!ready) return;
-    void openSong(song.id, tracks, saved, listened, instrumentTag);
-  }, [ready, song.id, tracks, saved, listened, instrumentTag]);
-  useEffect(() => closeSong, [song.id]);
+    void openSong(song.id, tracks, saved, listened, instrumentTag, songInfoOf(song));
+  }, [ready, song, tracks, saved, listened, instrumentTag]);
+  // Leaving the page keeps a playing song (the mini-player takes over, SPEC §6.10).
+  useEffect(() => attachPage(song.id), [song.id]);
+  useFollowQueue(song.id, songPath);
 
   useEffect(
     () =>
@@ -273,6 +266,23 @@ export function RehearsePanel({
       )}
     </Section>
   );
+}
+
+/**
+ * The queue moved on from this page's song (its end, media controls): the page follows to the
+ * song that now plays, so the Player never shows another song's audio.
+ */
+function useFollowQueue(songId: string, songPath?: (songId: string) => string) {
+  const navigate = useNavigate();
+  const playing = useRehearse((s) => (s.open ? s.songId : null));
+  const prev = useRef(playing);
+  useEffect(() => {
+    const was = prev.current;
+    prev.current = playing;
+    if (songPath && was === songId && playing !== null && playing !== songId) {
+      void navigate(songPath(playing));
+    }
+  }, [playing, songId, songPath, navigate]);
 }
 
 /**

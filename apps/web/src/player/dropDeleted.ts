@@ -1,13 +1,14 @@
 import { notifications } from "@mantine/notifications";
 import type { TFunction } from "i18next";
-import { dropFromQueue, type GoneSongs } from "./listenEngine";
+import { dropSongs } from "../rehearse/controller";
+import type { GoneSongs } from "./queue";
 
 /**
- * Deleted songs leave the Listen queue (SPEC §6.10); when the playing song was deleted, the mini
- * player stops and a toast says why. Used by the delete actions and by SSE deletes of others.
+ * Deleted songs leave the engine queue (SPEC §6.10); when the loaded song was deleted, playback
+ * stops and a toast says why. Used by the delete actions and by SSE deletes of others.
  */
 export function dropDeletedFromQueue(t: TFunction, gone: GoneSongs): void {
-  if (dropFromQueue(gone) !== "stopped") return;
+  if (dropSongs(gone) !== "stopped") return;
   notifications.show({
     id: "listen-gone",
     color: "gray",

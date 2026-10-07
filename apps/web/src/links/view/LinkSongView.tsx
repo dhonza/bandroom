@@ -67,7 +67,13 @@ export function LinkSongView({ songId, token }: { songId: string; token: string 
         </Group>
       </Group>
       {tracks.length > 0 ? (
-        <RehearsePanel key={song.id} song={song} tracks={tracks} mixerOpen={mixer.open} />
+        <RehearsePanel
+          key={song.id}
+          song={song}
+          tracks={tracks}
+          mixerOpen={mixer.open}
+          {...(view.songId === null && { songPath: (id: string) => `/l/${token}/songs/${id}` })}
+        />
       ) : (
         // Nothing to hear yet (no tracks).
         <Alert color="gray" data-testid="link-mix-preparing">

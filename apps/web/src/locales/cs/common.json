@@ -626,8 +626,10 @@
   "listen": {
     "play": "Přehrát",
     "pause": "Pozastavit",
+    "previous": "Předchozí píseň",
     "next": "Další píseň",
     "stop": "Zastavit a zavřít přehrávač",
+    "interrupted": "Zastaveno. Klepnutím na přehrát pokračujte.",
     "playAll": "Přehrát vše",
     "nothingToPlay": "V tomto projektu zatím žádná píseň nemá připravený zvuk.",
     "openSong": "Otevřít {{title}}",

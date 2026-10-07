@@ -10,7 +10,8 @@ import { BrandLogo, useLogoHash } from "../branding/BrandLogo";
 import { useClientConfig } from "../config/ClientConfigContext";
 import { useEventStream } from "../realtime/useEventStream";
 import { dropDeletedFromQueue } from "../player/dropDeleted";
-import type { GoneSongs } from "../player/listenEngine";
+import { closeSong } from "../rehearse/controller";
+import type { GoneSongs } from "../player/queue";
 import { BottomTabBar, TAB_BAR_HEIGHT } from "./BottomTabBar";
 import { ChromeRestoreButton } from "./ChromeRestoreButton";
 import { isChromeToggleKey, isTypingTarget, toggleChrome, useChrome } from "./chrome";
@@ -52,6 +53,8 @@ export function AppLayout() {
     [t],
   );
   useEventStream(true, onNotification, onGone);
+  // Leaving the app (logout, an expired session): the player stops with it.
+  useEffect(() => closeSong, []);
   const mini = useMiniPlayerVisible();
   // Split view: the documents panel sits beside the page on desktop (SPEC §11.3).
   const docsInset = useDocsInset();
