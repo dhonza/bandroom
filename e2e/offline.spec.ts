@@ -198,7 +198,9 @@ test("Offline song: the Player with the Mixer closed and open in airplane mode, 
 
 test("Offline project, Range answers from the cache, Offline page, logout cleanup", async ({
   page,
+  context,
   request,
+  browserName,
 }, testInfo) => {
   test.setTimeout(420_000);
   const phone = isMobile(testInfo);
@@ -216,6 +218,26 @@ test("Offline project, Range answers from the cache, Offline page, logout cleanu
     timeout: 120_000,
   });
   await expect(page.getByTestId("song-offline-badge")).toHaveCount(1);
+
+  // "Play all" in airplane mode: the engine queue loads the song from this device (SPEC §6.10,
+  // §13). Not in WebKit (offline emulation bypasses the service worker, see above).
+  if (browserName !== "webkit") {
+    await context.setOffline(true);
+    await page.reload();
+    await expect(page.getByTestId("offline-indicator")).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId("play-all").click();
+    await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("playing");
+    const mini = page.getByTestId("mini-player");
+    await expect(mini.getByTestId("mini-title")).toHaveText("tone_48000_s16_stereo");
+    const p0 = (await debug(page))?.position ?? 0;
+    await expect
+      .poll(async () => (await debug(page))?.position ?? 0, { timeout: 20_000 })
+      .toBeGreaterThan(p0 + 12_000);
+    expect((await debug(page))?.errors).toEqual({});
+    await mini.getByTestId("mini-close").click();
+    await expect(mini).toBeHidden();
+    await context.setOffline(false);
+  }
   await page.goto(songPath.replace(/^\/bandroom/, "").replace(/^\//, ""));
   await expect(page.getByTestId("offline-button")).toHaveAttribute("data-status", "project");
 

@@ -124,11 +124,11 @@ function makeTone(file, seconds, freq) {
   ]);
 }
 
-async function upload(songId, name, role, file) {
+async function upload(songId, name, file) {
   const data = fs.readFileSync(file);
   const b64 = (s) => Buffer.from(s).toString("base64");
   const meta = `filename ${b64(`${name}.wav`)},target ${b64(
-    JSON.stringify({ type: "newTrack", songId, name, role }),
+    JSON.stringify({ type: "newTrack", songId, name }),
   )}`;
   const created = await apiCall("POST", "api/v1/uploads", {
     headers: {
@@ -171,8 +171,8 @@ async function seed() {
   const bass = path.join(OUT, "bass.wav");
   makeTone(mix, 60, 330);
   makeTone(bass, 60, 110);
-  for (const s of songs) await upload(s.id, "Mix", "mix", mix);
-  await upload(songs[0].id, "Bass", "track", bass);
+  for (const s of songs) await upload(s.id, "Keys", mix);
+  await upload(songs[0].id, "Bass", bass);
   for (let i = 0; i < 240; i++) {
     const ready = await Promise.all(
       songs.map(async (s) => {
@@ -330,7 +330,7 @@ const playing = `return !!document.querySelector('[data-testid="rehearse-play"][
 async function run() {
   await startStack();
   log("stack up; seeding");
-  const { songs } = await seed();
+  const { project, songs } = await seed();
   const caps = await startSafari();
   results.push({
     name: "device",
@@ -464,13 +464,31 @@ async function run() {
     return { progress: t0 };
   });
 
-  await step("next song from the mini-player", async () => {
-    await js(
-      `document.querySelector('[data-testid="mini-player"] button[aria-label="Next song"]').click();`,
+  // The engine queue (SPEC §6.10): "Play all" on the project page, then the next song.
+  await step("Play all from the project page", async () => {
+    await click(`a[href$="projects/${project.id}"]`);
+    await waitFor(
+      "play all",
+      `return !!document.querySelector('[data-testid="play-all"]:not([data-loading])');`,
+    );
+    await click('[data-testid="play-all"]');
+    await waitFor(
+      "song one",
+      `return /Sim Song One/.test(document.querySelector('[data-testid="mini-title"]')?.textContent ?? "");`,
     );
     await waitFor(
+      "playing",
+      `return document.querySelector('[data-testid="mini-play"]')?.getAttribute("aria-label") === "Pause";`,
+      15_000,
+    );
+    return await js(`return navigator.mediaSession?.metadata?.title ?? null;`);
+  });
+
+  await step("next song from the mini-player", async () => {
+    await click('[data-testid="mini-next"]');
+    await waitFor(
       "song two",
-      `return /Sim Song Two/.test(document.querySelector('[data-testid="mini-player"]')?.textContent ?? "");`,
+      `return /Sim Song Two/.test(document.querySelector('[data-testid="mini-title"]')?.textContent ?? "");`,
     );
     await waitFor(
       "playing",
