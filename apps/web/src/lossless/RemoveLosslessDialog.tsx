@@ -1,14 +1,29 @@
 import {
+  AUDIO_QUALITIES,
+  AUDIO_QUALITY_KBPS,
+  AudioQualitySchema,
   batchRemoveLossless,
   batchRemoveLosslessPreview,
+  type AudioQuality,
   type BatchItems,
   type RemoveLosslessPreview,
 } from "@bandroom/shared";
-import { Alert, Button, Group, List, Loader, Modal, Stack, Text, TextInput } from "@mantine/core";
+import {
+  Alert,
+  Button,
+  Group,
+  List,
+  Loader,
+  Modal,
+  Select,
+  Stack,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import { IconAlertTriangle, IconCopy } from "@tabler/icons-react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api/client";
@@ -59,20 +74,32 @@ function DialogBody({
   const apiError = useApiError();
   const invalidate = useInvalidateBatch();
   const [typed, setTyped] = useState("");
+  // The Opus that stays (SPEC §28.3): the current one, or a preset re-encoded first.
+  const [quality, setQuality] = useState<AudioQuality | null>(null);
+  const body = quality ? { ...items, quality } : items;
   const size = (n: number) => formatBytes(n, i18n.language);
   const preview = useQuery({
-    queryKey: ["lossless", "preview", items],
-    queryFn: ({ signal }) => api(batchRemoveLosslessPreview, { body: items }, { signal }),
+    queryKey: ["lossless", "preview", items, quality],
+    queryFn: ({ signal }) => api(batchRemoveLosslessPreview, { body }, { signal }),
     gcTime: 0,
     staleTime: 0,
+    // The dialog keeps its content while the preview for another quality loads.
+    placeholderData: keepPreviousData,
   });
   const apply = useMutation({
-    mutationFn: () => api(batchRemoveLossless, { body: items }),
+    mutationFn: () => api(batchRemoveLossless, { body }),
     onSuccess: (r) => {
       invalidate();
       notifications.show({
         color: "teal",
-        message: t("lossless.done", { count: r.count, size: size(r.usageBytes) }),
+        message: [
+          r.count > 0 || r.reencoding === 0
+            ? t("lossless.done", { count: r.count, size: size(r.usageBytes) })
+            : null,
+          r.reencoding > 0 ? t("lossless.doneQueued", { count: r.reencoding }) : null,
+        ]
+          .filter(Boolean)
+          .join(" "),
       });
       onDone?.();
       onClose();
@@ -111,7 +138,37 @@ function DialogBody({
           {t("lossless.nothing")}
         </Alert>
       ) : (
-        <Summary preview={p} size={size} />
+        <>
+          <Select
+            label={t("lossless.quality")}
+            description={t("lossless.qualityHint")}
+            data={[
+              {
+                value: "keep",
+                label: t("lossless.keepCurrent", {
+                  kbps: p.currentOpus.map((o) => o.kbps).join(", ") || "?",
+                }),
+              },
+              ...AUDIO_QUALITIES.map((q) => ({
+                value: q,
+                label: t(`upload.settings.qualities.${q}`, AUDIO_QUALITY_KBPS[q]),
+              })),
+            ]}
+            value={quality ?? "keep"}
+            allowDeselect={false}
+            onChange={(v) => {
+              const q = AudioQualitySchema.safeParse(v);
+              setQuality(q.success ? q.data : null);
+            }}
+            data-testid="lossless-quality"
+          />
+          <Summary preview={p} size={size} />
+          {p.reencode > 0 && (
+            <Text size="sm" data-testid="lossless-reencode">
+              {t("lossless.reencode", { count: p.reencode })}
+            </Text>
+          )}
+        </>
       )}
       <Skipped preview={p} />
       {p.lossySources.count > 0 && (
@@ -164,7 +221,9 @@ function DialogBody({
           <Button
             color="red"
             h={44}
-            disabled={typed.trim().toLowerCase() !== word.toLowerCase()}
+            disabled={
+              typed.trim().toLowerCase() !== word.toLowerCase() || preview.isPlaceholderData
+            }
             loading={apply.isPending}
             onClick={() => {
               apply.mutate();

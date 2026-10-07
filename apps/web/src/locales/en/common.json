@@ -1549,7 +1549,14 @@
     "convertedOnUpload": "Converted to lossy on upload on {{date}}.",
     "convertedOnUploadBy": "Converted to lossy on upload on {{date}} by {{name}}.",
     "reencodedOn": "Re-encoded and full quality removed on {{date}}.",
-    "reencodedOnBy": "Re-encoded and full quality removed on {{date}} by {{name}}."
+    "reencodedOnBy": "Re-encoded and full quality removed on {{date}} by {{name}}.",
+    "quality": "Opus quality",
+    "qualityHint": "The compressed audio that stays. Another quality is re-encoded from the full quality first.",
+    "keepCurrent": "Keep current ({{kbps}} kbps)",
+    "reencode_one": "{{count}} version is re-encoded first; its full quality goes when that is done.",
+    "reencode_other": "{{count}} versions are re-encoded first; their full quality goes when that is done.",
+    "doneQueued_one": "{{count}} version is being re-encoded; its full quality goes when that is done.",
+    "doneQueued_other": "{{count}} versions are being re-encoded; their full quality goes when that is done."
   },
   "transfer": {
     "makeMultitrack": "Make multitrack song",

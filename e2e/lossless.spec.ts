@@ -179,3 +179,32 @@ test("upload with lossy on upload: Opus only, the badge says converted on upload
   await page.reload();
   await expect(page.getByTestId("track-upload-settings")).toHaveText("Lossy on upload · 128 kbps");
 });
+
+test("remove full quality at another Opus quality: re-encoded first (SPEC §28.3)", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(240_000);
+  await loginAsNewUser(page, page.request, testInfo, "member");
+  const { songId } = await projectWithSong(page, `Reencode ${uniqueUsername(testInfo)}`, "Take");
+  await page.goto(`songs/${songId}`);
+  await uploadTracks(page, ["Gtr"]);
+
+  await page.getByTestId("tracks-select").click();
+  await page.getByTestId("track-row").filter({ hasText: "Gtr" }).click();
+  await page.getByTestId("tracks-selection-bar").getByTestId("selection-removeLossless").click();
+  const quality = page.getByTestId("lossless-quality");
+  await expect(quality).toHaveValue("Keep current (96 kbps)", { timeout: 30_000 });
+  await quality.click();
+  await page.getByRole("option", { name: /^High/ }).click();
+  await expect(page.getByTestId("lossless-reencode")).toContainText("1 version is re-encoded");
+  await confirmRemoval(page);
+
+  const gtr = page.getByTestId("track-row").filter({ hasText: "Gtr" });
+  await expect(gtr.getByTestId("lossy-badge")).toHaveAttribute("data-reason", "reencode", {
+    timeout: 60_000,
+  });
+  expect(await downloadsOf(page, "Gtr")).toEqual(["opus"]);
+  await gtr.getByTestId("version-button").click();
+  await expect(page.getByTestId("version-stack")).toContainText("Opus 128 kbps");
+  await expect(page.getByTestId("version-archived")).toContainText(/Re-encoded and full quality/);
+});

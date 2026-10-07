@@ -1679,7 +1679,18 @@
     "convertedOnUpload": "Převedeno na ztrátový formát při nahrání {{date}}.",
     "convertedOnUploadBy": "Převedeno na ztrátový formát při nahrání {{date}} ({{name}}).",
     "reencodedOn": "Překódováno a plná kvalita odstraněna {{date}}.",
-    "reencodedOnBy": "Překódováno a plná kvalita odstraněna {{date}} ({{name}})."
+    "reencodedOnBy": "Překódováno a plná kvalita odstraněna {{date}} ({{name}}).",
+    "quality": "Kvalita Opus",
+    "qualityHint": "Komprimovaný zvuk, který zůstane. Jiná kvalita se nejdřív překóduje z plné kvality.",
+    "keepCurrent": "Ponechat současnou ({{kbps}} kb/s)",
+    "reencode_one": "{{count}} verze se nejdřív překóduje; plná kvalita zmizí, až to bude hotové.",
+    "reencode_few": "{{count}} verze se nejdřív překódují; plná kvalita zmizí, až to bude hotové.",
+    "reencode_many": "{{count}} verzí se nejdřív překóduje; plná kvalita zmizí, až to bude hotové.",
+    "reencode_other": "{{count}} verzí se nejdřív překóduje; plná kvalita zmizí, až to bude hotové.",
+    "doneQueued_one": "{{count}} verze se překódovává; plná kvalita zmizí, až to bude hotové.",
+    "doneQueued_few": "{{count}} verze se překódovávají; plná kvalita zmizí, až to bude hotové.",
+    "doneQueued_many": "{{count}} verzí se překódovává; plná kvalita zmizí, až to bude hotové.",
+    "doneQueued_other": "{{count}} verzí se překódovává; plná kvalita zmizí, až to bude hotové."
   },
   "transfer": {
     "makeMultitrack": "Vytvořit vícestopou píseň",
