@@ -220,6 +220,20 @@ export function Transport({
         </ActionIcon>
       </Menu.Target>
       <Menu.Dropdown miw={260}>
+        {onBounce && (
+          <>
+            {/* First: the menu is long on phones, and the action must be reachable. */}
+            <Menu.Item
+              leftSection={<IconFileMusic size={14} />}
+              closeMenuOnClick
+              onClick={onBounce}
+              data-testid="transport-bounce"
+            >
+              {t("bounce.action")}
+            </Menu.Item>
+            <Menu.Divider />
+          </>
+        )}
         <Menu.Label>
           {t("rehearse.quality.title")} ·{" "}
           {t("rehearse.quality.playing", { quality: t(`rehearse.quality.${quality}`) })}
@@ -281,19 +295,6 @@ export function Transport({
             {t(`rehearse.wakeLock.${w}`)}
           </Menu.Item>
         ))}
-        {onBounce && (
-          <>
-            <Menu.Divider />
-            <Menu.Item
-              leftSection={<IconFileMusic size={14} />}
-              closeMenuOnClick
-              onClick={onBounce}
-              data-testid="transport-bounce"
-            >
-              {t("bounce.action")}
-            </Menu.Item>
-          </>
-        )}
         {!phone && (
           <>
             <Menu.Divider />
