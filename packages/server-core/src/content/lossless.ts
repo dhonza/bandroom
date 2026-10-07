@@ -1,5 +1,6 @@
 import {
   type ArchivedReason,
+  type AudioQuality,
   LOSSLESS_PREVIEW_LIST_MAX,
   LOSSLESS_VARIANTS,
   songLossyOf,
@@ -13,6 +14,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { assets, assetVariants, blobs, songs, tracks, trackVersions } from "../db/schema";
 import { assetProbe, type AssetRow } from "../media/assets";
+import { opusKbpsFor } from "../media/opusRates";
 import { removeVariant } from "../media/variants";
 import type { TrackRow, TrackVersionRow } from "./tracks";
 
@@ -74,6 +76,11 @@ export interface LosslessPlan {
   targets: LosslessTarget[];
   /** Their assets, each once. */
   assetIds: string[];
+  /**
+   * Assets whose Opus is re-encoded at the chosen quality before their full quality goes (SPEC
+   * §28.3), with the bitrate to encode; the rest lose it at once.
+   */
+  reencode: { assetId: string; kbps: number }[];
   preview: RemoveLosslessPreview;
 }
 
@@ -92,6 +99,7 @@ const refOf = (t: LosslessTarget): LosslessVersionRef => ({
 export function planLosslessRemoval(
   db: Db,
   items: { kind: TrashKind; id: string }[],
+  quality?: AudioQuality,
 ): LosslessPlan {
   const seen = new Set<string>();
   const targets: LosslessTarget[] = [];
@@ -138,6 +146,35 @@ export function planLosslessRemoval(
   }
 
   const assetIds = [...new Set(targets.map((t) => t.version.assetId))];
+  // SPEC §28.3: the current Opus of each asset, and whether the chosen quality needs a new one.
+  const opusOf = new Map<string, { kbps: number; mono: boolean }>();
+  if (assetIds.length > 0) {
+    for (const v of db
+      .select({ assetId: assetVariants.assetId, meta: assetVariants.meta })
+      .from(assetVariants)
+      .where(and(inArray(assetVariants.assetId, assetIds), eq(assetVariants.variant, "opus")))
+      .all()) {
+      const m = JSON.parse(v.meta) as { bitrate?: unknown; channels?: unknown };
+      opusOf.set(v.assetId, {
+        kbps: typeof m.bitrate === "number" ? m.bitrate : 0,
+        mono: m.channels === 1,
+      });
+    }
+  }
+  const reencode: LosslessPlan["reencode"] = [];
+  if (quality) {
+    for (const assetId of assetIds) {
+      const opus = opusOf.get(assetId);
+      const kbps = opusKbpsFor(db, quality, opus?.mono ?? false);
+      if (opus?.kbps !== kbps) reencode.push({ assetId, kbps });
+    }
+  }
+  const reencodeIds = new Set(reencode.map((r) => r.assetId));
+  const currentOpus = new Map<number, number>();
+  for (const t of targets) {
+    const kbps = opusOf.get(t.version.assetId)?.kbps;
+    if (kbps !== undefined) currentOpus.set(kbps, (currentOpus.get(kbps) ?? 0) + 1);
+  }
   const files: Record<LosslessVariant, number> = { flac: 0, original: 0, wavmeta: 0 };
   const removedRefs = new Map<string, number>();
   for (const assetId of assetIds) {
@@ -182,6 +219,7 @@ export function planLosslessRemoval(
   return {
     targets,
     assetIds,
+    reencode,
     preview: {
       versions: targets.length,
       files,
@@ -193,8 +231,40 @@ export function planLosslessRemoval(
       },
       sharedCopies,
       skipped,
+      reencode: targets.filter((t) => reencodeIds.has(t.version.assetId)).length,
+      currentOpus: [...currentOpus]
+        .sort((a, b) => b[1] - a[1] || b[0] - a[0])
+        .map(([kbps, count]) => ({ kbps, count })),
     },
   };
+}
+
+/** The part of a plan that is removed at once: the assets that need no re-encode (SPEC §28.3). */
+export function immediatePart(plan: LosslessPlan): LosslessPlan {
+  if (plan.reencode.length === 0) return plan;
+  const later = new Set(plan.reencode.map((r) => r.assetId));
+  return {
+    ...plan,
+    targets: plan.targets.filter((t) => !later.has(t.version.assetId)),
+    assetIds: plan.assetIds.filter((id) => !later.has(id)),
+    reencode: [],
+  };
+}
+
+/**
+ * The plan for one asset once its re-encode is done (SPEC §28.3): every live version that uses
+ * it, so copies are archived as selected versions.
+ */
+export function planForAsset(db: Db, assetId: string): LosslessPlan {
+  const versions = db
+    .select({ id: trackVersions.id })
+    .from(trackVersions)
+    .where(and(eq(trackVersions.assetId, assetId), isNull(trackVersions.deletedAt)))
+    .all();
+  return planLosslessRemoval(
+    db,
+    versions.map((v) => ({ kind: "version" as const, id: v.id })),
+  );
 }
 
 /** A version whose full quality went: a selected one, or a copy sharing its asset. */
@@ -217,7 +287,7 @@ export interface ArchivedVersion {
 export function applyLosslessRemoval(
   db: Db,
   plan: LosslessPlan,
-  userId: string,
+  userId: string | null,
   now: number = Date.now(),
   reason: ArchivedReason = "removed",
 ): ArchivedVersion[] {

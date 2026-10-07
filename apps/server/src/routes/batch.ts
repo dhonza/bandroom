@@ -1,5 +1,7 @@
 import {
   applyLosslessRemoval,
+  enqueueAudioReencode,
+  immediatePart,
   enqueueBlobGc,
   getSetting,
   listTrashRows,
@@ -261,16 +263,50 @@ export function registerBatchRoutes(app: FastifyInstance, ctx: AppContext): void
   registerContract(
     app,
     batchRemoveLosslessPreview,
-    ({ access }) => planLosslessRemoval(db, access.items).preview,
+    ({ access, body }) => planLosslessRemoval(db, access.items, body.quality).preview,
   );
 
-  registerContract(app, batchRemoveLossless, ({ user, access }, request) => {
+  registerContract(app, batchRemoveLossless, ({ user, access, body }, request) => {
     const batchId = uuidv7();
     const now = Date.now();
-    const { plan, archived } = db.transaction(
+    const { plan, archived, reencoding } = db.transaction(
       () => {
-        const p = planLosslessRemoval(db, access.items);
-        const a = applyLosslessRemoval(db, p, user.id, now);
+        const p = planLosslessRemoval(db, access.items, body.quality);
+        // Versions whose Opus needs another bitrate are re-encoded first (SPEC §28.3); the
+        // worker removes their full quality when the new Opus is in place.
+        const later = new Set(p.reencode.map((r) => r.assetId));
+        let queued = 0;
+        for (const t of p.targets) {
+          if (!later.has(t.version.assetId)) continue;
+          queued++;
+          audit(db, request, {
+            action: "version.reencode_requested",
+            projectId: t.projectId,
+            songId: t.track.songId,
+            targetType: "trackVersion",
+            targetId: t.version.id,
+            details: {
+              batchId,
+              trackId: t.track.id,
+              number: t.version.number,
+              quality: body.quality,
+              kbps: p.reencode.find((r) => r.assetId === t.version.assetId)?.kbps,
+            },
+          });
+        }
+        for (const r of p.reencode) {
+          const t = p.targets.find((x) => x.version.assetId === r.assetId);
+          if (!t || !body.quality) continue;
+          enqueueAudioReencode(db, {
+            assetId: r.assetId,
+            projectId: t.projectId,
+            songId: t.track.songId,
+            trackVersionId: t.version.id,
+            quality: body.quality,
+            userId: user.id,
+          });
+        }
+        const a = applyLosslessRemoval(db, immediatePart(p), user.id, now);
         for (const v of a) {
           audit(db, request, {
             action: "version.lossless_removed",
@@ -286,7 +322,7 @@ export function registerBatchRoutes(app: FastifyInstance, ctx: AppContext): void
             },
           });
         }
-        return { plan: p, archived: a };
+        return { plan: p, archived: a, reencoding: queued };
         // Immediate: the plan's reads and the writes see one snapshot even while the worker writes
         // (a deferred transaction would fail with SQLITE_BUSY_SNAPSHOT when upgrading).
       },
@@ -310,9 +346,10 @@ export function registerBatchRoutes(app: FastifyInstance, ctx: AppContext): void
     return {
       ok: true as const,
       batchId,
-      count: plan.targets.length,
+      count: plan.targets.length - reencoding,
       usageBytes: plan.preview.usageBytes,
       bytesFreed: plan.preview.bytesFreed,
+      reencoding,
     };
   });
 

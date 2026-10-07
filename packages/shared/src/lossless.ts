@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { BatchResultSchema } from "./trash";
+import { AudioQualitySchema } from "./audioQuality";
+import { BatchItemsSchema, BatchResultSchema } from "./trash";
 
 // Remove full quality (SPEC §26.4).
 
@@ -18,6 +19,16 @@ export const LosslessVersionRefSchema = z.object({
   songTitle: z.string(),
 });
 export type LosslessVersionRef = z.infer<typeof LosslessVersionRefSchema>;
+
+/**
+ * `POST /batch/remove-lossless` (and its preview): the items and, optionally, the Opus quality to
+ * keep (SPEC §28.3). Versions whose Opus has another bitrate are re-encoded from the full quality
+ * first; without a quality the current Opus is kept.
+ */
+export const RemoveLosslessRequestSchema = BatchItemsSchema.safeExtend({
+  quality: AudioQualitySchema.optional(),
+});
+export type RemoveLosslessRequest = z.infer<typeof RemoveLosslessRequestSchema>;
 
 /** What `POST /batch/remove-lossless` would do (SPEC §26.4); nothing is changed. */
 export const RemoveLosslessPreviewSchema = z.object({
@@ -50,12 +61,18 @@ export const RemoveLosslessPreviewSchema = z.object({
     /** No full-quality file left (removed before, or the automatic mix). */
     alreadyLossy: z.number().int(),
   }),
+  /** Versions whose Opus is re-encoded at the chosen quality first (SPEC §28.3). */
+  reencode: z.number().int(),
+  /** The current Opus bitrates (kbps) of the versions, with how many have each. */
+  currentOpus: z.array(z.object({ kbps: z.number(), count: z.number().int() })),
 });
 export type RemoveLosslessPreview = z.infer<typeof RemoveLosslessPreviewSchema>;
 
 export const RemoveLosslessResultSchema = BatchResultSchema.extend({
   usageBytes: z.number().int(),
   bytesFreed: z.number().int(),
+  /** Versions queued for re-encoding; they lose their full quality when it is done. */
+  reencoding: z.number().int(),
 });
 export type RemoveLosslessResult = z.infer<typeof RemoveLosslessResultSchema>;
 

@@ -6,7 +6,11 @@ import {
   TrashBatchItemsSchema,
   TrashListSchema,
 } from "../trash";
-import { RemoveLosslessPreviewSchema, RemoveLosslessResultSchema } from "../lossless";
+import {
+  RemoveLosslessPreviewSchema,
+  RemoveLosslessRequestSchema,
+  RemoveLosslessResultSchema,
+} from "../lossless";
 import {
   BatchTransferResultSchema,
   MakeMultitrackSchema,
@@ -58,7 +62,7 @@ export const batchPurge = defineContract({
 export const batchRemoveLosslessPreview = defineContract({
   method: "POST",
   path: "/batch/remove-lossless/preview",
-  body: BatchItemsSchema,
+  body: RemoveLosslessRequestSchema,
   response: RemoveLosslessPreviewSchema,
   errors: ["NOT_FOUND", "FORBIDDEN_ITEMS"],
   auth: { batch: "removeLossless" },
@@ -71,7 +75,7 @@ export const batchRemoveLosslessPreview = defineContract({
 export const batchRemoveLossless = defineContract({
   method: "POST",
   path: "/batch/remove-lossless",
-  body: BatchItemsSchema,
+  body: RemoveLosslessRequestSchema,
   response: RemoveLosslessResultSchema,
   errors: ["NOT_FOUND", "FORBIDDEN_ITEMS"],
   auth: { batch: "removeLossless" },

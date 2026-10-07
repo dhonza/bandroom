@@ -81,6 +81,8 @@ interface AssetSpec {
   /** A lossy source: an original (500 B) and no FLAC. */
   lossy?: boolean;
   status?: "ready" | "processing";
+  /** The opus variant's bitrate (default 96, the standard preset). */
+  opusKbps?: number;
 }
 
 /** An audio asset: flac (1000 B) + wavmeta (10 B) or an MP3 original (500 B), and opus (100 B). */
@@ -95,7 +97,7 @@ function asset(uploadedBy: string, spec: AssetSpec = {}): string {
   if (spec.lossy) putVariant(t.db, a.id, "original", blob(500));
   else if (spec.flac !== null) putVariant(t.db, a.id, "flac", spec.flac ?? blob(1000));
   if (spec.wavmeta) putVariant(t.db, a.id, "wavmeta", blob(10));
-  putVariant(t.db, a.id, "opus", blob(100));
+  putVariant(t.db, a.id, "opus", blob(100), { bitrate: spec.opusKbps ?? 96, channels: 2 });
   setAssetProbe(t.db, a.id, probe(!spec.lossy));
   setAssetStatus(t.db, a.id, spec.status ?? "ready");
   return a.id;
@@ -191,6 +193,8 @@ describe("remove full quality: preview (SPEC §26.4)", () => {
       },
       sharedCopies: 1,
       skipped: { notReady: 1, alreadyLossy: 1 },
+      reencode: 0,
+      currentOpus: [{ kbps: 96, count: 3 }],
     });
 
     // Only one of the two users of the shared FLAC: usage drops, but no disk space is freed.
@@ -403,5 +407,66 @@ describe("remove full quality: apply (SPEC §26.4)", () => {
     const res = await call(t, batchRemoveLossless, { body: { tracks: [v1.trackId] } }, member);
     expect(res.json()).toMatchObject({ count: 2 });
     expect(versionRow(v2.id)?.archivedAt).not.toBeNull();
+  });
+});
+
+describe("remove full quality with a quality choice (SPEC §28.3)", () => {
+  it("previews which versions are re-encoded and the current bitrates", async () => {
+    const song = newSong("Quality");
+    track(song, "Bass", ids.petr ?? "");
+    track(song, "Keys", ids.petr ?? "", { opusKbps: 128 });
+    expect(await preview({ songs: [song] })).toMatchObject({
+      versions: 2,
+      reencode: 0,
+      currentOpus: [
+        { kbps: 128, count: 1 },
+        { kbps: 96, count: 1 },
+      ],
+    });
+    expect((await preview({ songs: [song], quality: "high" })).reencode).toBe(1);
+    expect((await preview({ songs: [song], quality: "low" })).reencode).toBe(2);
+    expect((await preview({ songs: [song], quality: "standard" })).reencode).toBe(1);
+  });
+
+  it("removes at once what already has the bitrate and queues one re-encode per asset", async () => {
+    const song = newSong("Queue");
+    const same = track(song, "Bass", ids.petr ?? "", { opusKbps: 128 });
+    const other = track(song, "Keys", ids.petr ?? "");
+    // A copy of Keys in the same song shares its asset: one job.
+    const copy = createTrackWithVersion(t.db, {
+      songId: song,
+      name: "Keys copy",
+      assetId: other.assetId,
+      uploadedBy: ids.petr ?? "",
+    });
+    const res = await call(
+      t,
+      batchRemoveLossless,
+      { body: { songs: [song], quality: "high" } },
+      manager,
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, count: 1, reencoding: 2 });
+    expect(versionRow(same.versionId)).toMatchObject({ archivedReason: "removed" });
+    expect(versionRow(other.versionId)?.archivedAt).toBeNull();
+    expect(versionRow(copy.version.id)?.archivedAt).toBeNull();
+    const jobs = t.db
+      .select()
+      .from(schema.jobs)
+      .where(eq(schema.jobs.type, "audio.reencode"))
+      .all()
+      .filter((j) => j.payload.includes(other.assetId));
+    expect(jobs).toHaveLength(1);
+    expect(JSON.parse(jobs[0]?.payload ?? "{}")).toMatchObject({
+      assetId: other.assetId,
+      quality: "high",
+      userId: ids.mara,
+      removeLossless: true,
+    });
+    const requested = listEvents(t.db, { action: "version.reencode_requested" }).filter((e) =>
+      [other.versionId, copy.version.id].includes(e.targetId ?? ""),
+    );
+    expect(requested).toHaveLength(2);
+    expect(JSON.parse(requested[0]?.details ?? "{}")).toMatchObject({ quality: "high", kbps: 128 });
   });
 });

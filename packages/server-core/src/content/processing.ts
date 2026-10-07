@@ -3,8 +3,11 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { assets, jobs, songs, tracks, trackVersions } from "../db/schema";
 
-/** Jobs that work on a track version's file: a bounce renders it before the ingest (SPEC §5.5). */
-export const MEDIA_JOB_TYPES = ["audio.ingest", "audio.bounce"];
+/**
+ * Jobs that work on a track version's file: a bounce renders it before the ingest (SPEC §5.5); a
+ * re-encode swaps its Opus (SPEC §28.3).
+ */
+export const MEDIA_JOB_TYPES = ["audio.ingest", "audio.bounce", "audio.reencode"];
 
 const EMPTY: Processing = { queued: 0, processing: 0, failed: 0, progress: null };
 

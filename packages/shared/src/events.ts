@@ -80,6 +80,10 @@ export const EVENT_ACTIONS = [
   "version.rendered",
   /** Full-quality files removed (SPEC §26.4; details: batchId, files, bytes, copy). */
   "version.lossless_removed",
+  /** A re-encode at another Opus quality was queued before removing full quality (SPEC §28.3). */
+  "version.reencode_requested",
+  /** The worker swapped in the re-encoded Opus (details: quality, kbps, previous kbps). */
+  "version.reencoded",
   "asset.downloaded",
   // documents (SPEC §10, §14.1)
   "document.created",

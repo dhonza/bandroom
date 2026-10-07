@@ -16,3 +16,5 @@ export * from "./quota";
 export * from "./documentJobs";
 export * from "./ingestJobs";
 export * from "./zipStream";
+export * from "./opusRates";
+export * from "./reencode";

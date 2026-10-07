@@ -1,8 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { opusKbps, type AudioQuality } from "@bandroom/shared";
+import type { AudioQuality } from "@bandroom/shared";
 import { z } from "zod";
-import type { Db } from "../db/connection";
 import { archiveVersionsOfAssets, assetLosslessRemoved } from "../content/lossless";
 import { recordEvent } from "../events/record";
 import { PermanentJobError, type JobContext, type JobHandler } from "../jobs/types";
@@ -11,6 +10,7 @@ import { audioMd5, detectDualMono, measureLoudness } from "./analysis";
 import { assetIngestOptions, getAsset, setAssetProbe, setAssetStatus } from "./assets";
 import { encodeFlac, encodeOpus } from "./encode";
 import { flacSeekIndex } from "./flacIndex";
+import { opusKbpsFor } from "./opusRates";
 import { readOggOpus } from "./ogg";
 import { computePeaks } from "./peaks";
 import { probeAudio, UnsupportedMediaError, type Probe } from "./probe";
@@ -34,15 +34,6 @@ export interface AudioIngestResult {
   variants: string[];
   /** Converted to lossy on upload (SPEC §28.2): the original is gone, the versions archived. */
   lossyOnly?: boolean;
-}
-
-/**
- * The `opus` bitrate of a preset (SPEC §28.2); `standard` is the instance's
- * `audio.opusBitrates` setting.
- */
-export function opusKbpsFor(db: Db, quality: AudioQuality, mono: boolean): number {
-  const b = getSetting(db, "audio.opusBitrates");
-  return opusKbps(quality, mono, { stereo: b.trackStereo, mono: b.trackMono });
 }
 
 /** Expected sample count after resampling to 48 kHz (SPEC §5.3 step 5). */

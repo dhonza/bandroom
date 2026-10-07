@@ -8,7 +8,14 @@ import {
   listEvents,
   LocalStorage,
 } from "@bandroom/server-core";
-import { ApiErrorSchema, deleteTrack, UploadResultSchema, updateProject } from "@bandroom/shared";
+import {
+  ApiErrorSchema,
+  batchRemoveLossless,
+  batchRemoveLosslessPreview,
+  deleteTrack,
+  UploadResultSchema,
+  updateProject,
+} from "@bandroom/shared";
 import { describe, expect, it } from "vitest";
 import { call, loginAs, runQueuedJobs, seedUser, tusUpload } from "../testing/testApp";
 import {
@@ -357,4 +364,42 @@ describe("lossy on upload (SPEC §28.2)", () => {
     });
     expect(res.createStatus).toBe(400);
   });
+});
+
+describe("remove full quality with a re-encode (SPEC §28.3)", () => {
+  it("re-encodes in the worker, then the version plays the new Opus without full quality", async () => {
+    const data = await fs.readFile(BWF_FILE());
+    const res = await tusUpload(t, admin, data, "Song_Pad.wav", {
+      type: "newTrack",
+      songId,
+      name: "Pad",
+    });
+    const result = UploadResultSchema.parse(JSON.parse(res.body));
+    await runQueuedJobs(t);
+    const preview = await call(
+      t,
+      batchRemoveLosslessPreview,
+      { body: { tracks: [result.trackId], quality: "low" } },
+      admin,
+    );
+    expect(preview.json()).toMatchObject({ versions: 1, reencode: 1 });
+    const removed = await call(
+      t,
+      batchRemoveLossless,
+      { body: { tracks: [result.trackId], quality: "low" } },
+      admin,
+    );
+    expect(removed.json()).toMatchObject({ count: 0, reencoding: 1 });
+    // Until the worker runs, the full quality and the old Opus stay.
+    let pad = (await tracksOf(admin)).find((tr) => tr.id === result.trackId);
+    expect(pad?.current).toMatchObject({ archived: null, variants: { opus: { bitrate: 96 } } });
+    expect(await runQueuedJobs(t)).toEqual(["done"]);
+    pad = (await tracksOf(admin)).find((tr) => tr.id === result.trackId);
+    expect(pad?.current).toMatchObject({
+      status: "ready",
+      downloads: ["opus"],
+      archived: { reason: "reencode" },
+      variants: { flac: null, opus: { bitrate: 64, quality: "low" } },
+    });
+  }, 90_000);
 });
