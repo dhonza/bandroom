@@ -213,13 +213,20 @@ export function Transport({
   const state = <TransportState />;
 
   const options = (
-    <Menu position="bottom-end" withinPortal closeOnItemClick={false}>
+    <Menu
+      position="bottom-end"
+      withinPortal
+      closeOnItemClick={false}
+      // On phones the menu is taller than the space below the sticky transport: it gets that
+      // height and scrolls.
+      middlewares={{ flip: true, shift: true, size: true }}
+    >
       <Menu.Target>
         <ActionIcon size={44} variant="subtle" color="gray" aria-label={t("rehearse.options")}>
           <IconDots size={20} />
         </ActionIcon>
       </Menu.Target>
-      <Menu.Dropdown miw={260}>
+      <Menu.Dropdown miw={260} style={{ overflowY: "auto", overscrollBehavior: "contain" }}>
         {onBounce && (
           <>
             {/* First: the menu is long on phones, and the action must be reachable. */}
