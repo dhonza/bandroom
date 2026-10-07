@@ -67,7 +67,10 @@ export const TrackVersionSchema = z.object({
   uploadedBy: z.string().nullable(),
   uploaderName: z.string().nullable(),
   originalFilename: z.string(),
+  /** Size of the uploaded file. */
   sizeBytes: z.number(),
+  /** Bytes of the stored files of this version (SPEC §28.6); absent on public links. */
+  storedBytes: z.number().optional(),
   status: AssetStatusSchema,
   error: z.string().nullable(),
   /** 0–1 while processing. */
@@ -95,6 +98,8 @@ export const TrackSchema = z.object({
   versionCount: z.number(),
   createdBy: z.string().nullable(),
   current: TrackVersionSchema.nullable(),
+  /** Bytes of the stored files of all its versions (SPEC §28.6); absent on public links. */
+  bytes: z.number().optional(),
 });
 export type Track = z.infer<typeof TrackSchema>;
 
@@ -107,7 +112,7 @@ export const UploadTargetSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("newVersion"), trackId: z.string() }),
   z.object({ type: z.literal("projectImage"), projectId: z.string() }),
-  /** A new document on a song or (songId null) on the project (SPEC §10). */
+  /** A new document on the project (SPEC §10, §28.4). */
   z.object({
     type: z.literal("newDocument"),
     projectId: z.string(),

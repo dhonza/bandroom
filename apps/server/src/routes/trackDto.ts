@@ -19,7 +19,18 @@ function variantMap(v: TrackListVersion): Map<string, { hash: string; meta: Vari
 
 const num = (x: unknown, d = 0) => (typeof x === "number" ? x : d);
 
-export function toTrackVersion(v: TrackListVersion, allowDownload: boolean): TrackVersion {
+/** Bytes of a version's stored files, each file once (SPEC §28.6). */
+function storedBytesOf(v: TrackListVersion): number {
+  const seen = new Map(v.variants.map((x) => [x.blobHash, x.sizeBytes ?? 0]));
+  return [...seen.values()].reduce((a, b) => a + b, 0);
+}
+
+/** `withSizes`: include `storedBytes` (members only, never on public links). */
+export function toTrackVersion(
+  v: TrackListVersion,
+  allowDownload: boolean,
+  withSizes = false,
+): TrackVersion {
   const vars = variantMap(v);
   const opus = (name: string) => {
     const x = vars.get(name);
@@ -58,6 +69,7 @@ export function toTrackVersion(v: TrackListVersion, allowDownload: boolean): Tra
     uploaderName: v.uploaderName,
     originalFilename: v.asset.originalFilename,
     sizeBytes: v.asset.sizeBytes,
+    ...(withSizes && { storedBytes: storedBytesOf(v) }),
     status: v.asset.status,
     error: v.asset.error,
     progress: v.progress,
@@ -112,7 +124,8 @@ export function toTrackVersion(v: TrackListVersion, allowDownload: boolean): Tra
   };
 }
 
-export function toTrack(item: TrackListItem, allowDownload: boolean): Track {
+/** `bytes`: the track's stored bytes (members only, SPEC §28.6). */
+export function toTrack(item: TrackListItem, allowDownload: boolean, bytes?: number): Track {
   const color = PaletteColorSchema.safeParse(item.track.color);
   return {
     id: item.track.id,
@@ -126,6 +139,7 @@ export function toTrack(item: TrackListItem, allowDownload: boolean): Track {
     defaultMuted: item.track.defaultMuted,
     versionCount: item.versionCount,
     createdBy: item.track.createdBy,
-    current: item.current ? toTrackVersion(item.current, allowDownload) : null,
+    current: item.current ? toTrackVersion(item.current, allowDownload, bytes !== undefined) : null,
+    ...(bytes !== undefined && { bytes }),
   };
 }

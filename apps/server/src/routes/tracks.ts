@@ -1,4 +1,5 @@
 import {
+  bytesByTrack,
   listTrackVersions as listTrackVersionsRepo,
   listVisibleSongs,
   readySongIds,
@@ -45,7 +46,12 @@ export function registerTrackRoutes(app: FastifyInstance, ctx: AppContext): void
 
   registerContract(app, listSongTracksContract, ({ access }) => {
     const allow = downloadAllowed(access);
-    return { tracks: listSongTracks(db, access.song.id).map((t) => toTrack(t, allow)) };
+    const bytes = bytesByTrack(db, access.song.id);
+    return {
+      tracks: listSongTracks(db, access.song.id).map((t) =>
+        toTrack(t, allow, bytes.get(t.track.id) ?? 0),
+      ),
+    };
   });
 
   registerContract(app, deleteTrack, ({ user, access }, request) => {
@@ -123,7 +129,7 @@ export function registerVersionRoutes(app: FastifyInstance, ctx: AppContext): vo
     const allow = downloadAllowed(access);
     return {
       versions: listTrackVersionsRepo(db, track.id).map((v) => ({
-        ...toTrackVersion(v, allow),
+        ...toTrackVersion(v, allow, true),
         isCurrent: v.version.id === track.currentVersionId,
       })),
     };

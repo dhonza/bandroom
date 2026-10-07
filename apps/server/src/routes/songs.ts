@@ -1,4 +1,5 @@
 import {
+  songBytes,
   createBounce,
   getUserById,
   planBounce,
@@ -58,7 +59,13 @@ export function registerSongRoutes(app: FastifyInstance, ctx: AppContext): void 
 
   registerContract(app, getSong, ({ user, access }) => {
     const projectRole = resolveProjectAccess(db, user, access.project.id)?.role ?? "none";
-    return { song: { ...dto(access), canBounce: canBounce(access.role, projectRole) } };
+    return {
+      song: {
+        ...dto(access),
+        canBounce: canBounce(access.role, projectRole),
+        bytes: songBytes(db, access.song.id),
+      },
+    };
   });
 
   // Bounce (SPEC §5.5): the route's auth checks `stream` here and `song.create` on the project.

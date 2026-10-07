@@ -1,8 +1,17 @@
 import { autoTrackColor, uuidv7 } from "@bandroom/shared";
-import { and, asc, desc, eq, inArray, isNull, max } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, max, sql } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { MEDIA_JOB_TYPES } from "./processing";
-import { assets, assetVariants, jobs, songs, tracks, trackVersions, users } from "../db/schema";
+import {
+  assets,
+  assetVariants,
+  blobs,
+  jobs,
+  songs,
+  tracks,
+  trackVersions,
+  users,
+} from "../db/schema";
 import { assetProbe, type AssetRow } from "../media/assets";
 import type { Probe } from "../media/probe";
 import { touchProject } from "./projects";
@@ -190,7 +199,8 @@ export interface TrackListVersion {
   version: TrackVersionRow;
   asset: AssetRow;
   probe: Probe | null;
-  variants: { variant: string; blobHash: string; meta: string }[];
+  /** `sizeBytes`: the stored file's size (SPEC §28.6). */
+  variants: { variant: string; blobHash: string; meta: string; sizeBytes?: number }[];
   uploaderName: string | null;
   /** Who removed the full-quality files (SPEC §26.4), when they did. */
   archiverName: string | null;
@@ -232,8 +242,10 @@ export function versionDetails(db: Db, version: TrackVersionRow): TrackListVersi
       variant: assetVariants.variant,
       blobHash: assetVariants.blobHash,
       meta: assetVariants.meta,
+      sizeBytes: sql<number>`COALESCE(${blobs.sizeBytes}, 0)`,
     })
     .from(assetVariants)
+    .leftJoin(blobs, eq(blobs.hash, assetVariants.blobHash))
     .where(eq(assetVariants.assetId, asset.id))
     .all();
   const uploaderName = version.uploadedBy

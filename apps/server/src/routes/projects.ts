@@ -1,4 +1,6 @@
 import {
+  bytesByProject,
+  bytesBySong,
   createProjectRow,
   createSongRow,
   followTarget,
@@ -52,23 +54,35 @@ function projectDto(
   role: EffectiveRole,
   visibility: "full" | "reduced",
 ) {
-  return toProject(db, p, role, visibility, listVisibleSongs(db, user, p.id).length);
+  return {
+    ...toProject(db, p, role, visibility, listVisibleSongs(db, user, p.id).length),
+    // Sizes only for the full view: the reduced view must not reveal hidden songs (SPEC §28.6).
+    bytes: visibility === "full" ? (bytesByProject(db, [p.id]).get(p.id) ?? 0) : null,
+  };
 }
 
 export function registerProjectRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { db } = ctx;
 
-  registerContract(app, listProjects, ({ query, user }) => ({
-    projects: listVisibleProjects(db, user, { archived: query.archived === "true" }).map((v) =>
-      toProjectSummary(
-        v.project,
-        v.role,
-        v.visibility,
-        v.visibleSongCount,
-        projectImageHash(db, v.project),
-      ),
-    ),
-  }));
+  registerContract(app, listProjects, ({ query, user }) => {
+    const visible = listVisibleProjects(db, user, { archived: query.archived === "true" });
+    const bytes = bytesByProject(
+      db,
+      visible.filter((v) => v.visibility === "full").map((v) => v.project.id),
+    );
+    return {
+      projects: visible.map((v) => ({
+        ...toProjectSummary(
+          v.project,
+          v.role,
+          v.visibility,
+          v.visibleSongCount,
+          projectImageHash(db, v.project),
+        ),
+        bytes: v.visibility === "full" ? (bytes.get(v.project.id) ?? 0) : null,
+      })),
+    };
+  });
 
   registerContract(app, createProject, ({ body, user }, request) => {
     const project = createProjectRow(db, { ...body, createdBy: user.id });
@@ -151,11 +165,13 @@ export function registerProjectRoutes(app: FastifyInstance, ctx: AppContext): vo
   registerContract(app, listProjectSongs, ({ user, access }) => {
     const processing = processingBySong(db, access.project.id);
     const lossy = lossyBySong(db, access.project.id);
+    const bytes = bytesBySong(db, access.project.id);
     return {
       songs: listVisibleSongs(db, user, access.project.id).map((s) => ({
         ...toSongSummary(s.song, s.role),
         processing: processing.get(s.song.id) ?? noProcessing(),
         lossy: lossy.get(s.song.id) ?? "none",
+        bytes: bytes.get(s.song.id) ?? 0,
       })),
     };
   });

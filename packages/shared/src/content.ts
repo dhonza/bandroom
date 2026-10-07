@@ -59,6 +59,11 @@ export const ProjectSummarySchema = z.object({
   /** "reduced": the user only sees songs granted to them individually (SPEC §3.3). */
   visibility: z.enum(["full", "reduced"]),
   access: AccessSchema,
+  /**
+   * Bytes of the stored files of its songs, documents and image (SPEC §28.6); null when the user
+   * sees the project only partly, absent on public links.
+   */
+  bytes: z.number().nullable().optional(),
 });
 export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
 
@@ -101,6 +106,8 @@ export const SongSummarySchema = z.object({
    * (ready ones only) are lossy — none, some or all.
    */
   lossy: SongLossySchema.optional(),
+  /** Bytes of the stored files of its tracks and tempo MIDI (SPEC §28.6); not on public links. */
+  bytes: z.number().optional(),
 });
 export type SongSummary = z.infer<typeof SongSummarySchema>;
 
