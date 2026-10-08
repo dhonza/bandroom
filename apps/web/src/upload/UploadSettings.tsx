@@ -10,15 +10,15 @@ import { IconAdjustmentsHorizontal } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useUploadPrefs } from "./prefs";
 
-/** "Keep full quality" or "Lossy on upload · 128 kbps" (stereo rate of the preset). */
+/** "Keep full quality" or "Lossy on upload · 128 kbps stereo / 80 kbps mono". */
 export function useUploadSummary(): (o: UploadOptions) => string {
   const { t } = useTranslation();
   return (o) => {
-    const kbps = AUDIO_QUALITY_KBPS[o.quality].stereo;
-    if (o.lossyOnly) return t("upload.settings.summaryLossy", { kbps });
+    const rates = AUDIO_QUALITY_KBPS[o.quality];
+    if (o.lossyOnly) return t("upload.settings.summaryLossy", rates);
     return o.quality === DEFAULT_AUDIO_QUALITY
       ? t("upload.settings.keepFull")
-      : t("upload.settings.summaryFull", { kbps });
+      : t("upload.settings.summaryFull", rates);
   };
 }
 
@@ -39,7 +39,11 @@ export function UploadSettings({ testId = "upload-settings" }: { testId?: string
           variant="subtle"
           color={options.lossyOnly ? "yellow" : "gray"}
           size="compact-sm"
-          h={44}
+          // Both rates make the summary long: it wraps on a phone instead of being cut off.
+          styles={{
+            root: { height: "auto", minHeight: 44, maxWidth: "100%" },
+            label: { whiteSpace: "normal", textAlign: "start" },
+          }}
           leftSection={<IconAdjustmentsHorizontal size={16} aria-hidden />}
           aria-label={`${t("upload.settings.title")}: ${summary(options)}`}
           data-testid={testId}

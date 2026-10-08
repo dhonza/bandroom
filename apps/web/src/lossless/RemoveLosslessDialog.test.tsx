@@ -13,7 +13,12 @@ import { RemoveLosslessDialog } from "./RemoveLosslessDialog";
 
 const i18n = i18next.createInstance();
 
-const preview = (reencode: number): RemoveLosslessPreview => ({
+const preview = (
+  reencode: number,
+  currentOpus: RemoveLosslessPreview["currentOpus"] = [
+    { kbps: 96, count: 2, channels: 2, quality: "standard" },
+  ],
+): RemoveLosslessPreview => ({
   versions: 2,
   files: { flac: 2, original: 0, wavmeta: 0 },
   usageBytes: 2048,
@@ -22,8 +27,20 @@ const preview = (reencode: number): RemoveLosslessPreview => ({
   sharedCopies: 0,
   skipped: { notReady: 0, alreadyLossy: 0 },
   reencode,
-  currentOpus: [{ kbps: 96, count: 2 }],
+  currentOpus,
 });
+
+function renderDialog() {
+  render(
+    <I18nextProvider i18n={i18n}>
+      <MantineProvider>
+        <QueryClientProvider client={new QueryClient()}>
+          <RemoveLosslessDialog items={{ tracks: ["t1"] }} onClose={vi.fn()} />
+        </QueryClientProvider>
+      </MantineProvider>
+    </I18nextProvider>,
+  );
+}
 
 describe("remove full quality with a quality choice (SPEC §28.3)", () => {
   beforeAll(async () => {
@@ -69,12 +86,15 @@ describe("remove full quality with a quality choice (SPEC §28.3)", () => {
       </I18nextProvider>,
     );
     const select = await screen.findByTestId("lossless-quality");
-    expect(select).toHaveValue("Keep current (96 kbps)");
+    expect(select).toHaveValue("Keep the existing compressed copy (Standard)");
     expect(screen.queryByTestId("lossless-reencode")).toBeNull();
 
     await userEvent.click(select);
     await userEvent.click(
-      await screen.findByRole("option", { name: /^High · 128 kbps/, hidden: true }),
+      await screen.findByRole("option", {
+        name: "High · 128 kbps stereo / 80 kbps mono",
+        hidden: true,
+      }),
     );
     expect(await screen.findByTestId("lossless-reencode")).toHaveTextContent(
       "2 versions are re-encoded first",
@@ -90,5 +110,48 @@ describe("remove full quality with a quality choice (SPEC §28.3)", () => {
     expect(
       await screen.findByText(/2 versions are being re-encoded; their full quality goes/),
     ).toBeInTheDocument();
+  });
+
+  it.each<[string, RemoveLosslessPreview["currentOpus"], string, string]>([
+    [
+      "one preset, stereo and mono",
+      [
+        { kbps: 96, count: 4, channels: 2, quality: "standard" },
+        { kbps: 64, count: 3, channels: 1, quality: "standard" },
+      ],
+      "Now: full quality (FLAC) · compressed copy Opus Standard (96 kbps stereo / 64 kbps mono)",
+      "Keep the existing compressed copy (Standard)",
+    ],
+    [
+      "mixed presets",
+      [
+        { kbps: 96, count: 2, channels: 2, quality: "standard" },
+        { kbps: 128, count: 1, channels: 2, quality: "high" },
+      ],
+      "Now: full quality (FLAC) · compressed copy Opus: mixed (High, Standard)",
+      "Keep the existing compressed copy (mixed: High, Standard)",
+    ],
+    [
+      "a bitrate no preset uses",
+      [{ kbps: 100, count: 2, channels: 2, quality: null }],
+      "Now: full quality (FLAC) · compressed copy Opus 100 kbps stereo",
+      "Keep the existing compressed copy (100 kbps stereo)",
+    ],
+    [
+      "a preset and an unknown bitrate",
+      [
+        { kbps: 96, count: 2, channels: 2, quality: "standard" },
+        { kbps: 100, count: 1, channels: 2, quality: null },
+      ],
+      "Now: full quality (FLAC) · compressed copy Opus: mixed (Standard, Opus 100 kbps stereo)",
+      "Keep the existing compressed copy (mixed: Standard, Opus 100 kbps stereo)",
+    ],
+  ])("describes the current state: %s", async (_name, currentOpus, now, keep) => {
+    mockApi({
+      "POST /batch/remove-lossless/preview": () => ({ body: preview(0, currentOpus) }),
+    });
+    renderDialog();
+    expect(await screen.findByTestId("lossless-now")).toHaveTextContent(now);
+    expect(screen.getByTestId("lossless-quality")).toHaveValue(keep);
   });
 });

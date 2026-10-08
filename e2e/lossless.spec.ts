@@ -159,7 +159,7 @@ test("upload with lossy on upload: Opus only, the badge says converted on upload
   await page.getByRole("switch", { name: "Convert to lossy on upload" }).check();
   await page.getByTestId("upload-quality").click();
   await page.getByRole("option", { name: /^High/ }).click();
-  await expect(settings).toHaveText("Lossy on upload · 128 kbps");
+  await expect(settings).toHaveText("Lossy on upload · 128 kbps stereo / 80 kbps mono");
   expect(await noHorizontalScroll(page)).toBe(true);
   await page.keyboard.press("Escape");
 
@@ -177,7 +177,9 @@ test("upload with lossy on upload: Opus only, the badge says converted on upload
   await page.keyboard.press("Escape");
 
   await page.reload();
-  await expect(page.getByTestId("track-upload-settings")).toHaveText("Lossy on upload · 128 kbps");
+  await expect(page.getByTestId("track-upload-settings")).toHaveText(
+    "Lossy on upload · 128 kbps stereo / 80 kbps mono",
+  );
 });
 
 test("remove full quality at another Opus quality: re-encoded first (SPEC §28.3)", async ({
@@ -193,7 +195,12 @@ test("remove full quality at another Opus quality: re-encoded first (SPEC §28.3
   await page.getByTestId("track-row").filter({ hasText: "Gtr" }).click();
   await page.getByTestId("tracks-selection-bar").getByTestId("selection-removeLossless").click();
   const quality = page.getByTestId("lossless-quality");
-  await expect(quality).toHaveValue("Keep current (96 kbps)", { timeout: 30_000 });
+  await expect(quality).toHaveValue("Keep the existing compressed copy (Standard)", {
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId("lossless-now")).toHaveText(
+    "Now: full quality (FLAC) · compressed copy Opus Standard (96 kbps stereo)",
+  );
   await quality.click();
   await page.getByRole("option", { name: /^High/ }).click();
   await expect(page.getByTestId("lossless-reencode")).toContainText("1 version is re-encoded");

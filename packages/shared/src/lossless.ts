@@ -63,8 +63,18 @@ export const RemoveLosslessPreviewSchema = z.object({
   }),
   /** Versions whose Opus is re-encoded at the chosen quality first (SPEC §28.3). */
   reencode: z.number().int(),
-  /** The current Opus bitrates (kbps) of the versions, with how many have each. */
-  currentOpus: z.array(z.object({ kbps: z.number(), count: z.number().int() })),
+  /**
+   * The current Opus of the versions by bitrate (kbps) and channels, with how many have each and
+   * the preset it belongs to (`null`: no preset uses it, e.g. after `audio.opusBitrates` changed).
+   */
+  currentOpus: z.array(
+    z.object({
+      kbps: z.number(),
+      count: z.number().int(),
+      channels: z.union([z.literal(1), z.literal(2)]),
+      quality: AudioQualitySchema.nullable(),
+    }),
+  ),
 });
 export type RemoveLosslessPreview = z.infer<typeof RemoveLosslessPreviewSchema>;
 

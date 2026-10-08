@@ -1682,7 +1682,20 @@
     "reencodedOnBy": "Překódováno a plná kvalita odstraněna {{date}} ({{name}}).",
     "quality": "Kvalita Opus",
     "qualityHint": "Komprimovaný zvuk, který zůstane. Jiná kvalita se nejdřív překóduje z plné kvality.",
-    "keepCurrent": "Ponechat současnou ({{kbps}} kb/s)",
+    "keepExisting": "Ponechat stávající komprimovanou kopii ({{opus}})",
+    "now": {
+      "line": "Nyní: {{parts}}",
+      "full": "plná kvalita",
+      "fullKinds": "plná kvalita ({{kinds}})",
+      "originals": "originály",
+      "opusPreset": "komprimovaná kopie Opus {{name}} ({{rates}})",
+      "opusMixed": "komprimovaná kopie Opus: smíšená ({{list}})",
+      "opusRaw": "komprimovaná kopie Opus {{rates}}",
+      "mixed": "smíšená: {{list}}",
+      "raw": "Opus {{rates}}",
+      "rateStereo": "{{kbps}} kb/s stereo",
+      "rateMono": "{{kbps}} kb/s mono"
+    },
     "reencode_one": "{{count}} verze se nejdřív překóduje; plná kvalita zmizí, až to bude hotové.",
     "reencode_few": "{{count}} verze se nejdřív překódují; plná kvalita zmizí, až to bude hotové.",
     "reencode_many": "{{count}} verzí se nejdřív překóduje; plná kvalita zmizí, až to bude hotové.",
@@ -1763,17 +1776,23 @@
     "settings": {
       "title": "Nastavení nahrávání",
       "keepFull": "Zachovat plnou kvalitu",
-      "summaryFull": "Plná kvalita · Opus {{kbps}} kb/s",
-      "summaryLossy": "Ztrátově při nahrání · {{kbps}} kb/s",
+      "summaryFull": "Plná kvalita · Opus {{stereo}} kb/s stereo / {{mono}} kb/s mono",
+      "summaryLossy": "Ztrátově při nahrání · {{stereo}} kb/s stereo / {{mono}} kb/s mono",
       "lossyOnly": "Při nahrání převést na ztrátový formát",
       "lossyOnlyHint": "Ponechá jen komprimovaný zvuk (Opus) a nahraný soubor smaže. Šetří místo; stažení ve FLAC a WAV nebude k dispozici.",
       "quality": "Kvalita Opus",
       "qualityHint": "Pro přehrávání; při převodu na ztrátový formát jediná kopie.",
       "qualities": {
-        "veryHigh": "Velmi vysoká · {{stereo}} kb/s ({{mono}} mono)",
-        "high": "Vysoká · {{stereo}} kb/s ({{mono}} mono)",
-        "standard": "Standardní · {{stereo}} kb/s ({{mono}} mono)",
-        "low": "Nízká · {{stereo}} kb/s ({{mono}} mono)"
+        "veryHigh": "Velmi vysoká · {{stereo}} kb/s stereo / {{mono}} kb/s mono",
+        "high": "Vysoká · {{stereo}} kb/s stereo / {{mono}} kb/s mono",
+        "standard": "Standardní · {{stereo}} kb/s stereo / {{mono}} kb/s mono",
+        "low": "Nízká · {{stereo}} kb/s stereo / {{mono}} kb/s mono"
+      },
+      "presets": {
+        "veryHigh": "Velmi vysoká",
+        "high": "Vysoká",
+        "standard": "Standardní",
+        "low": "Nízká"
       }
     }
   }

@@ -1,11 +1,13 @@
+import { randomBytes } from "node:crypto";
 import { generateFixtures, MP3_FILE, TONE_FILE } from "@bandroom/fixtures";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { insertUser } from "../auth/users";
 import type { Db } from "../db/connection";
-import { jobs, trackVersions } from "../db/schema";
-import { getAsset } from "../media/assets";
-import { getUsage, listVariants } from "../media/variants";
+import { blobs, jobs, trackVersions } from "../db/schema";
+import { createAsset, getAsset, setAssetStatus } from "../media/assets";
+import { getUsage, listVariants, putVariant } from "../media/variants";
+import { setSetting } from "../settings/registry";
 import { getBlob } from "../storage/blobs";
 import { addOriginal, createHarness, runOneJob, type Harness } from "../testing/ingestHarness";
 import { makeTempDir } from "../testing/tempDir";
@@ -163,5 +165,71 @@ describe("remove full quality (SPEC §26.4)", () => {
     expect(archived.find((a) => a.versionId === copy.version.id)).toMatchObject({ copy: true });
     expect(archived.find((a) => a.versionId === wav.version.id)).toMatchObject({ copy: false });
     expect(lossyBySong(db, projectId).get(other)).toBe("all");
+  });
+});
+
+describe("remove full quality preview: current Opus (SPEC §28.3)", () => {
+  /** A ready FLAC asset with an Opus of `kbps` and `channels` (fake blobs, no files). */
+  function fakeTrack(songId: string, kbps: number, channels: 1 | 2) {
+    const blob = (size: number) => {
+      const hash = randomBytes(32).toString("hex");
+      db.insert(blobs)
+        .values({ hash, sizeBytes: size, storageKey: `x/${hash}`, refCount: 0, createdAt: 0 })
+        .run();
+      return hash;
+    };
+    const asset = createAsset(db, {
+      kind: "audio",
+      originalFilename: "x.wav",
+      sizeBytes: 1,
+      originalHash: randomBytes(32).toString("hex"),
+      uploadedBy: userId,
+    });
+    putVariant(db, asset.id, "flac", blob(1000));
+    putVariant(db, asset.id, "opus", blob(100), { bitrate: kbps, channels });
+    setAssetStatus(db, asset.id, "ready");
+    createTrackWithVersion(db, { songId, name: "T", assetId: asset.id, uploadedBy: userId });
+  }
+
+  it("groups by bitrate and channels and names the preset", () => {
+    const songId = newSong();
+    fakeTrack(songId, 96, 2);
+    fakeTrack(songId, 96, 2);
+    fakeTrack(songId, 64, 1);
+    fakeTrack(songId, 64, 2);
+    fakeTrack(songId, 100, 2);
+    const { currentOpus } = planLosslessRemoval(db, [{ kind: "song", id: songId }]).preview;
+    expect(currentOpus).toEqual([
+      { kbps: 96, count: 2, channels: 2, quality: "standard" },
+      { kbps: 100, count: 1, channels: 2, quality: null },
+      { kbps: 64, count: 1, channels: 2, quality: "low" },
+      { kbps: 64, count: 1, channels: 1, quality: "standard" },
+    ]);
+  });
+
+  it("names standard by the audio.opusBitrates setting", () => {
+    const songId = newSong();
+    fakeTrack(songId, 112, 2);
+    fakeTrack(songId, 96, 2);
+    setSetting(db, "audio.opusBitrates", {
+      trackStereo: 112,
+      trackMono: 72,
+      lowStereo: 48,
+      lowMono: 32,
+    });
+    try {
+      const { currentOpus } = planLosslessRemoval(db, [{ kind: "song", id: songId }]).preview;
+      expect(currentOpus).toEqual([
+        { kbps: 112, count: 1, channels: 2, quality: "standard" },
+        { kbps: 96, count: 1, channels: 2, quality: null },
+      ]);
+    } finally {
+      setSetting(db, "audio.opusBitrates", {
+        trackStereo: 96,
+        trackMono: 64,
+        lowStereo: 48,
+        lowMono: 32,
+      });
+    }
   });
 });

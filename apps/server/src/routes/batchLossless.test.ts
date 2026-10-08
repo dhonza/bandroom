@@ -194,7 +194,7 @@ describe("remove full quality: preview (SPEC §26.4)", () => {
       sharedCopies: 1,
       skipped: { notReady: 1, alreadyLossy: 1 },
       reencode: 0,
-      currentOpus: [{ kbps: 96, count: 3 }],
+      currentOpus: [{ kbps: 96, count: 3, channels: 2, quality: "standard" }],
     });
 
     // Only one of the two users of the shared FLAC: usage drops, but no disk space is freed.
@@ -419,8 +419,8 @@ describe("remove full quality with a quality choice (SPEC §28.3)", () => {
       versions: 2,
       reencode: 0,
       currentOpus: [
-        { kbps: 128, count: 1 },
-        { kbps: 96, count: 1 },
+        { kbps: 128, count: 1, channels: 2, quality: "high" },
+        { kbps: 96, count: 1, channels: 2, quality: "standard" },
       ],
     });
     expect((await preview({ songs: [song], quality: "high" })).reencode).toBe(1);

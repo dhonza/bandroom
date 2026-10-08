@@ -26,6 +26,7 @@ import { IconAlertTriangle, IconCopy } from "@tabler/icons-react";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { api } from "../api/client";
 import { useApiError } from "../api/useApiError";
 import { formatBytes } from "../lib/media";
@@ -139,15 +140,16 @@ function DialogBody({
         </Alert>
       ) : (
         <>
+          <Text size="sm" data-testid="lossless-now">
+            {nowLine(t, p)}
+          </Text>
           <Select
             label={t("lossless.quality")}
             description={t("lossless.qualityHint")}
             data={[
               {
                 value: "keep",
-                label: t("lossless.keepCurrent", {
-                  kbps: p.currentOpus.map((o) => o.kbps).join(", ") || "?",
-                }),
+                label: t("lossless.keepExisting", { opus: opusName(t, p.currentOpus) }),
               },
               ...AUDIO_QUALITIES.map((q) => ({
                 value: q,
@@ -239,6 +241,67 @@ function DialogBody({
       </Group>
     </Stack>
   );
+}
+
+type CurrentOpus = RemoveLosslessPreview["currentOpus"];
+
+/** "96 kbps stereo / 64 kbps mono": the rates of the entries, stereo first. */
+function ratesOf(t: TFunction, opus: CurrentOpus): string {
+  const rate = (o: CurrentOpus[number]) =>
+    t(o.channels === 1 ? "lossless.now.rateMono" : "lossless.now.rateStereo", { kbps: o.kbps });
+  return [...new Set([...opus].sort((a, b) => b.channels - a.channels).map(rate))].join(" / ");
+}
+
+/** The presets of a mixed selection in table order, then the bitrates no preset uses. */
+function mixedList(t: TFunction, opus: CurrentOpus): string {
+  const known = new Set(opus.map((o) => o.quality));
+  return [
+    ...new Set([
+      ...AUDIO_QUALITIES.filter((q) => known.has(q)).map((q) => t(`upload.settings.presets.${q}`)),
+      ...opus
+        .filter((o) => o.quality === null)
+        .map((o) => t("lossless.now.raw", { rates: ratesOf(t, [o]) })),
+    ]),
+  ].join(", ");
+}
+
+/**
+ * What the current Opus is called in the "keep" option: the one preset ("Standard"), "mixed:
+ * Standard, High", or the raw rates when no preset uses them (`audio.opusBitrates` changed).
+ */
+function opusName(t: TFunction, opus: CurrentOpus): string {
+  const known = new Set(opus.map((o) => o.quality));
+  if (known.size === 0) return "?";
+  if (known.size > 1) return t("lossless.now.mixed", { list: mixedList(t, opus) });
+  const q = opus[0]?.quality;
+  return q ? t(`upload.settings.presets.${q}`) : ratesOf(t, opus);
+}
+
+/** "Now: full quality (FLAC) · compressed copy Opus Standard (96 kbps stereo / 64 kbps mono)". */
+function nowLine(t: TFunction, p: RemoveLosslessPreview): string {
+  const kinds = [
+    p.files.flac > 0 && "FLAC",
+    p.files.original > 0 && t("lossless.now.originals"),
+  ].filter((x): x is string => typeof x === "string");
+  const full =
+    kinds.length > 0
+      ? t("lossless.now.fullKinds", { kinds: kinds.join(", ") })
+      : t("lossless.now.full");
+  const opus = p.currentOpus;
+  const known = new Set(opus.map((o) => o.quality));
+  const q = opus[0]?.quality;
+  const copy =
+    known.size === 0
+      ? null
+      : known.size > 1
+        ? t("lossless.now.opusMixed", { list: mixedList(t, opus) })
+        : q
+          ? t("lossless.now.opusPreset", {
+              name: t(`upload.settings.presets.${q}`),
+              rates: ratesOf(t, opus),
+            })
+          : t("lossless.now.opusRaw", { rates: ratesOf(t, opus) });
+  return t("lossless.now.line", { parts: [full, copy].filter(Boolean).join(" · ") });
 }
 
 function Summary({

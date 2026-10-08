@@ -3,6 +3,7 @@ import {
   type AudioQuality,
   LOSSLESS_PREVIEW_LIST_MAX,
   LOSSLESS_VARIANTS,
+  qualityForKbps,
   songLossyOf,
   type LosslessVariant,
   type LosslessVersionRef,
@@ -14,7 +15,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { assets, assetVariants, blobs, songs, tracks, trackVersions } from "../db/schema";
 import { assetProbe, type AssetRow } from "../media/assets";
-import { opusKbpsFor } from "../media/opusRates";
+import { opusKbpsFor, standardOpusKbps } from "../media/opusRates";
 import { removeVariant } from "../media/variants";
 import type { TrackRow, TrackVersionRow } from "./tracks";
 
@@ -170,10 +171,22 @@ export function planLosslessRemoval(
     }
   }
   const reencodeIds = new Set(reencode.map((r) => r.assetId));
-  const currentOpus = new Map<number, number>();
+  // Grouped by bitrate and channels: the preset a bitrate belongs to depends on both.
+  const standard = standardOpusKbps(db);
+  const currentOpus = new Map<string, RemoveLosslessPreview["currentOpus"][number]>();
   for (const t of targets) {
-    const kbps = opusOf.get(t.version.assetId)?.kbps;
-    if (kbps !== undefined) currentOpus.set(kbps, (currentOpus.get(kbps) ?? 0) + 1);
+    const opus = opusOf.get(t.version.assetId);
+    if (!opus) continue;
+    const key = `${opus.kbps}:${opus.mono ? 1 : 2}`;
+    const entry = currentOpus.get(key);
+    if (entry) entry.count++;
+    else
+      currentOpus.set(key, {
+        kbps: opus.kbps,
+        count: 1,
+        channels: opus.mono ? 1 : 2,
+        quality: qualityForKbps(opus.kbps, opus.mono, standard),
+      });
   }
   const files: Record<LosslessVariant, number> = { flac: 0, original: 0, wavmeta: 0 };
   const removedRefs = new Map<string, number>();
@@ -232,9 +245,9 @@ export function planLosslessRemoval(
       sharedCopies,
       skipped,
       reencode: targets.filter((t) => reencodeIds.has(t.version.assetId)).length,
-      currentOpus: [...currentOpus]
-        .sort((a, b) => b[1] - a[1] || b[0] - a[0])
-        .map(([kbps, count]) => ({ kbps, count })),
+      currentOpus: [...currentOpus.values()].sort(
+        (a, b) => b.count - a.count || b.kbps - a.kbps || b.channels - a.channels,
+      ),
     },
   };
 }

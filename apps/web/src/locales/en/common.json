@@ -1552,7 +1552,20 @@
     "reencodedOnBy": "Re-encoded and full quality removed on {{date}} by {{name}}.",
     "quality": "Opus quality",
     "qualityHint": "The compressed audio that stays. Another quality is re-encoded from the full quality first.",
-    "keepCurrent": "Keep current ({{kbps}} kbps)",
+    "keepExisting": "Keep the existing compressed copy ({{opus}})",
+    "now": {
+      "line": "Now: {{parts}}",
+      "full": "full quality",
+      "fullKinds": "full quality ({{kinds}})",
+      "originals": "originals",
+      "opusPreset": "compressed copy Opus {{name}} ({{rates}})",
+      "opusMixed": "compressed copy Opus: mixed ({{list}})",
+      "opusRaw": "compressed copy Opus {{rates}}",
+      "mixed": "mixed: {{list}}",
+      "raw": "Opus {{rates}}",
+      "rateStereo": "{{kbps}} kbps stereo",
+      "rateMono": "{{kbps}} kbps mono"
+    },
     "reencode_one": "{{count}} version is re-encoded first; its full quality goes when that is done.",
     "reencode_other": "{{count}} versions are re-encoded first; their full quality goes when that is done.",
     "doneQueued_one": "{{count}} version is being re-encoded; its full quality goes when that is done.",
@@ -1611,17 +1624,23 @@
     "settings": {
       "title": "Upload settings",
       "keepFull": "Keep full quality",
-      "summaryFull": "Full quality · Opus {{kbps}} kbps",
-      "summaryLossy": "Lossy on upload · {{kbps}} kbps",
+      "summaryFull": "Full quality · Opus {{stereo}} kbps stereo / {{mono}} kbps mono",
+      "summaryLossy": "Lossy on upload · {{stereo}} kbps stereo / {{mono}} kbps mono",
       "lossyOnly": "Convert to lossy on upload",
       "lossyOnlyHint": "Keeps only the compressed audio (Opus) and deletes the uploaded file. Saves space; FLAC and WAV downloads are not available.",
       "quality": "Opus quality",
       "qualityHint": "For playback, and the only copy when converting to lossy.",
       "qualities": {
-        "veryHigh": "Very high · {{stereo}} kbps ({{mono}} mono)",
-        "high": "High · {{stereo}} kbps ({{mono}} mono)",
-        "standard": "Standard · {{stereo}} kbps ({{mono}} mono)",
-        "low": "Low · {{stereo}} kbps ({{mono}} mono)"
+        "veryHigh": "Very high · {{stereo}} kbps stereo / {{mono}} kbps mono",
+        "high": "High · {{stereo}} kbps stereo / {{mono}} kbps mono",
+        "standard": "Standard · {{stereo}} kbps stereo / {{mono}} kbps mono",
+        "low": "Low · {{stereo}} kbps stereo / {{mono}} kbps mono"
+      },
+      "presets": {
+        "veryHigh": "Very high",
+        "high": "High",
+        "standard": "Standard",
+        "low": "Low"
       }
     }
   }

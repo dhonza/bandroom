@@ -41,9 +41,14 @@ describe("upload settings (SPEC §28.2)", () => {
     await userEvent.click(await screen.findByTestId("upload-lossy-only"));
     await userEvent.click(screen.getByTestId("upload-quality"));
     await userEvent.click(
-      await screen.findByRole("option", { name: /^High · 128 kbps/, hidden: true }),
+      await screen.findByRole("option", {
+        name: "High · 128 kbps stereo / 80 kbps mono",
+        hidden: true,
+      }),
     );
-    expect(screen.getByTestId("b")).toHaveTextContent("Lossy on upload · 128 kbps");
+    expect(screen.getByTestId("b")).toHaveTextContent(
+      "Lossy on upload · 128 kbps stereo / 80 kbps mono",
+    );
     expect(screen.getByTestId("b").getAttribute("data-lossy")).toBe("true");
     expect(uploadOptions()).toEqual({ lossyOnly: true, quality: "high" });
     expect(JSON.parse(localStorage.getItem("bandroom.uploadOptions") ?? "null")).toEqual({

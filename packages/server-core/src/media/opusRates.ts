@@ -7,6 +7,11 @@ import { getSetting } from "../settings/registry";
  * `audio.opusBitrates` setting.
  */
 export function opusKbpsFor(db: Db, quality: AudioQuality, mono: boolean): number {
+  return opusKbps(quality, mono, standardOpusKbps(db));
+}
+
+/** The `standard` preset's bitrates on this instance (the `audio.opusBitrates` setting). */
+export function standardOpusKbps(db: Db): { stereo: number; mono: number } {
   const b = getSetting(db, "audio.opusBitrates");
-  return opusKbps(quality, mono, { stereo: b.trackStereo, mono: b.trackMono });
+  return { stereo: b.trackStereo, mono: b.trackMono };
 }
