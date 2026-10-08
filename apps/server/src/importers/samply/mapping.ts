@@ -29,6 +29,24 @@ export function documentKind(name: string): DocumentKind {
   return "other";
 }
 
+/**
+ * Samply's stock artwork (`…/samply-a03ff-public/img/default-artwork/13.png`) shown for projects
+ * without a picture of their own. It is not a project picture, so the importer ignores it.
+ */
+export function isDefaultArtwork(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    return new URL(url).pathname.includes("/default-artwork/");
+  } catch {
+    return false;
+  }
+}
+
+/** Project artwork URL, or null when there is none or it is Samply's stock artwork. */
+export function projectArtworkUrl(url: string | null | undefined): string | null {
+  return url && !isDefaultArtwork(url) ? url : null;
+}
+
 /** Lower-cased file name at the end of a Samply artwork URL (`…/files/<id>/cover.jpeg`). */
 export function artworkFileName(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -108,18 +126,42 @@ export function proposeProject(
   // items into multitrack songs in review; lengths may differ, all tracks start at 0 (owner
   // decisions 2026-09-28 and 2026-10-05, DECISIONS.md, SPEC §26.5).
   const nodes = live.filter((b) => !childIds.has(b.id)).map(toNode);
-  // Samply lists the project picture as an ordinary file; recognise it by the artwork URL's name.
-  const artworkName = artworkFileName(project.artwork);
+  // Samply lists the project picture as an ordinary file, often a hidden one; recognise it by the
+  // artwork URL's name. A visible match stays where it is; otherwise a hidden file box with that
+  // name is added as the picture node (other hidden boxes stay out of the tree).
+  const artworkUrl = projectArtworkUrl(project.artwork);
+  const artworkName = artworkFileName(artworkUrl);
   if (artworkName) {
-    for (const n of nodes) {
-      const match =
+    const visible = nodes.find(
+      (n) =>
         n.kind !== "folder" &&
         !n.isAudio &&
-        n.versions.some((v) => v.name.toLowerCase() === artworkName);
-      if (match) {
-        n.isArtwork = true;
-        n.action = "skip";
-        break;
+        n.versions.some((v) => v.name.toLowerCase() === artworkName),
+    );
+    if (visible) {
+      visible.isArtwork = true;
+      visible.action = "skip";
+    } else {
+      const hidden = boxes.find(
+        (b) =>
+          b.object === "file" &&
+          !b.trashed &&
+          b.hidden === true &&
+          b.name.toLowerCase() === artworkName,
+      );
+      if (hidden) {
+        nodes.push({
+          id: hidden.id,
+          kind: "file",
+          name: stripExtension(hidden.name),
+          action: "skip",
+          targetId: null,
+          trackName: stripExtension(hidden.name),
+          isAudio: false,
+          isArtwork: true,
+          versions: [versionOf(hidden, info)],
+          children: [],
+        });
       }
     }
   }
@@ -127,7 +169,7 @@ export function proposeProject(
     samplyId: project.id,
     name: project.name,
     color: project.color ?? null,
-    artworkUrl: project.artwork || null,
+    artworkUrl,
     sizeBytes: project.size ?? null,
     include: true,
     existingProjectId,

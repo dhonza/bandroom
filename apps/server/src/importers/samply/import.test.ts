@@ -43,7 +43,8 @@ let fake: ReturnType<typeof createFakeSamply>;
 /** SSE events the import jobs published (SPEC §25.3). */
 const emitted: JobEvent[] = [];
 
-// Tree: "Song One" stack (2 versions) · "Tune" folder (2 equal stems + lyrics) · cover.png.
+// Tree: "Song One" stack (2 versions) · "Tune" folder (2 equal stems + lyrics) · cover.png, a
+// hidden box as Samply keeps the project picture · another hidden picture (left out).
 const v1 = fakeBox("file", "Song One v1.wav", { duration: 10, timeCreated: 1000 });
 const v2 = fakeBox("file", "Song One v2.wav", { duration: 10, timeCreated: 2000 });
 const songOne = fakeBox("stack", "Song One", { children: childrenOf(v2, v1) });
@@ -51,7 +52,8 @@ const bass = fakeBox("file", "Tune - Bass.flac", { duration: 6 });
 const drums = fakeBox("file", "Tune - Drums.wav", { duration: 6.1 });
 const lyrics = fakeBox("file", "lyrics.txt");
 const tune = fakeBox("folder", "Tune", { children: childrenOf(bass, drums, lyrics) });
-const cover = fakeBox("file", "cover.png");
+const cover = fakeBox("file", "cover.png", { hidden: true });
+const oldCover = fakeBox("file", "popeye.jpeg", { hidden: true });
 
 async function runSamplyJobs(fetchFn: typeof fetch = fake.fetch): Promise<string[]> {
   const storage = new LocalStorage(path.join(t.dataDir, "blobs"));
@@ -134,13 +136,14 @@ beforeAll(async () => {
         id: "projA",
         name: "Album A",
         color: "#12b886",
-        // Signed-only CDN link (not fetchable); the picture is also listed as the cover.png box.
+        // Signed-only CDN link (not fetchable); the picture is also listed as the hidden
+        // cover.png box.
         artwork: "https://cdn.samply.test/users/u1/files/aaaa-bbbb/cover.png",
         size: 1234,
       },
       { id: "projB", name: "Other", size: 1 },
     ],
-    boxes: { projA: [songOne, v2, v1, tune, bass, drums, lyrics, cover] },
+    boxes: { projA: [songOne, v2, v1, tune, bass, drums, lyrics, cover, oldCover] },
     comments: {
       [v2.id]: [
         {

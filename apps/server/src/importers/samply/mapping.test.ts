@@ -8,6 +8,7 @@ import projectsFixture from "./fixtures/projects.json";
 import { runMapping, type ImportRunRow } from "./store";
 import {
   artworkFileName,
+  isDefaultArtwork,
   computeTotals,
   documentKind,
   planProject,
@@ -205,6 +206,51 @@ describe("project picture", () => {
       ["My Cover", "skip", true],
     ]);
     expect(planProject(p).projectDocuments.map((d) => d.name)).toEqual(["photo"]);
+  });
+
+  it("finds the picture in a hidden file box; other hidden boxes stay out", () => {
+    const song = box("file", "Song.wav", { duration: 10 });
+    const mickey = box("file", "mickey.jpg", { hidden: true });
+    const popeye = box("file", "popeye.jpeg", { hidden: true });
+    const gone = box("file", "trashed.wav", { duration: 5, trashed: true });
+    const withArt = {
+      ...P,
+      artwork: "https://cdn.samply.app/users/u/files/af73c8e6-1/mickey.jpg",
+    };
+    const info: ScanInfo = { ...emptyInfo, sizes: new Map([[song.id, 10]]) };
+    const p = proposeProject(withArt, [mickey, song, popeye, gone], info, null);
+    expect(p.artworkUrl).toBe(withArt.artwork);
+    expect(p.nodes.map((n) => [n.id, n.name, n.action, n.isArtwork ?? false])).toEqual([
+      [song.id, "Song", "songSingle", false],
+      [mickey.id, "mickey", "skip", true],
+    ]);
+    expect(p.nodes[1]?.versions.map((v) => [v.id, v.name])).toEqual([[mickey.id, "mickey.jpg"]]);
+    expect(planProject(p).projectDocuments).toEqual([]);
+    expect(computeTotals(mappingOf(p)).songs).toBe(1);
+  });
+
+  it("prefers a visible box over a hidden one with the same name", () => {
+    const hidden = box("file", "cover.jpg", { hidden: true });
+    const visible = box("file", "cover.jpg");
+    const withArt = { ...P, artwork: "https://cdn.samply.app/users/u/files/x/cover.jpg" };
+    const p = proposeProject(withArt, [hidden, visible], emptyInfo, null);
+    expect(p.nodes.map((n) => [n.id, n.isArtwork ?? false])).toEqual([[visible.id, true]]);
+  });
+
+  it("ignores Samply's stock artwork", () => {
+    const stock = "https://storage.googleapis.com/samply-a03ff-public/img/default-artwork/13.png";
+    expect(isDefaultArtwork(stock)).toBe(true);
+    expect(isDefaultArtwork("https://cdn.samply.app/users/u/files/x/13.png")).toBe(false);
+    expect(isDefaultArtwork(null)).toBe(false);
+    expect(isDefaultArtwork("not a url")).toBe(false);
+    const hidden13 = box("file", "13.png", { hidden: true });
+    const visible13 = box("file", "13.png");
+    const p = proposeProject({ ...P, artwork: stock }, [hidden13, visible13], emptyInfo, null);
+    // No picture, so neither the review warning nor the import log mentions one.
+    expect(p.artworkUrl).toBeNull();
+    expect(p.nodes.map((n) => [n.id, n.action, n.isArtwork ?? false])).toEqual([
+      [visible13.id, "document", false],
+    ]);
   });
 });
 

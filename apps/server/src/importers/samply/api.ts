@@ -194,7 +194,10 @@ export class SamplyClient {
     return this.get("/projects", z.array(SamplyProjectSchema));
   }
 
-  /** All boxes of a project (files, folders, stacks); hidden boxes are excluded by Samply. */
+  /**
+   * All boxes of a project (files, folders, stacks), including hidden ones (`hidden: true`, e.g.
+   * the project picture) and trashed ones; the mapping decides what to keep.
+   */
   listBoxes(projectId: string): Promise<SamplyBox[]> {
     return this.get(`/projects/${enc(projectId)}/all`, z.array(SamplyBoxSchema));
   }
