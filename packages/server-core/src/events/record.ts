@@ -26,26 +26,30 @@ export interface EventInput {
 /** Appends one activity event (SPEC §14.1). This is the only write path for `events`. */
 export function recordEvent(db: Db, e: EventInput): void {
   const ts = e.ts ?? Date.now();
-  db.insert(events)
-    .values({
-      id: uuidv7(ts),
-      ts,
-      actorType: e.actorType ?? (e.actorUserId ? "user" : "system"),
-      actorUserId: e.actorUserId ?? null,
-      sessionId: e.sessionId ?? null,
-      apiKeyId: e.apiKeyId ?? null,
-      linkId: e.linkId ?? null,
-      linkSessionId: e.linkSessionId ?? null,
-      action: e.action,
-      projectId: e.projectId ?? null,
-      songId: e.songId ?? null,
-      targetType: e.targetType ?? null,
-      targetId: e.targetId ?? null,
-      ip: e.ip ?? null,
-      userAgent: e.userAgent?.slice(0, 400) ?? null,
-      details: e.details === undefined ? null : JSON.stringify(e.details),
-    })
-    .run();
+  const row: Record<string, string | number | null> = {
+    id: uuidv7(ts),
+    ts,
+    actor_type: e.actorType ?? (e.actorUserId ? "user" : "system"),
+    actor_user_id: e.actorUserId ?? null,
+    session_id: e.sessionId ?? null,
+    link_id: e.linkId ?? null,
+    link_session_id: e.linkSessionId ?? null,
+    action: e.action,
+    project_id: e.projectId ?? null,
+    song_id: e.songId ?? null,
+    target_type: e.targetType ?? null,
+    target_id: e.targetId ?? null,
+    ip: e.ip ?? null,
+    user_agent: e.userAgent?.slice(0, 400) ?? null,
+    details: e.details === undefined ? null : JSON.stringify(e.details),
+  };
+  // Named only when set: the one-time data steps before the migrations (SPEC §27.2, §28.4) record
+  // events on schemas that predate this column (Drizzle would always name every column).
+  if (e.apiKeyId) row.api_key_id = e.apiKeyId;
+  const cols = Object.keys(row);
+  db.$client
+    .prepare(`INSERT INTO events (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`)
+    .run(...Object.values(row));
 }
 
 export type EventRow = typeof events.$inferSelect;
