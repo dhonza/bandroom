@@ -97,6 +97,11 @@ export function RehearsePanel({
   const { t } = useTranslation();
   const user = useOptionalUser();
   const instrumentTag = user?.instrumentTag ?? "";
+  const userInstrument = user?.instrument ?? null;
+  const me = useMemo(
+    () => ({ instrumentTag, instrument: userInstrument }),
+    [instrumentTag, userInstrument],
+  );
   const isPhone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   const coarse = useMediaQuery(COARSE_POINTER_QUERY, false, { getInitialValueInEffect: false });
   const mixerQuery = useQuery({
@@ -131,8 +136,8 @@ export function RehearsePanel({
   useEffect(() => attachPage(song.id), [song.id]);
   useEffect(() => {
     if (!ready) return;
-    void openSong(song.id, tracks, saved, listened, instrumentTag, songInfoOf(song));
-  }, [ready, song, tracks, saved, listened, instrumentTag]);
+    void openSong(song.id, tracks, saved, listened, me, songInfoOf(song));
+  }, [ready, song, tracks, saved, listened, me]);
   useFollowQueue(song.id, songPath);
 
   useEffect(

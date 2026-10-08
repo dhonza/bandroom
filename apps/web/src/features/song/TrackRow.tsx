@@ -26,6 +26,7 @@ import { useUploadErrorToast } from "../../upload/UploadRow";
 import { songKeys } from "../library/queries";
 import { trackPermissions, uploadTargetFor } from "./model";
 import { TrackEditModal } from "./TrackEditModal";
+import { isSongLocked } from "./songLock";
 import { TrackMenu } from "./TrackMenu";
 import { VersionStackModal } from "./VersionStackModal";
 import { VersionStatus } from "./VersionStatus";
@@ -48,9 +49,12 @@ export function TrackRow({
   song,
   selection,
   draggable = false,
+  singleTrack = false,
 }: {
   track: Track;
   song: Song;
+  /** The only track of the song (its automatic instrument is the mix, SPEC §30.3). */
+  singleTrack?: boolean;
   selection?: TrackRowSelection | undefined;
   draggable?: boolean;
 }) {
@@ -253,6 +257,8 @@ export function TrackRow({
       {editOpen && (
         <TrackEditModal
           track={track}
+          locked={isSongLocked(song)}
+          singleTrack={singleTrack}
           onClose={() => {
             setEditOpen(false);
           }}

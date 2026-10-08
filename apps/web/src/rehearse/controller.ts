@@ -65,6 +65,8 @@ import {
   resetMix as resetMixState,
   toggleMyInstrument,
   myInstrumentTracks,
+  NO_INSTRUMENT,
+  type MyInstrument,
   type PlayableTrack,
   type Quality,
 } from "./model";
@@ -205,7 +207,7 @@ let pendingPlay: "countIn" | "plain" | null = null;
 const saveTimers = new Map<SongStore, ReturnType<typeof setTimeout>>();
 let struggleTimer: ReturnType<typeof setTimeout> | null = null;
 let allTracks: Track[] = [];
-let userTag = "";
+let userInstrument: MyInstrument = NO_INSTRUMENT;
 /** Loop in seconds, re-applied after a reload of the song's audio. */
 let loopSec: { start: number; end: number } | null = null;
 /** The last `openSong` call, repeated by `retryAudio` after the engine failed to start. */
@@ -219,7 +221,7 @@ let queueLoad = 0;
 let pageArgs: OpenArgs | null = null;
 /** The preview's tracks, instrument tag, start position and loop (applied when it loads). */
 let previewTracks: Track[] = [];
-let previewTag = "";
+let previewInstrument: MyInstrument = NO_INSTRUMENT;
 let previewPos = 0;
 let previewLoop: { start: number; end: number } | null = null;
 /**
@@ -233,7 +235,7 @@ type OpenArgs = [
   tracks: Track[],
   saved: MixerState | null,
   listenedVersions: Record<string, TrackVersion | undefined>,
-  instrumentTag: string,
+  me: MyInstrument,
   info: SongInfo,
 ];
 
@@ -431,12 +433,12 @@ function playsOtherSong(songId: string): boolean {
 
 /** Builds (or refreshes) the preview of the page's song; the engine is not touched. */
 function showPreview(args: OpenArgs): void {
-  const [songId, tracks, , , instrumentTag, info] = args;
+  const [songId, tracks, , , me, info] = args;
   const p = usePreview.getState();
   const same = p.songId === songId;
   if (!same) clearPreview();
   previewTracks = tracks;
-  previewTag = instrumentTag;
+  previewInstrument = me;
   const v = songView(args, same ? p : null);
   const engineState = useRehearse.getState();
   usePreview.setState({
@@ -492,10 +494,10 @@ function clearPreview(): void {
  * the position. `carry`: the page's preview of this song (mix, A/B, start position, loop).
  */
 async function loadIntoEngine(args: OpenArgs, carry: Carry | null = null): Promise<void> {
-  const [songId, tracks, , , instrumentTag, info] = args;
+  const [songId, tracks, , , me, info] = args;
   lastOpen = args;
   allTracks = tracks;
-  userTag = instrumentTag;
+  userInstrument = me;
   const e = getEngine();
   // The queue reached the song the page previews: the page shows the engine again.
   if (!carry && useRehearse.getState().previewSongId === songId) {
@@ -720,7 +722,14 @@ function playQueueIndex(index: number): void {
       if (!previewing() || useRehearse.getState().previewSongId === d.song.id) {
         setSongTempo(d.song.id, d.tempo);
       }
-      await loadIntoEngine([d.song.id, d.tracks, d.saved, d.listened, userTag, songInfoOf(d.song)]);
+      await loadIntoEngine([
+        d.song.id,
+        d.tracks,
+        d.saved,
+        d.listened,
+        userInstrument,
+        songInfoOf(d.song),
+      ]);
     })
     .catch(() => {
       if (token !== queueLoad) return;
@@ -1021,11 +1030,11 @@ function flushSave(store: SongStore = useRehearse) {
     );
 }
 
-/** The page's song's tracks and the user's instrument tag ("mute my instrument"). */
-function pageTracks(): { tracks: Track[]; tag: string } {
+/** The page's song's tracks and the user's instrument ("mute my instrument"). */
+function pageTracks(): { tracks: Track[]; me: MyInstrument } {
   return previewing()
-    ? { tracks: previewTracks, tag: previewTag }
-    : { tracks: allTracks, tag: userTag };
+    ? { tracks: previewTracks, me: previewInstrument }
+    : { tracks: allTracks, me: userInstrument };
 }
 
 function applyMix(mix: MixerState) {
@@ -1062,13 +1071,13 @@ export function resetMix(): void {
 }
 
 export function hasMyInstrument(): boolean {
-  const { tracks, tag } = pageTracks();
-  return myInstrumentTracks(tracks, tag).length > 0;
+  const { tracks, me } = pageTracks();
+  return myInstrumentTracks(tracks, me).length > 0;
 }
 
 export function muteMyInstrument(): void {
-  const { tracks, tag } = pageTracks();
-  applyMix(toggleMyInstrument(pageState().mix, myInstrumentTracks(tracks, tag)));
+  const { tracks, me } = pageTracks();
+  applyMix(toggleMyInstrument(pageState().mix, myInstrumentTracks(tracks, me)));
 }
 
 /** Applies a snapshot's gain/pan/mute/solo (listened versions stay as they are). */

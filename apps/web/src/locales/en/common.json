@@ -211,8 +211,10 @@
     "audio": {
       "title": "Audio",
       "instrument": "My instrument",
-      "instrumentHint": "Used by “Mute my instrument” in the Mixer; matches the instrument of tracks (e.g. bass).",
-      "deviceTitle": "On this device"
+      "instrumentHint": "Used by “Mute my instrument” in the Mixer. Automatic guesses it from your tag.",
+      "deviceTitle": "On this device",
+      "instrumentTag": "My tag",
+      "instrumentTagHint": "Optional, e.g. lead: tracks that have a tag must match it."
     },
     "keyboard": {
       "title": "Keyboard and pedal",
@@ -671,7 +673,10 @@
     "fields": {
       "name": "Name",
       "instrument": "Instrument",
-      "instrumentHint": "e.g. bass — used by “Mute my instrument” in the Mixer."
+      "instrumentTag": "Tag",
+      "instrumentTagHint": "Optional, e.g. lead or rhythm: “Mute my instrument” then also matches the tag.",
+      "transpose": "Transpose",
+      "voiceRange": "Voice range"
     },
     "match": {
       "title": "Where should these files go?",
@@ -1720,5 +1725,24 @@
     "neverExpires": "never expires",
     "expires": "expires {{when}}",
     "expired": "expired"
+  },
+  "instruments": {
+    "drums": "Drums",
+    "percussion": "Percussion",
+    "bass": "Bass",
+    "guitar": "Guitar",
+    "keys": "Keys",
+    "vocals": "Vocals",
+    "strings": "Strings",
+    "winds": "Winds",
+    "synth": "Synth",
+    "mix": "Mix",
+    "other": "Other",
+    "automaticGuess": "Automatic ({{guess}})",
+    "automatic": "Automatic",
+    "on": "On",
+    "off": "Off",
+    "low": "Low",
+    "high": "High"
   }
 }

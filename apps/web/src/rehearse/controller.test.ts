@@ -1,5 +1,6 @@
 import type { Song, Track, TrackVersion } from "@bandroom/shared";
 import type { QueueLoader } from "../player/queueLoader";
+import { NO_INSTRUMENT } from "./model";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -214,7 +215,7 @@ describe("engine start failure", () => {
     controller.prepareEngine(); // creates the engine
     engine().failInit = 2; // the tap and the load both fail
     controller.prepareEngine();
-    await openSong(songId, [track("a")], null, {}, "", info(songId));
+    await openSong(songId, [track("a")], null, {}, NO_INSTRUMENT, info(songId));
     expect(useRehearse.getState().status).toBe("error");
     expect(engine().loads).toHaveLength(0);
     togglePlay(); // in the error state, play retries (inside the tap)
@@ -229,7 +230,7 @@ describe("engine start failure", () => {
 
   it("retryAudio reloads even when the song had loaded before", async () => {
     const songId = nextSong();
-    await openSong(songId, [track("a")], null, {}, "", info(songId));
+    await openSong(songId, [track("a")], null, {}, NO_INSTRUMENT, info(songId));
     expect(engine().loads).toHaveLength(1);
     engine().setState("error"); // e.g. a context rebuild failed
     retryAudio();
@@ -246,12 +247,12 @@ describe("A/B selection (listened versions)", () => {
   it("keeps the chosen version across a track refresh without reloading", async () => {
     const songId = nextSong();
     const b = version("a-v2", "a2");
-    await openSong(songId, [track("a")], null, {}, "", info(songId));
+    await openSong(songId, [track("a")], null, {}, NO_INSTRUMENT, info(songId));
     expect(engine().loads).toHaveLength(1);
     controller.listenToVersion("a", b);
     expect(engine().switches).toEqual([{ trackId: "a", hash: "a2", trimDb: 0 }]);
     // An SSE "tracks" change refreshes the track list; the saved mix has not caught up yet.
-    await openSong(songId, [track("a")], null, {}, "", info(songId));
+    await openSong(songId, [track("a")], null, {}, NO_INSTRUMENT, info(songId));
     expect(engine().loads).toHaveLength(1); // no reload, no rebuffer
     expect(useRehearse.getState().tracks[0]?.version.id).toBe("a-v2");
     expect(useRehearse.getState().mix.tracks.a?.listenedVersionId).toBe("a-v2");
@@ -259,9 +260,9 @@ describe("A/B selection (listened versions)", () => {
 
   it("reloads with the chosen version when the song's audio really changes", async () => {
     const songId = nextSong();
-    await openSong(songId, [track("a")], null, {}, "", info(songId));
+    await openSong(songId, [track("a")], null, {}, NO_INSTRUMENT, info(songId));
     controller.listenToVersion("a", version("a-v2", "a2"));
-    await openSong(songId, [track("a"), track("b")], null, {}, "", info(songId)); // a track was added
+    await openSong(songId, [track("a"), track("b")], null, {}, NO_INSTRUMENT, info(songId)); // a track was added
     expect(engine().loads).toHaveLength(2);
     const hashes = engine().loads[1]?.tracks.map((t) => t.clips[0]?.variant.hash);
     expect(hashes).toEqual(["a2", "b1"]);
@@ -272,7 +273,7 @@ describe("version gain (SPEC §25.6)", () => {
   it("loads with each version's gain and applies a changed gain without reloading", async () => {
     const songId = nextSong();
     const loud = { ...version("b-v1", "b1"), gainDb: 4.5 };
-    await openSong(songId, [track("a"), track("b", loud)], null, {}, "", info(songId));
+    await openSong(songId, [track("a"), track("b", loud)], null, {}, NO_INSTRUMENT, info(songId));
     expect(
       engine()
         .loads.at(-1)
@@ -283,7 +284,7 @@ describe("version gain (SPEC §25.6)", () => {
       [track("a", { ...version("a-v1", "a1"), gainDb: -3 }), track("b", loud)],
       null,
       {},
-      "",
+      NO_INSTRUMENT,
       info(songId),
     );
     expect(engine().loads).toHaveLength(1);
@@ -296,7 +297,14 @@ describe("version gain (SPEC §25.6)", () => {
 
 describe("per-track errors", () => {
   it("clears a track's error once it has audio buffered again", async () => {
-    await openSong("errors-song", [track("a"), track("b")], null, {}, "", info("errors-song"));
+    await openSong(
+      "errors-song",
+      [track("a"), track("b")],
+      null,
+      {},
+      NO_INSTRUMENT,
+      info("errors-song"),
+    );
     engine().emit("error", { trackId: "a", message: "HTTP 503" });
     engine().emit("error", { trackId: "b", message: "HTTP 404" });
     expect(Object.keys(useRehearse.getState().errors)).toEqual(["a", "b"]);
@@ -343,15 +351,15 @@ describe("offline with a listened version", () => {
     });
     useOnlineState.setState({ online: false });
     try {
-      await openSong(songId, [track("a")], saved, { a: b }, "", info(songId));
+      await openSong(songId, [track("a")], saved, { a: b }, NO_INSTRUMENT, info(songId));
       expect(engine().loads.at(-1)?.tracks[0]?.clips[0]?.variant.hash).toBe("a1");
       // The choice is kept for when the version is available again.
       expect(useRehearse.getState().mix.tracks.a?.listenedVersionId).toBe("a-v2");
       // With the version on the device, it plays.
       const item = useOffline.getState().items[0];
       if (item) useOffline.setState({ items: [{ ...item, blobs: ["a1", "a2"] }] });
-      await openSong("other-song", [track("a")], null, {}, "", info("other-song"));
-      await openSong(songId, [track("a")], saved, { a: b }, "", info(songId));
+      await openSong("other-song", [track("a")], null, {}, NO_INSTRUMENT, info("other-song"));
+      await openSong(songId, [track("a")], saved, { a: b }, NO_INSTRUMENT, info(songId));
       expect(engine().loads.at(-1)?.tracks[0]?.clips[0]?.variant.hash).toBe("a2");
     } finally {
       useOnlineState.setState({ online: true });
@@ -392,14 +400,14 @@ describe("song lifecycle and queue (SPEC §6.10)", () => {
   it("leaving a stopped song closes it; a playing one plays on until the end", async () => {
     const a = nextSong();
     const detach = controller.attachPage(a);
-    await openSong(a, [track("a")], null, {}, "", info(a));
+    await openSong(a, [track("a")], null, {}, NO_INSTRUMENT, info(a));
     expect(useRehearse.getState().open).toBe(true);
     detach();
     expect(useRehearse.getState().open).toBe(false);
 
     const b = nextSong();
     const detachB = controller.attachPage(b);
-    await openSong(b, [track("b")], null, {}, "", info(b));
+    await openSong(b, [track("b")], null, {}, NO_INSTRUMENT, info(b));
     togglePlay();
     detachB();
     expect(useRehearse.getState().open).toBe(true);
@@ -413,7 +421,7 @@ describe("song lifecycle and queue (SPEC §6.10)", () => {
   it("an ended song stays on its own page", async () => {
     const a = nextSong();
     const detach = controller.attachPage(a);
-    await openSong(a, [track("a")], null, {}, "", info(a));
+    await openSong(a, [track("a")], null, {}, NO_INSTRUMENT, info(a));
     engine().emit("ended", undefined);
     expect(useRehearse.getState().open).toBe(true);
     expect(useRehearse.getState().ended).toBe(true);
@@ -491,7 +499,7 @@ describe("song lifecycle and queue (SPEC §6.10)", () => {
   it("deleting the stopped song on its own page closes it without a notice", async () => {
     const id = nextSong();
     const detach = controller.attachPage(id);
-    await openSong(id, [track("a")], null, {}, "", info(id));
+    await openSong(id, [track("a")], null, {}, NO_INSTRUMENT, info(id));
     expect(controller.dropSongs({ songIds: [id] })).toBe("removed");
     expect(useRehearse.getState().open).toBe(false);
     detach();
@@ -506,7 +514,10 @@ describe("song lifecycle and queue (SPEC §6.10)", () => {
     controller.pause();
     engine().loads = [];
     const detach = controller.attachPage("f3");
-    await openSong("f3", [track("f3-t")], null, {}, "", { ...info("f3"), projectId: "p" });
+    await openSong("f3", [track("f3-t")], null, {}, NO_INSTRUMENT, {
+      ...info("f3"),
+      projectId: "p",
+    });
     expect(engine().loads).toHaveLength(0);
     expect(useRehearse.getState().songId).toBe("f1");
     expect(useRehearse.getState().open).toBe(true);
@@ -562,7 +573,7 @@ describe("another song's page while a song plays (SPEC §6.10)", () => {
   /** The page of `id` opens (attach, then its data arrives). */
   async function openPage(id: string, tracks = [track(`${id}-t`)]) {
     const detach = controller.attachPage(id);
-    await openSong(id, tracks, null, {}, "", info(id));
+    await openSong(id, tracks, null, {}, NO_INSTRUMENT, info(id));
     return detach;
   }
 
@@ -639,7 +650,7 @@ describe("another song's page while a song plays (SPEC §6.10)", () => {
     expect(controller.pageIsPlaying()).toBe(true);
     expect(controller.usePreview.getState().songId).toBeNull();
     // From now on the page is the normal Player: a refresh does not reload.
-    await openSong("s3", [track("a")], null, {}, "", info("s3"));
+    await openSong("s3", [track("a")], null, {}, NO_INSTRUMENT, info("s3"));
     expect(engine().loads).toHaveLength(1);
     detach();
   });
@@ -648,7 +659,7 @@ describe("another song's page while a song plays (SPEC §6.10)", () => {
     await playing(["c1"]);
     const detach = await openPage("c2");
     controller.pause(); // paused in the mini-player: the preview stays
-    await openSong("c2", [track("c2-t")], null, {}, "", info("c2"));
+    await openSong("c2", [track("c2-t")], null, {}, NO_INSTRUMENT, info("c2"));
     expect(useRehearse.getState().previewSongId).toBe("c2");
     expect(engine().loads).toHaveLength(0);
     controller.closeSong(); // ✕ in the mini-player
@@ -702,7 +713,7 @@ describe("another song's page while a song plays (SPEC §6.10)", () => {
     // ✕ before the data arrived: the page's openSong then loads its song.
     controller.closeSong();
     expect(useRehearse.getState().previewSongId).toBeNull();
-    await openSong("a2", [track("a2-t")], null, {}, "", info("a2"));
+    await openSong("a2", [track("a2-t")], null, {}, NO_INSTRUMENT, info("a2"));
     expect(useRehearse.getState().songId).toBe("a2");
     expect(engine().loads).toHaveLength(1);
     detach();

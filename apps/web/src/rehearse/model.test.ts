@@ -1,4 +1,4 @@
-import type { Track, TrackVersion } from "@bandroom/shared";
+import type { Instrument, Track, TrackVersion } from "@bandroom/shared";
 import { describe, expect, it } from "vitest";
 import {
   abPartner,
@@ -259,9 +259,9 @@ describe("mix state", () => {
       track("b", { instrumentTag: "drums" }),
       track("c", { instrumentTag: "bass" }),
     ];
-    const ids = myInstrumentTracks(tracks, " bass");
+    const ids = myInstrumentTracks(tracks, { instrumentTag: " bass" });
     expect(ids).toEqual(["a", "c"]);
-    expect(myInstrumentTracks(tracks, "")).toEqual([]);
+    expect(myInstrumentTracks(tracks, { instrumentTag: "" })).toEqual([]);
     const mix = defaultMix(tracks);
     const muted = toggleMyInstrument(mix, ids);
     expect([muted.tracks.a?.mute, muted.tracks.b?.mute, muted.tracks.c?.mute]).toEqual([
@@ -271,6 +271,33 @@ describe("mix state", () => {
     ]);
     expect(toggleMyInstrument(muted, ids).tracks.a?.mute).toBe(false);
     expect(toggleMyInstrument(mix, [])).toBe(mix);
+  });
+
+  it("finds my tracks by effective instrument, and by tag when both have one (SPEC §30.3)", () => {
+    const tracks = [
+      track("bass", { name: "Bass DI" }),
+      track("lead", { name: "Gtr 1", instrumentTag: "lead" }),
+      track("rhythm", { name: "Gtr 2", instrumentTag: "Rhythm" }),
+      track("plain", { name: "Kytara" }),
+      track("set", { name: "Take 3", instrument: "guitar" }),
+      track("odd", { name: "Guitar", instrument: "keys" }),
+    ];
+    const me = (instrumentTag: string, instrument: Instrument | null = null) =>
+      myInstrumentTracks(tracks, { instrumentTag, instrument });
+    expect(me("", "guitar")).toEqual(["lead", "rhythm", "plain", "set"]);
+    expect(me("rhythm ", "guitar")).toEqual(["rhythm", "plain", "set"]);
+    // Guessed from the tag; the tag must then match the tagged tracks.
+    expect(me("Kytara")).toEqual(["plain", "set"]);
+    expect(me("bass")).toEqual(["bass"]);
+    // The chosen instrument wins over the guess from the tag.
+    expect(me("bass", "keys")).toEqual(["odd"]);
+    // A tag naming no instrument: exact tag match as before.
+    expect(me("lead")).toEqual(["lead"]);
+    expect(me("")).toEqual([]);
+    // A single unrecognised track is the mix.
+    const single = [track("only", { name: "Take" })];
+    expect(myInstrumentTracks(single, { instrumentTag: "", instrument: "mix" })).toEqual(["only"]);
+    expect(myInstrumentTracks(single, { instrumentTag: "", instrument: "other" })).toEqual([]);
   });
 
   it("turns the louder A/B version down to the quieter one", () => {

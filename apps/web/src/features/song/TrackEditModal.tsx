@@ -1,5 +1,24 @@
-import { TrackNameSchema, updateTrack, type Track } from "@bandroom/shared";
-import { Alert, Button, Group, Modal, Stack, TextInput } from "@mantine/core";
+import {
+  INSTRUMENTS,
+  InstrumentSchema,
+  TrackNameSchema,
+  guessInstrument,
+  updateTrack,
+  type Instrument,
+  type Track,
+  type VoiceRange,
+} from "@bandroom/shared";
+import {
+  Alert,
+  Button,
+  Group,
+  Modal,
+  SegmentedControl,
+  Select,
+  Stack,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -9,26 +28,76 @@ import { zodValidator } from "../../api/validate";
 import { ColorSwatchPicker } from "../../components/ColorSwatchPicker";
 import { songKeys } from "../library/queries";
 
-export function TrackEditModal({ track, onClose }: { track: Track; onClose: () => void }) {
+/** Select value for "automatic" (null in the API). */
+const AUTO = "auto";
+
+type TransposeValue = typeof AUTO | "on" | "off";
+type VoiceValue = typeof AUTO | "low" | "high";
+
+const transposeOf = (v: boolean | null): TransposeValue => (v === null ? AUTO : v ? "on" : "off");
+const transposeFrom = (v: TransposeValue): boolean | null => (v === AUTO ? null : v === "on");
+// A stored "auto" voice range is the same as automatic (pitch tracking).
+const voiceOf = (v: VoiceRange | null): VoiceValue => (v === "low" || v === "high" ? v : AUTO);
+const voiceFrom = (v: VoiceValue): VoiceRange | null => (v === AUTO ? null : v);
+const instrumentFrom = (v: string): Instrument | null => {
+  const r = InstrumentSchema.safeParse(v);
+  return r.success ? r.data : null;
+};
+
+/**
+ * Track dialog: name, colour, free-text tag, and the band-wide instrument, transpose policy and
+ * voice range (SPEC §30.3, §30.6). The last three are frozen by a song lock.
+ */
+export function TrackEditModal({
+  track,
+  locked = false,
+  singleTrack = false,
+  onClose,
+}: {
+  track: Track;
+  /** The song is locked: instrument, transpose and voice range stay read-only. */
+  locked?: boolean;
+  /** The only track of its song: an unrecognised one is the mix. */
+  singleTrack?: boolean;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const apiError = useApiError();
+  const initial = {
+    name: track.name,
+    color: track.color,
+    instrumentTag: track.instrumentTag,
+    instrument: track.instrument ?? AUTO,
+    transpose: transposeOf(track.transpose),
+    voiceRange: voiceOf(track.voiceRange),
+  };
   const form = useForm({
-    initialValues: {
-      name: track.name,
-      color: track.color,
-      instrumentTag: track.instrumentTag,
-    },
+    initialValues: initial,
     validate: { name: zodValidator(TrackNameSchema, t) },
   });
+  const v = form.values;
+  const guess = guessInstrument(v.name, v.instrumentTag) ?? (singleTrack ? "mix" : "other");
+  const effective = instrumentFrom(v.instrument) ?? guess;
+  const lockedNote = locked ? t("songs.lock.locked") : undefined;
   const save = useMutation({
-    mutationFn: (v: typeof form.values) =>
+    mutationFn: (values: typeof form.values) =>
       api(updateTrack, {
         params: { id: track.id },
         body: {
-          name: v.name,
-          color: v.color,
-          instrumentTag: v.instrumentTag.trim(),
+          name: values.name,
+          color: values.color,
+          instrumentTag: values.instrumentTag.trim(),
+          // Only changed playback fields: a locked song refuses them even when unchanged.
+          ...(values.instrument !== initial.instrument && {
+            instrument: instrumentFrom(values.instrument),
+          }),
+          ...(values.transpose !== initial.transpose && {
+            transpose: transposeFrom(values.transpose),
+          }),
+          ...(values.voiceRange !== initial.voiceRange && {
+            voiceRange: voiceFrom(values.voiceRange),
+          }),
         },
       }),
     onSuccess: () => {
@@ -39,8 +108,8 @@ export function TrackEditModal({ track, onClose }: { track: Track; onClose: () =
   return (
     <Modal opened onClose={onClose} title={t("tracks.edit")} centered>
       <form
-        onSubmit={form.onSubmit((v) => {
-          save.mutate(v);
+        onSubmit={form.onSubmit((values) => {
+          save.mutate(values);
         })}
         noValidate
       >
@@ -53,17 +122,68 @@ export function TrackEditModal({ track, onClose }: { track: Track; onClose: () =
           />
           <ColorSwatchPicker
             label={t("projects.fields.color")}
-            value={form.values.color}
+            value={v.color}
             onChange={(c) => {
               form.setFieldValue("color", c);
             }}
           />
-          <TextInput
+          <Select
             label={t("tracks.fields.instrument")}
-            description={t("tracks.fields.instrumentHint")}
+            description={lockedNote}
+            data-testid="track-instrument"
+            allowDeselect={false}
+            disabled={locked}
+            data={[
+              {
+                value: AUTO,
+                label: t("instruments.automaticGuess", { guess: t(`instruments.${guess}`) }),
+              },
+              ...INSTRUMENTS.map((i) => ({ value: i, label: t(`instruments.${i}`) })),
+            ]}
+            {...form.getInputProps("instrument")}
+          />
+          <TextInput
+            label={t("tracks.fields.instrumentTag")}
+            description={t("tracks.fields.instrumentTagHint")}
             maxLength={40}
             {...form.getInputProps("instrumentTag")}
           />
+          <Stack gap={4}>
+            <Text size="sm" fw={500}>
+              {t("tracks.fields.transpose")}
+            </Text>
+            <SegmentedControl
+              data-testid="track-transpose"
+              disabled={locked}
+              value={v.transpose}
+              onChange={(x) => {
+                form.setFieldValue("transpose", x);
+              }}
+              data={(["auto", "on", "off"] as const).map((x) => ({
+                value: x,
+                label: t(x === AUTO ? "instruments.automatic" : `instruments.${x}`),
+              }))}
+            />
+            {lockedNote && (
+              <Text size="xs" c="dimmed">
+                {lockedNote}
+              </Text>
+            )}
+          </Stack>
+          {effective === "vocals" && (
+            <Select
+              label={t("tracks.fields.voiceRange")}
+              description={lockedNote}
+              data-testid="track-voice-range"
+              allowDeselect={false}
+              disabled={locked}
+              data={(["auto", "low", "high"] as const).map((x) => ({
+                value: x,
+                label: t(x === AUTO ? "instruments.automatic" : `instruments.${x}`),
+              }))}
+              {...form.getInputProps("voiceRange")}
+            />
+          )}
           <Group justify="flex-end">
             <Button variant="default" onClick={onClose}>
               {t("common.cancel")}
