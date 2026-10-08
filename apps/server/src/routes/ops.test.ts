@@ -2,9 +2,11 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { BWF_FILE } from "@bandroom/fixtures";
-import { logFilePath } from "@bandroom/server-core";
+import { getAsset, listEvents, logFilePath } from "@bandroom/server-core";
 import {
   ApiErrorSchema,
+  cancelAdminJob,
+  retryAdminJob,
   getAdminEvents,
   getAdminJobs,
   getAdminLogs,
@@ -169,5 +171,35 @@ describe("ops read endpoints (SPEC §29.6)", () => {
     expect(codeOf(await callWithKey(t, getAdminSystem, {}, adminRead))).toBe("ok");
     const contentKey = keyFor(t, bossId, ["read", "write"]);
     expect(codeOf(await callWithKey(t, getAdminJobs, {}, contentKey))).toBe("API_KEY_SCOPE");
+  });
+
+  it("cancels and retries jobs with events", async () => {
+    const queued = (await call(t, getAdminJobs, { query: { status: "queued" } }, admin)).json<{
+      jobs: AdminJob[];
+    }>().jobs[0];
+    const id = queued?.id ?? "";
+    expect(codeOf(await call(t, retryAdminJob, { params: { id } }, admin))).toBe("JOB_STATE");
+    const cancelled = await call(t, cancelAdminJob, { params: { id } }, admin);
+    expect(cancelled.json<{ job: AdminJob }>().job.status).toBe("cancelled");
+    expect(codeOf(await call(t, cancelAdminJob, { params: { id } }, admin))).toBe("JOB_STATE");
+
+    const assetId = queued?.refs.assetId ?? "";
+    t.db.$client.prepare("UPDATE assets SET status = 'failed' WHERE id = ?").run(assetId);
+    const adminOps = keyFor(t, bossId, ["admin:ops"]);
+    const retried = await callWithKey(t, retryAdminJob, { params: { id } }, adminOps);
+    expect(retried.json<{ job: AdminJob }>().job).toMatchObject({ status: "queued", attempts: 0 });
+    expect(getAsset(t.db, assetId)?.status).toBe("queued");
+    expect(listEvents(t.db, { action: "job.cancelled", targetId: id })).toHaveLength(1);
+    const [ev] = listEvents(t.db, { action: "job.retried", targetId: id });
+    expect(ev?.apiKeyId).not.toBeNull();
+
+    const readOnly = keyFor(t, bossId, ["admin:read"]);
+    expect(codeOf(await callWithKey(t, cancelAdminJob, { params: { id } }, readOnly))).toBe(
+      "API_KEY_SCOPE",
+    );
+    expect(codeOf(await call(t, retryAdminJob, { params: { id: "nope" } }, admin))).toBe(
+      "NOT_FOUND",
+    );
+    expect(codeOf(await call(t, cancelAdminJob, { params: { id } }, member))).toBe("FORBIDDEN");
   });
 });

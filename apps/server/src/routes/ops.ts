@@ -7,11 +7,16 @@ import {
   getUserById,
   logFilePath,
   readLogRecords,
+  cancelJob,
+  getAsset,
+  requeueJob,
+  setAssetStatus,
   type Db,
   type LogSource,
   type UserRow,
 } from "@bandroom/server-core";
 import {
+  cancelAdminJob,
   getAdminEvents,
   getAdminJobs,
   getAdminLogs,
@@ -19,13 +24,16 @@ import {
   getAdminSystem,
   getAdminUploads,
   LOG_LEVELS,
+  retryAdminJob,
   type AdminEvent,
   type AdminJob,
   type AdminLogRecord,
 } from "@bandroom/shared";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context";
+import { audit } from "../http/audit";
 import { registerContract } from "../http/contracts";
+import { AppError } from "../http/errors";
 import { effectiveQuota } from "../quota";
 
 /** Status files larger than this are not parsed (they are written by our own scripts). */
@@ -371,5 +379,46 @@ export function registerOpsRoutes(app: FastifyInstance, ctx: AppContext): void {
       .sort((a, b) => a.time - b.time)
       .slice(-query.limit);
     return { records };
+  });
+
+  // --- Job actions (admin:ops) -----------------------------------------------------------------
+
+  const jobOr404 = (id: string) => {
+    const job = getRawJob(db, id);
+    if (!job) throw new AppError("NOT_FOUND", "Job not found");
+    return job;
+  };
+
+  registerContract(app, retryAdminJob, ({ params }, request) => {
+    const before = jobOr404(params.id);
+    const result = requeueJob(db, params.id);
+    if (result === "conflict")
+      throw new AppError("JOB_STATE", "An equal job is already queued or running");
+    if (result === "state")
+      throw new AppError("JOB_STATE", "Only failed or cancelled jobs can be retried");
+    // A failed media job left its asset failed; it is waiting for processing again.
+    const assetId = toAdminJob(before).refs.assetId;
+    const asset = assetId ? getAsset(db, assetId) : undefined;
+    if (asset?.status === "failed") setAssetStatus(db, asset.id, "queued");
+    audit(db, request, {
+      action: "job.retried",
+      targetType: "job",
+      targetId: params.id,
+      details: { type: before.type, previousStatus: before.status },
+    });
+    return { job: toAdminJob(jobOr404(params.id)) };
+  });
+
+  registerContract(app, cancelAdminJob, ({ params }, request) => {
+    const before = jobOr404(params.id);
+    if (!cancelJob(db, params.id))
+      throw new AppError("JOB_STATE", "Only queued or running jobs can be cancelled");
+    audit(db, request, {
+      action: "job.cancelled",
+      targetType: "job",
+      targetId: params.id,
+      details: { type: before.type, previousStatus: before.status },
+    });
+    return { job: toAdminJob(jobOr404(params.id)) };
   });
 }

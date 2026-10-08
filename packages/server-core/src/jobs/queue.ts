@@ -294,3 +294,35 @@ export function cancelJob(db: Db, jobId: string, now: number = Date.now()): bool
 export function getJob(db: Db, id: string): JobRow | undefined {
   return db.select().from(jobs).where(eq(jobs.id, id)).get();
 }
+
+/**
+ * Queues a failed or cancelled job again with fresh attempts (ops API, SPEC §29.6). Returns
+ * "conflict" when an equal job (same dedupe key) is already queued or running.
+ */
+export function requeueJob(
+  db: Db,
+  jobId: string,
+  now: number = Date.now(),
+): "requeued" | "state" | "conflict" {
+  try {
+    const changed = db
+      .update(jobs)
+      .set({
+        status: "queued",
+        attempts: 0,
+        error: null,
+        progress: 0,
+        lockedBy: null,
+        lockedUntil: null,
+        runAfter: now,
+        startedAt: null,
+        finishedAt: null,
+      })
+      .where(and(eq(jobs.id, jobId), inArray(jobs.status, ["failed", "cancelled"])))
+      .run().changes;
+    return changed > 0 ? "requeued" : "state";
+  } catch (err) {
+    if (err instanceof Error && /UNIQUE constraint/i.test(err.message)) return "conflict";
+    throw err;
+  }
+}

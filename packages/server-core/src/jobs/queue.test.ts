@@ -8,6 +8,7 @@ import {
   enqueueJob,
   failJob,
   getJob,
+  requeueJob,
   heartbeatJob,
   LEASE_MS,
   recoverExpiredJobs,
@@ -133,5 +134,19 @@ describe("recoverExpiredJobs", () => {
       spy.mockRestore();
     }
     expect(getJob(db, j.id)).toMatchObject({ status: "running", lockedBy: "w" });
+  });
+});
+
+describe("requeueJob", () => {
+  it("queues failed and cancelled jobs again, refuses others and duplicates", () => {
+    const a = add("t", { dedupeKey: "k" });
+    expect(requeueJob(db, a.id)).toBe("state");
+    cancelJob(db, a.id);
+    expect(requeueJob(db, a.id, 5)).toBe("requeued");
+    expect(getJob(db, a.id)).toMatchObject({ status: "queued", attempts: 0, runAfter: 5 });
+    cancelJob(db, a.id);
+    add("t", { dedupeKey: "k" });
+    expect(requeueJob(db, a.id)).toBe("conflict");
+    expect(requeueJob(db, "missing")).toBe("state");
   });
 });

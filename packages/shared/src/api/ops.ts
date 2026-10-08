@@ -94,6 +94,26 @@ export const getAdminJobs = defineContract({
   auth: admin,
 });
 
+const JobIdParams = z.object({ id: z.string().min(1).max(64) });
+
+export const retryAdminJob = defineContract({
+  method: "POST",
+  path: "/admin/jobs/:id/retry",
+  params: JobIdParams,
+  response: z.object({ job: AdminJobSchema }),
+  errors: ["NOT_FOUND", "JOB_STATE"],
+  auth: admin,
+});
+
+export const cancelAdminJob = defineContract({
+  method: "POST",
+  path: "/admin/jobs/:id/cancel",
+  params: JobIdParams,
+  response: z.object({ job: AdminJobSchema }),
+  errors: ["NOT_FOUND", "JOB_STATE"],
+  auth: admin,
+});
+
 export const AdminEventSchema = z.object({
   id: z.string(),
   ts: z.number(),
