@@ -4,6 +4,7 @@ export * from "./content";
 export * from "./db";
 export * from "./events/record";
 export * from "./logger";
+export * from "./logFile";
 export * from "./notifications/service";
 export * from "./settings/branding";
 export * from "./settings/registry";

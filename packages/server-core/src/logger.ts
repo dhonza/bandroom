@@ -1,5 +1,6 @@
-import { pino, type Logger, type LoggerOptions } from "pino";
+import { multistream, pino, type Logger, type LoggerOptions } from "pino";
 import type { Config } from "./config";
+import { CappedLogFile, logFilePath, type LogSource } from "./logFile";
 
 /** Paths that must never reach the logs (SPEC §18.6). */
 export const LOG_REDACT_PATHS = [
@@ -55,6 +56,22 @@ export function loggerOptions(config: Pick<Config, "logLevel">, name: string): L
   };
 }
 
-export function createLogger(config: Pick<Config, "logLevel">, name: string): Logger {
-  return pino(loggerOptions(config, name));
+/**
+ * Logs to stdout; with `file`, records at warn and above also go to the size-capped
+ * `DATA_DIR/logs/<file>.log` (SPEC §29.7), redacted the same way.
+ */
+export function createLogger(
+  config: Pick<Config, "logLevel"> & Partial<Pick<Config, "dataDir">>,
+  name: string,
+  file?: LogSource,
+): Logger {
+  const options = loggerOptions(config, name);
+  if (file === undefined || config.dataDir === undefined || config.logLevel === "silent") {
+    return pino(options);
+  }
+  const streams = multistream([
+    { level: config.logLevel, stream: process.stdout },
+    { level: "warn", stream: new CappedLogFile(logFilePath(config.dataDir, file)) },
+  ]);
+  return pino(options, streams);
 }

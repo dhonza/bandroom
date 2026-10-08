@@ -11,7 +11,7 @@ import { APP_VERSION } from "./version";
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const logger = createLogger(config, "server");
+  const logger = createLogger(config, "server", "app");
   for (const w of config.warnings) logger.warn(w);
 
   const db = openDb(config.dbPath);

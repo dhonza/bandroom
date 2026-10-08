@@ -44,7 +44,7 @@ const CAPABILITIES = [...HANDLERS.values()].map((h) => h.capability);
  */
 async function main(): Promise<void> {
   const config = loadConfig();
-  const logger = createLogger(config, "worker");
+  const logger = createLogger(config, "worker", "worker");
   for (const w of config.warnings) logger.warn(w);
   const version = process.env.APP_VERSION ?? pkg.version;
 
