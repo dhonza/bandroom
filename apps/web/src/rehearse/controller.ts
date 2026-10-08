@@ -270,6 +270,7 @@ function getEngine(): Engine {
     useRehearse.setState((s) => ({ errors: { ...s.errors, [err.trackId]: err.message } }));
   });
   e.on("ended", onEnded);
+  e.on("meters", onMeters);
   installMediaActions({
     play: () => {
       if (!isPlaying()) togglePlay();
@@ -349,8 +350,23 @@ function onVisibility() {
   }
 }
 
-export function subscribeMeters(cb: (m: EngineEvents["meters"]) => void): () => void {
-  return getEngine().on("meters", cb);
+type MeterListener = (m: EngineEvents["meters"]) => void;
+const meterListeners = new Set<MeterListener>();
+
+/**
+ * The engine's post-fader peaks (~20 Hz while anything sounds). Subscribing does not start the
+ * engine, and a page showing a preview (another song in the engine) gets no reports.
+ */
+export function subscribeMeters(cb: MeterListener): () => void {
+  meterListeners.add(cb);
+  return () => {
+    meterListeners.delete(cb);
+  };
+}
+
+function onMeters(m: EngineEvents["meters"]) {
+  if (previewing()) return;
+  for (const cb of meterListeners) cb(m);
 }
 
 /** The engine song's position (the mini-player; the song page uses {@link positionSec}). */

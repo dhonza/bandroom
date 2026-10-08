@@ -29,7 +29,7 @@ import { VersionStackModal } from "../features/song/VersionStackModal";
 import { listenToVersion, setTrack, startAB, toggleAB, usePlayerView } from "./controller";
 import { ChannelsIcon } from "./ChannelsIcon";
 import { headerButtonSize, headerTier } from "./headerTier";
-import { Meter, SHOW_METERS } from "./Meter";
+import { Meter } from "./Meter";
 import type { PlayableTrack } from "./model";
 import { TrackColorBar, TrackColorPalette } from "./TrackColor";
 import { PitchLockedBadge, TrackPracticeSettings } from "./TrackTranspose";
@@ -53,7 +53,8 @@ export function formatPan(pan: number, t: TFunction): string {
 
 /**
  * One track's header left of its timeline lane (SPEC §11.3; DECISIONS 2026-10-07): name, version
- * (`v3 ▾`), M/S, fader with dB readout, pan and version gain, and a thin buffering line. It adapts
+ * (`v3 ▾`), M/S, fader with dB readout, pan and version gain, a post-fader peak meter (a bar on
+ * full headers, a thin vertical one along the edge of shorter ones) and a thin buffering line. It adapts
  * to the lane height (`headerTier`): on short lanes and on narrow (`compact`, phone) headers the
  * fader and the rest move into the settings popover, so M/S are never clipped.
  */
@@ -392,6 +393,7 @@ export function TrackStrip({
     />
   );
 
+  const meterLabel = t("rehearse.meter", { track: track.name });
   let content;
   if (tier === "full") {
     content = (
@@ -402,9 +404,7 @@ export function TrackStrip({
           {fader}
           {settings}
         </Group>
-        {SHOW_METERS && (
-          <Meter trackId={track.id} label={t("rehearse.meter", { track: track.name })} />
-        )}
+        <Meter trackId={track.id} label={meterLabel} />
         {error && (
           <Text size="xs" c="red" truncate>
             {t("rehearse.trackError", { track: track.name })}
@@ -470,6 +470,8 @@ export function TrackStrip({
       {/* Narrow headers pick the colour in the settings popover (the bar is too thin to tap). */}
       <TrackColorBar track={track} canEdit={canEditTrack && !compact} />
       {content}
+      {/* Shorter headers: a thin vertical meter along the edge, beside the buttons. */}
+      {tier !== "full" && <Meter trackId={track.id} label={meterLabel} vertical />}
       {bufferLine}
       {modal}
     </Group>

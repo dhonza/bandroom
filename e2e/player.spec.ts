@@ -472,3 +472,67 @@ test("Recenter follows the playhead without seeking; the overview shows the play
   expect(Math.max(...columns) - Math.min(...columns)).toBeLessThan(0.02);
   expect(Math.min(...columns)).toBeLessThan(0.7);
 });
+
+/** How full a track header's peak meter is (0..100 %), whichever way it runs. */
+async function meterFill(strip: Locator): Promise<number> {
+  return strip.getByTestId("track-meter-bar").evaluate((el) => {
+    const s = (el as HTMLElement).style;
+    return parseFloat(s.height || "0") + parseFloat(s.width || "0");
+  });
+}
+
+test("Mixer: post-fader peak meters move while playing, in every header tier", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(540_000);
+  await loginAsNewUser(page, request, testInfo, "member");
+  await songWithTrack(page, testInfo);
+  await page.getByTestId("mixer-toggle").click();
+  const strip = page.getByTestId("track-headers").getByTestId("track-strip");
+  await expect(strip).toHaveCount(1, { timeout: 30_000 });
+  const meter = strip.getByRole("meter");
+  const tierOf = async () => (await strip.getAttribute("data-tier")) ?? "";
+  const orientation = (tier: string) => (tier === "full" ? "horizontal" : "vertical");
+
+  // Every tier has one meter: shrink the lanes down to the shortest header.
+  const tiers = new Set<string>();
+  const shorter = page.getByTestId("lanes-shorter");
+  for (;;) {
+    const tier = await tierOf();
+    tiers.add(tier);
+    await expect(meter).toHaveCount(1);
+    await expect(meter).toHaveAttribute("data-orientation", orientation(tier));
+    if (tier !== "full") {
+      // Full header height, beside (never over) the M/S buttons.
+      const m = await box(meter);
+      expect(m.height).toBeGreaterThan((await box(strip)).height - 6);
+      for (const id of ["track-mute", "track-solo"]) {
+        const b = await box(strip.getByTestId(id));
+        expect(m.x >= b.x + b.width || m.x + m.width <= b.x).toBe(true);
+      }
+    }
+    if (await shorter.isDisabled()) break;
+    await shorter.click();
+  }
+  expect(tiers.has("one") || tiers.has("two")).toBe(true);
+  expect(await meterFill(strip)).toBe(0);
+
+  // Playing: the shortest header's meter moves.
+  await page.getByTestId("rehearse-play").click();
+  await expect.poll(async () => (await engine(page))?.status, { timeout: 30_000 }).toBe("playing");
+  await expect.poll(() => meterFill(strip), { timeout: 10_000 }).toBeGreaterThan(0);
+
+  // Post-fader: a muted track's meter falls to zero.
+  await strip.getByTestId("track-mute").click();
+  await expect.poll(() => meterFill(strip), { timeout: 5_000 }).toBe(0);
+  await strip.getByTestId("track-mute").click();
+
+  // Back up to the tallest header: its meter moves too.
+  await page.getByTestId("lanes-taller").click();
+  await page.getByTestId("lanes-taller").click();
+  await page.getByTestId("lanes-taller").click();
+  await expect(meter).toHaveAttribute("data-orientation", orientation(await tierOf()));
+  await expect.poll(() => meterFill(strip), { timeout: 5_000 }).toBeGreaterThan(0);
+  await page.getByTestId("rehearse-play").click();
+});

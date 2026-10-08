@@ -122,3 +122,38 @@ describe("TrackStrip mono/stereo mark", () => {
     );
   });
 });
+
+describe("TrackStrip peak meter", () => {
+  beforeAll(async () => {
+    await initI18n("en", i18n);
+  });
+  beforeEach(() => {
+    mockApi({});
+    useRehearse.setState({
+      songId: "s1",
+      previewSongId: null,
+      mix: { tracks: { t1: { gainDb: 0, pan: 0, mute: false, solo: false } } },
+    });
+  });
+
+  const cases = [
+    { tier: "full", height: 120, compact: false, orientation: "horizontal" },
+    { tier: "two", height: 80, compact: false, orientation: "vertical" },
+    { tier: "one", height: 50, compact: false, orientation: "vertical" },
+    { tier: "two", height: 80, compact: true, orientation: "vertical" },
+    { tier: "one", height: 50, compact: true, orientation: "vertical" },
+  ] as const;
+
+  for (const c of cases) {
+    it(`is in the ${c.tier} tier${c.compact ? " (phone)" : ""}, ${c.orientation}`, () => {
+      renderStrip(playable(2, false), c.height, c.compact);
+      expect(screen.getByTestId("track-strip")).toHaveAttribute("data-tier", c.tier);
+      const meters = screen.getAllByRole("meter", { name: "Level of Bass" });
+      expect(meters).toHaveLength(1);
+      expect(meters[0]).toHaveAttribute("data-orientation", c.orientation);
+      // Silent until the engine reports.
+      const bar = within(meters[0] as HTMLElement).getByTestId("track-meter-bar");
+      expect(c.orientation === "vertical" ? bar.style.height : bar.style.width).toMatch(/^0(px)?$/);
+    });
+  }
+});
