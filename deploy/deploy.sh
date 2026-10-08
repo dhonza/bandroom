@@ -43,6 +43,16 @@ docker compose pull
 new_image="$(docker compose config --images app | head -n 1)"
 new_version="$(version_of_image "$new_image")"
 info "Pulled: $new_image = $new_version"
+tag_line="$(grep -E '^BANDROOM_TAG=' .env 2>/dev/null | tail -n 1 || true)"
+if [ -n "$tag_line" ]; then
+  info "Image tag from .env: $tag_line (edit .env to deploy another version)"
+else
+  info "Image tag: latest (no BANDROOM_TAG in .env)"
+fi
+if [ "$new_version" = "$old_version" ]; then
+  say "WARNING: the pulled version equals the running one ($new_version); restarting it unchanged."
+  info "To update, set BANDROOM_TAG in .env to the new tag (e.g. v1.2.3) or remove the line for latest."
+fi
 
 backup=""
 if [ "${BANDROOM_SKIP_BACKUP:-0}" = "1" ]; then
