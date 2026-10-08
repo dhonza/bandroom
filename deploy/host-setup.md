@@ -117,8 +117,9 @@ directory, so a compromised container cannot touch your home directory. The dire
 sudo adduser --system --group --no-create-home --home /nonexistent bandroom
 id bandroom                                  # note the uid and gid for .env
 sudo mkdir -p /opt/bandroom/data && cd /opt/bandroom
-# copy deploy/compose.yml, deploy/deploy.sh and deploy/.env.example here, and
-# deploy/Caddyfile.subpath as Caddyfile (sub-path) or deploy/Caddyfile (subdomain)
+# copy deploy/compose.yml, deploy/deploy.sh, deploy/status.sh and deploy/.env.example here, and
+# deploy/Caddyfile.subpath as Caddyfile (sub-path) or deploy/Caddyfile (subdomain);
+# all of them owned by root and not writable by anyone else (see §7)
 sudo cp .env.example .env && sudo chmod 600 .env && sudoedit .env
 #   APP_URL=https://example.com/your-secret-path   SITE_ADDRESS=example.com   BASE_PATH=/your-secret-path
 #   BANDROOM_UID / BANDROOM_GID from `id bandroom`, APP_SECRET, INTERNAL_EVENTS_SECRET, …
@@ -127,16 +128,7 @@ sudo docker compose pull && sudo docker compose up -d
 sudo docker compose exec app bandroom create-admin   # from M1
 ```
 
-Updates: `sudo ./deploy.sh` in `/opt/bandroom`. It pulls the new image, stops the app and worker,
-copies `data/bandroom.sqlite` to `/opt/bandroom-backup/bandroom-before-<new>-from-<old>-<UTC time>.sqlite`
-(next to the application directory; `BANDROOM_BACKUP_DIR` changes it), verifies the copy, starts the
-new version, waits for the health check and prints the rollback commands. It never overwrites or
-deletes a backup; remove old ones by hand. The backup directory is root-only (`chmod 700`), so list
-or copy its files inside a root shell, e.g. `sudo sh -c 'ls -l /opt/bandroom-backup/'` (a `*` typed
-in your own shell cannot see into it).
-
-To update `deploy.sh` itself, copy the new version from the repository:
-`sudo curl -fsSL https://raw.githubusercontent.com/<owner>/bandroom/main/deploy/deploy.sh -o deploy.sh && sudo chmod 755 deploy.sh`.
+Updates, rollback and the status script: §7.
 
 ## 6. Other services on the same host
 
@@ -147,3 +139,99 @@ on `example.com` share BandRoom's origin, so a cross-site scripting hole in anot
 act with a band member's BandRoom session.
 
 Off-site backups (`backup.sh`, restic) are added in M15; `deploy.sh` only keeps a local copy of the database before each update.
+
+## 7. Updates, rollback and status
+
+All commands run in `/opt/bandroom`.
+
+```bash
+sudo ./deploy.sh              # deploy the tag already in .env (BANDROOM_TAG; latest without it)
+sudo ./deploy.sh v1.2.3       # switch to v1.2.3 and deploy it
+sudo ./deploy.sh --rollback   # undo the last update
+sudo ./status.sh              # read-only overview
+sudo ./status.sh song "<part of a title>"
+sudo ./status.sh uploads [hours]
+```
+
+**Deploy.** `deploy.sh` accepts only a tag of the form `vX.Y.Z`. With a tag it first pulls exactly
+that image; if the tag does not exist it stops and changes nothing. Then it sets
+`BANDROOM_TAG=<tag>` in `.env` (adding the line if needed), after copying `.env` to
+`.env.bak-<UTC time>` (mode 600). It pulls, stops the app and worker, copies
+`data/bandroom.sqlite` to `/opt/bandroom-backup/bandroom-before-<new>-from-<old>-<UTC time>.sqlite`
+(next to the application directory), verifies the copy, starts the new version and waits for the
+health check. It never overwrites or deletes a backup; remove old ones by hand. The backup
+directory is root-only (`chmod 700`), so list or copy its files inside a root shell, e.g.
+`sudo sh -c 'ls -l /opt/bandroom-backup/'` (a `*` typed in your own shell cannot see into it), or
+use `sudo ./status.sh`.
+
+**Self-update.** Every image from v0.4.1 on carries `deploy.sh`, `status.sh`, `compose.yml` and the
+Caddyfile templates in `/app/deploy/`. After pulling, `deploy.sh` copies them out of the new image
+and, for each of `deploy.sh`, `status.sh` and `compose.yml` that differs from the installed one,
+prints a unified diff, keeps the old file as `<file>.bak-<UTC time>` and installs the new one
+(owned by root; mode 755 for the scripts, 644 for `compose.yml`). When `deploy.sh` or `compose.yml`
+changed, it restarts itself once with the same arguments, so the rest of the update already runs
+with the new files. It never installs files from an image older than the running version. The
+`Caddyfile` is never replaced, because yours may be customized: when it differs from the matching
+template, the diff is printed as a note, and you adopt what you need by hand
+(`sudo docker compose restart caddy` afterwards).
+
+Updating from a release before v0.4.1 needs the new scripts once (later updates bring them along):
+
+```bash
+cd /opt/bandroom
+for f in deploy.sh status.sh; do
+  sudo curl -fsSL "https://raw.githubusercontent.com/<owner>/bandroom/main/deploy/$f" -o "$f"
+done
+sudo chown root:root deploy.sh status.sh && sudo chmod 755 deploy.sh status.sh
+```
+
+**Rollback.** `sudo ./deploy.sh --rollback` looks in the backup directory for the newest
+`bandroom-before-<running>-from-<previous>-*.sqlite`, prints its plan and checks that the
+`<previous>` image exists. It then stops the app and worker, copies the current database to
+`bandroom-before-rollback-from-<running>-<UTC time>.sqlite` (verified), restores the backup (removing
+stale `-wal`/`-shm` files and keeping the owner and mode of the database file), sets
+`BANDROOM_TAG=<previous>` (with a `.env` backup), starts and waits for the health check. Everything
+changed in BandRoom since that backup is lost from the running instance; it is still in the copy
+made first. Without a matching backup, or when `<previous>` is not a `vX.Y.Z` tag, it changes nothing.
+
+**Status.** `status.sh` only reads: it shows the running versions, container states and health,
+`BANDROOM_TAG`, free disk space for the data and backups, the newest 10 backups and the last 50
+warnings and errors of the app and worker. `song` lists, for each song whose title contains the
+text (case-insensitive, deleted ones included), its tracks and versions with their audio variants,
+Opus bitrate and channels, source codec, lossless flag and upload options. `uploads` lists the
+audio uploaded in the last `hours` (default 24). The database is opened read-only inside the app
+container, and the search text is passed as a bound query parameter.
+
+### Running the scripts without a password (optional)
+
+A sudoers rule can allow your user (`<you>`) to run exactly these two scripts as root without a
+password, e.g. so that an assistant working in your SSH session can deploy or inspect without
+being given your password. Install it once:
+
+```bash
+sudo visudo -f /etc/sudoers.d/bandroom-deploy
+#   <you> ALL=(root) NOPASSWD: /opt/bandroom/deploy.sh, /opt/bandroom/status.sh
+sudo chmod 0440 /etc/sudoers.d/bandroom-deploy
+sudo visudo -c                 # all files parse
+sudo -l                        # as <you>: lists the two scripts
+```
+
+Run them as `sudo ./deploy.sh …` in `/opt/bandroom` or as `sudo /opt/bandroom/deploy.sh …`; sudo
+matches the full path. Why this does not hand out root:
+
+- The rule only covers these two files, so they, everything they read and their directory must not
+  be writable by `<you>`: otherwise `<you>` could change them, or `compose.yml` (a container can
+  mount `/`), and run anything as root. Check with
+  `ls -ld /opt/bandroom /opt/bandroom/{deploy.sh,status.sh,compose.yml,Caddyfile,.env}`: all owned
+  by root and writable only by root. `deploy.sh` installs updated files the same way.
+- Both scripts accept only strictly validated arguments (a `vX.Y.Z` tag, `--rollback`, `--help`; a
+  title fragment of at most 200 characters without control characters, a whole number of hours),
+  and never pass them to a shell or into SQL text.
+- sudo resets the environment (`env_reset`), so nothing in your shell changes what the scripts do.
+  The variables `BANDROOM_BACKUP_DIR` and `BANDROOM_SKIP_BACKUP` therefore only work for a user
+  with full sudo rights (`sudo BANDROOM_SKIP_BACKUP=1 ./deploy.sh`); under this rule sudo refuses
+  them.
+- What the rule does allow: deploying any published version and rolling back the last update
+  (which keeps a copy of the database first), and reading song, track and upload details.
+- The self-update installs files from the release image as root, so whoever can publish images to
+  the registry can change these scripts. The diff is printed on every change; review it.

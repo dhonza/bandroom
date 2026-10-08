@@ -49,6 +49,10 @@ COPY --from=build --chown=node:node /out/ ./
 RUN printf '#!/bin/sh\nexec node /app/apps/server/dist/cli.js "$@"\n' > /usr/local/bin/bandroom \
  && chmod +x /usr/local/bin/bandroom \
  && mkdir -p /data && chown node:node /data
+# The server-side deploy files: deploy.sh installs updated copies of them from each new image
+# (host-setup.md §7). Root-owned and read-only inside the image.
+COPY --chmod=0644 deploy/deploy.sh deploy/status.sh deploy/compose.yml deploy/Caddyfile \
+     deploy/Caddyfile.subpath /app/deploy/
 
 ENV NODE_ENV=production \
     DATA_DIR=/data \
