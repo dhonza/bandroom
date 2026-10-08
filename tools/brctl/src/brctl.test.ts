@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Client, CHUNK_BYTES, RemoteError } from "./client";
 import { run, UsageError, type Options } from "./commands";
 import { ConfigError, loadRemoteConfig, parseEnvFile } from "./config";
+import { PartialFailureError, SongExistsError } from "./folders";
 import { formatAgo, formatBytes, parseSince, table } from "./format";
 
 let dir: string;
@@ -212,5 +213,220 @@ describe("commands", () => {
     await expect(run(c, ["jobs"], opts({ status: "weird" }), () => undefined)).rejects.toThrow(
       UsageError,
     );
+  });
+});
+
+describe("folder uploads", () => {
+  const opts = (o: Partial<Options> = {}): Options => ({
+    json: false,
+    wait: false,
+    cwd: dir,
+    ...o,
+  });
+  const access = { role: "admin", capabilities: [] };
+  const project = (id: string, name: string) => ({
+    id,
+    name,
+    color: "red",
+    songCount: 0,
+    updatedAt: 1,
+    archivedAt: null,
+    imageHash: null,
+    visibility: "full",
+    access,
+    description: "",
+    downloadPolicy: "all",
+    ownerId: "u",
+    ownerDisplayName: "Ann",
+    createdAt: 1,
+  });
+  const song = (id: string, projectId: string, title: string) => ({
+    id,
+    projectId,
+    title,
+    subtitle: "",
+    key: "",
+    sortOrder: 0,
+    updatedAt: 1,
+    access,
+  });
+  const write = (rel: string, data = "x") => {
+    const f = path.join(dir, rel);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, data);
+  };
+
+  /** A server that creates projects and songs and accepts tus uploads (one PATCH each). */
+  function bandServer(existing: { id: string; title: string }[] = [], failFile?: string) {
+    const created: { kind: string; body: Record<string, unknown>; parent?: string }[] = [];
+    const uploads: { file: string; target: Record<string, unknown> }[] = [];
+    let n = 0;
+    const s = fakeServer({
+      "POST /sub/api/v1/projects": async (req) => {
+        const body = (await req.json()) as { name: string };
+        created.push({ kind: "project", body });
+        return Response.json({ project: project("p-new", body.name) });
+      },
+      "GET /sub/api/v1/projects/p1/songs": () =>
+        Response.json({ songs: existing.map((e) => song(e.id, "p1", e.title)) }),
+      ...Object.fromEntries(
+        ["p1", "p-new"].map((p) => [
+          `POST /sub/api/v1/projects/${p}/songs`,
+          async (req: Request) => {
+            const body = (await req.json()) as { title: string };
+            created.push({ kind: "song", body, parent: p });
+            return Response.json({ song: song(`s${created.length}`, p, body.title) });
+          },
+        ]),
+      ),
+      "POST /sub/api/v1/uploads": (req) => {
+        const meta: Record<string, string> = Object.fromEntries(
+          (req.headers.get("upload-metadata") ?? "").split(",").map((kv): [string, string] => {
+            const [k = "", v = ""] = kv.split(" ");
+            return [k, atob(v)];
+          }),
+        );
+        const file = meta.filename ?? "";
+        if (file === failFile)
+          return Response.json({ code: "QUOTA_EXCEEDED", message: "full" }, { status: 413 });
+        uploads.push({ file, target: JSON.parse(meta.target ?? "{}") as Record<string, unknown> });
+        n++;
+        return new Response(null, { status: 201, headers: { Location: `uploads/u${n}` } });
+      },
+    });
+    const doFetch: typeof fetch = async (input, init) => {
+      const req = new Request(input instanceof Request ? input : String(input), init);
+      const m = /\/uploads\/u(\d+)$/.exec(new URL(req.url).pathname);
+      if (req.method === "PATCH" && m)
+        return Response.json({
+          assetId: `a${m[1]}`,
+          trackId: `t${m[1]}`,
+          trackVersionId: `v${m[1]}`,
+        });
+      return s.doFetch(input, init);
+    };
+    return { calls: s.calls, created, uploads, client: new Client(config, doFetch) };
+  }
+
+  it("creates a project and a song and prints their ids", async () => {
+    const b = bandServer();
+    const lines: string[] = [];
+    await run(b.client, ["create-project", "New", "Album"], opts({ description: "d" }), (l) =>
+      lines.push(l),
+    );
+    await run(b.client, ["create-song", "p1", "First", "Song"], opts(), (l) => lines.push(l));
+    expect(b.created).toEqual([
+      { kind: "project", body: { name: "New Album", description: "d" } },
+      { kind: "song", body: { title: "First Song" }, parent: "p1" },
+    ]);
+    expect(lines).toEqual(["p-new", "s2"]);
+  });
+
+  it("uploads a song folder: sorted, named like the web drop, non-audio skipped", async () => {
+    write("Demo/Demo_Drums.wav");
+    write("Demo/Demo_Bass.flac");
+    write("Demo/Demo_Vox 10.wav");
+    write("Demo/Demo_Vox 2.wav");
+    write("Demo/notes.txt");
+    write("Demo/stems.zip");
+    write("Demo/.DS_Store");
+    write("Demo/sub/x.wav");
+    const b = bandServer();
+    const lines: string[] = [];
+    await run(b.client, ["upload-song", "Demo"], opts({ project: "p1", json: true }), (l) =>
+      lines.push(l),
+    );
+    expect(b.created).toEqual([{ kind: "song", body: { title: "Demo" }, parent: "p1" }]);
+    expect(b.uploads.map((u) => [u.file, u.target.name])).toEqual([
+      ["Demo_Bass.flac", "Bass"],
+      ["Demo_Drums.wav", "Drums"],
+      ["Demo_Vox 2.wav", "Vox 2"],
+      ["Demo_Vox 10.wav", "Vox 10"],
+    ]);
+    expect(b.uploads[0]?.target).toEqual({ type: "newTrack", songId: "s1", name: "Bass" });
+    const summary = JSON.parse(lines.at(-1) ?? "") as { skipped: { path: string }[] };
+    expect(summary.skipped.map((x) => x.path)).toEqual(["notes.txt", "stems.zip", "sub"]);
+  });
+
+  it("refuses a song title the project already has", async () => {
+    write("Demo/a.wav");
+    const b = bandServer([{ id: "old", title: "demo" }]);
+    const err = await run(
+      b.client,
+      ["upload-song", "Demo"],
+      opts({ project: "p1" }),
+      () => undefined,
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(SongExistsError);
+    expect(String(err)).toContain("--song old");
+    expect(b.calls.filter((c) => c.method === "POST")).toHaveLength(0);
+  });
+
+  it("uploads a project folder: subfolders are songs, loose files one song", async () => {
+    write("Gig/loose.wav");
+    write("Gig/B Song/x_gtr.wav");
+    write("Gig/B Song/x_keys.wav");
+    write("Gig/A Song/one.mp3");
+    write("Gig/Empty/readme.md");
+    const b = bandServer();
+    await run(b.client, ["upload-project", "Gig"], opts(), () => undefined);
+    expect(b.created.map((c) => [c.kind, c.body.name ?? c.body.title, c.parent])).toEqual([
+      ["project", "Gig", undefined],
+      ["song", "Gig", "p-new"],
+      ["song", "A Song", "p-new"],
+      ["song", "B Song", "p-new"],
+    ]);
+    expect(b.uploads.map((u) => u.target.name)).toEqual(["loose", "one", "gtr", "keys"]);
+  });
+
+  it("reuses a project with --project and passes the upload options", async () => {
+    write("Gig/A/a.wav");
+    const b = bandServer([{ id: "s0", title: "Other" }]);
+    await run(
+      b.client,
+      ["upload-project", "Gig"],
+      opts({ project: "p1", quality: "low", lossyOnly: true }),
+      () => undefined,
+    );
+    expect(b.created).toEqual([{ kind: "song", body: { title: "A" }, parent: "p1" }]);
+    expect(b.uploads[0]?.target).toMatchObject({
+      type: "newTrack",
+      options: { lossyOnly: true, quality: "low" },
+    });
+    await expect(
+      run(b.client, ["upload-project", "Gig"], opts({ quality: "ultra" }), () => undefined),
+    ).rejects.toThrow(UsageError);
+  });
+
+  it("makes no writes on --dry-run", async () => {
+    write("Gig/A/Song_Bass.wav", "1234");
+    write("Gig/A/Song_Drums.wav");
+    const b = bandServer();
+    const lines: string[] = [];
+    await run(b.client, ["upload-project", "Gig"], opts({ dryRun: true }), (l) => lines.push(l));
+    await run(b.client, ["upload-song", "Gig/A"], opts({ dryRun: true, project: "p1" }), (l) =>
+      lines.push(l),
+    );
+    await run(b.client, ["create-project", "X"], opts({ dryRun: true }), (l) => lines.push(l));
+    expect(b.calls.filter((c) => c.method !== "GET")).toHaveLength(0);
+    expect(lines[0]).toContain('song "A" (2 track(s))');
+    expect(lines[0]).toContain("Bass <- Song_Bass.wav (4 B)");
+  });
+
+  it("continues after a failed file and exits non-zero with the failures", async () => {
+    write("Demo/a.wav");
+    write("Demo/b.wav");
+    write("Demo/c.wav");
+    const b = bandServer([], "b.wav");
+    const lines: string[] = [];
+    const err = await run(b.client, ["upload-song", "Demo"], opts({ project: "p1" }), (l) =>
+      lines.push(l),
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PartialFailureError);
+    expect((err as PartialFailureError).failures).toEqual([
+      { file: path.join(dir, "Demo/b.wav"), error: "QUOTA_EXCEEDED: full" },
+    ]);
+    expect(b.uploads.map((u) => u.file)).toEqual(["a.wav", "c.wav"]);
+    expect(lines.at(-1)).toContain("2 track(s) uploaded to 1 song(s)");
   });
 });

@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import { Client, RemoteError } from "./client";
 import { ConfigError, loadRemoteConfig } from "./config";
 import { run, USAGE, UsageError } from "./commands";
+import { CommandError } from "./folders";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
 
@@ -28,6 +29,11 @@ async function main(): Promise<number> {
       track: { type: "string" },
       name: { type: "string" },
       confirm: { type: "string" },
+      title: { type: "string" },
+      description: { type: "string" },
+      quality: { type: "string" },
+      "lossy-only": { type: "boolean", default: false },
+      "dry-run": { type: "boolean", default: false },
     },
   });
   const out = (s: string) => {
@@ -40,7 +46,13 @@ async function main(): Promise<number> {
   const config = loadRemoteConfig(process.env, REPO_ROOT);
   const client = new Client(config);
   // pnpm runs scripts in the package directory; INIT_CWD is where the command was typed.
-  await run(client, positionals, { ...values, cwd: process.env.INIT_CWD ?? process.cwd() }, out);
+  const { "lossy-only": lossyOnly, "dry-run": dryRun, ...rest } = values;
+  await run(
+    client,
+    positionals,
+    { ...rest, lossyOnly, dryRun, cwd: process.env.INIT_CWD ?? process.cwd() },
+    out,
+  );
   return 0;
 }
 
@@ -51,6 +63,8 @@ main().then(
   (err: unknown) => {
     if (err instanceof RemoteError) {
       process.stderr.write(`error ${err.status} ${err.code}: ${err.message}\n`);
+    } else if (err instanceof CommandError) {
+      process.stderr.write(`${err.message}\n`);
     } else if (err instanceof UsageError || err instanceof ConfigError) {
       process.stderr.write(`${err.message}\n\n${err instanceof UsageError ? USAGE : ""}\n`);
     } else if (

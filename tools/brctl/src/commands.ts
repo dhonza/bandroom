@@ -1,10 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
+  AUDIO_QUALITIES,
   adminListApiKeys,
   adminListUsers,
   cancelAdminJob,
   cancelAdminUpdate,
+  DEFAULT_AUDIO_QUALITY,
   getAdminEvents,
   getAdminJobs,
   getAdminLogs,
@@ -17,13 +19,29 @@ import {
   listProjects,
   listProjectSongs,
   listSongTracks,
-  listTrackVersions,
   RELEASE_TAG_RE,
   requestAdminUpdate,
   retryAdminJob,
+  type UploadOptions,
   type UploadTarget,
 } from "@bandroom/shared";
 import { RemoteError, sha256OfFile, type Client } from "./client";
+import {
+  checkSongTitles,
+  CommandError,
+  createProjectNamed,
+  createSongTitled,
+  describePlan,
+  PartialFailureError,
+  scanProjectFolder,
+  scanSongFolder,
+  uploadSong,
+  waitForVersions,
+  type Failure,
+  type PlannedSong,
+  type Skipped,
+  type UploadedFile,
+} from "./folders";
 import { formatAgo, formatBytes, formatTime, parseSince, table } from "./format";
 
 export interface Options {
@@ -42,6 +60,11 @@ export interface Options {
   track?: string;
   name?: string;
   confirm?: string;
+  title?: string;
+  description?: string;
+  quality?: string;
+  lossyOnly?: boolean;
+  dryRun?: boolean;
   wait: boolean;
   /** Where relative file paths are resolved (the shell's cwd). */
   cwd: string;
@@ -90,8 +113,22 @@ Add --json to any command for machine-readable output.
   songs <projectId>
   tracks <songId>
   find-song <title>
-  upload <file> --song <id> (--track <id> | --name <name>) [--wait]
-  update check | status | request <vX.Y.Z> | rollback --confirm <running> | cancel`;
+  upload <file> --song <id> (--track <id> | --name <name>) [UPLOAD OPTIONS]
+  create-project <name> [--description D]      prints the new project's id
+  create-song <projectId> <title>              prints the new song's id
+  upload-song <folder> --project <id> [--title T] [UPLOAD OPTIONS] [--dry-run]
+                                 a new song (titled after the folder) with one track per audio
+                                 file in the folder; refuses a title the project already has
+  upload-project <folder> [--project <id> | --name N] [UPLOAD OPTIONS] [--dry-run]
+                                 a new project (named after the folder) unless --project; each
+                                 subfolder with audio is a song, loose audio files one more song
+                                 named after the folder
+  update check | status | request <vX.Y.Z> | rollback --confirm <running> | cancel
+
+Upload options: --quality veryHigh|high|standard|low (Opus preset), --lossy-only (keep only
+Opus), --wait (until every version is ready or failed). Folder uploads send one file at a time,
+name tracks like the web folder drop, skip non-audio files and zips (unzip them first), continue
+after a failed file and exit non-zero listing the failures. --dry-run prints the plan only.`;
 
 export async function run(client: Client, args: string[], o: Options, out: Out): Promise<void> {
   const [cmd, ...rest] = args;
@@ -369,6 +406,31 @@ export async function run(client: Client, args: string[], o: Options, out: Out):
     }
     case "upload":
       return upload(client, rest, o, out);
+    case "create-project": {
+      const name = need(rest.join(" ").trim(), "project name");
+      if (o.dryRun) {
+        print({ dryRun: true, project: { name } }, () => `would create project "${name}"`);
+        return;
+      }
+      const id = await createProjectNamed(client, name, o.description);
+      print({ project: { id, name } }, () => id);
+      return;
+    }
+    case "create-song": {
+      const projectId = need(rest[0], "project id");
+      const title = need(rest.slice(1).join(" ").trim(), "song title");
+      if (o.dryRun) {
+        print({ dryRun: true, song: { projectId, title } }, () => `would create song "${title}"`);
+        return;
+      }
+      const id = await createSongTitled(client, projectId, title);
+      print({ song: { id, projectId, title } }, () => id);
+      return;
+    }
+    case "upload-song":
+      return uploadFolder(client, "song", rest, o, out);
+    case "upload-project":
+      return uploadFolder(client, "project", rest, o, out);
     case "update":
       return update(client, rest, o, out);
     case undefined:
@@ -426,17 +488,35 @@ async function status(client: Client, o: Options, out: Out): Promise<void> {
   out(lines.join("\n"));
 }
 
+/** `--quality` / `--lossy-only` as tus target options; none for the defaults (SPEC §28.2). */
+function uploadOptionsOf(o: Options): UploadOptions | undefined {
+  const quality = oneOf(o.quality, AUDIO_QUALITIES, "--quality") ?? DEFAULT_AUDIO_QUALITY;
+  const lossyOnly = o.lossyOnly === true;
+  return lossyOnly || quality !== DEFAULT_AUDIO_QUALITY ? { lossyOnly, quality } : undefined;
+}
+
 async function upload(client: Client, rest: string[], o: Options, out: Out): Promise<void> {
   const file = path.resolve(o.cwd, need(rest[0], "file"));
   if (!fs.existsSync(file) || !fs.statSync(file).isFile())
     throw new UsageError(`Not a file: ${file}`);
   if (!o.track && !(o.song && o.name))
     throw new UsageError("upload needs --track <id>, or --song <id> with --name <name>");
+  const options = uploadOptionsOf(o);
   let target: UploadTarget;
   if (o.track) {
-    target = { type: "newVersion", trackId: o.track, sha256: await sha256OfFile(file) };
+    target = {
+      type: "newVersion",
+      trackId: o.track,
+      sha256: await sha256OfFile(file),
+      ...(options && { options }),
+    };
   } else {
-    target = { type: "newTrack", songId: need(o.song, "--song"), name: need(o.name, "--name") };
+    target = {
+      type: "newTrack",
+      songId: need(o.song, "--song"),
+      name: need(o.name, "--name"),
+      ...(options && { options }),
+    };
   }
   let lastPct = -1;
   const result = await client.upload(file, target, (sent, total) => {
@@ -448,15 +528,10 @@ async function upload(client: Client, rest: string[], o: Options, out: Out): Pro
   });
   let status: string | null = null;
   if (o.wait && result.trackId && result.trackVersionId) {
-    const until = Date.now() + 10 * 60_000;
-    for (;;) {
-      const { versions } = await client.call(listTrackVersions, {
-        params: { id: result.trackId },
-      });
-      status = versions.find((v) => v.id === result.trackVersionId)?.status ?? null;
-      if (status === "ready" || status === "failed" || Date.now() > until) break;
-      await new Promise((r) => setTimeout(r, 2000));
-    }
+    const statuses = await waitForVersions(client, [
+      { trackId: result.trackId, trackVersionId: result.trackVersionId },
+    ]);
+    status = statuses.get(result.trackVersionId) ?? null;
   }
   const data = { ...result, ...(status !== null && { status }) };
   out(
@@ -464,6 +539,127 @@ async function upload(client: Client, rest: string[], o: Options, out: Out): Pro
       ? JSON.stringify(data, null, 2)
       : `track ${result.trackId ?? "-"}, version ${result.trackVersionId ?? "-"}${status ? `: ${status}` : " (processing; poll with: pnpm remote tracks <songId>)"}`,
   );
+}
+
+/** `upload-song` and `upload-project`: create the song(s) and upload a local folder. */
+async function uploadFolder(
+  client: Client,
+  kind: "song" | "project",
+  rest: string[],
+  o: Options,
+  out: Out,
+): Promise<void> {
+  const dir = path.resolve(o.cwd, need(rest[0], "folder"));
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory())
+    throw new UsageError(`Not a folder: ${dir}`);
+  const options = uploadOptionsOf(o);
+  const log: Out = o.json ? () => undefined : out;
+
+  let songs: PlannedSong[];
+  let skipped: Skipped[];
+  let projectId: string | null;
+  let projectName: string | null = null;
+  if (kind === "song") {
+    projectId = need(o.project, "--project <id>");
+    const scan = scanSongFolder(dir, dir);
+    songs = [{ title: (o.title ?? path.basename(dir)).trim(), files: scan.files }];
+    skipped = scan.skipped;
+    if (scan.files.length === 0) {
+      log(describePlan(projectId, [], skipped));
+      throw new CommandError(`No audio files in ${dir}`);
+    }
+  } else {
+    if (o.project && o.name) throw new UsageError("Use --project or --name, not both");
+    projectId = o.project ?? null;
+    if (!projectId) projectName = (o.name ?? path.basename(dir)).trim();
+    ({ songs, skipped } = scanProjectFolder(dir));
+    if (songs.length === 0) {
+      log(describePlan(projectId ?? `new "${projectName}"`, [], skipped));
+      throw new CommandError(`No audio files in ${dir} or its subfolders`);
+    }
+  }
+  await checkSongTitles(
+    client,
+    projectId,
+    songs.map((s) => s.title),
+  );
+  const projectLabel = projectId ?? `new "${projectName}"`;
+
+  if (o.dryRun) {
+    out(
+      o.json
+        ? JSON.stringify(
+            {
+              dryRun: true,
+              project: { id: projectId, name: projectName },
+              songs: songs.map((s) => ({
+                title: s.title,
+                tracks: s.files.map((f) => ({ file: f.file, name: f.name, bytes: f.bytes })),
+              })),
+              skipped,
+            },
+            null,
+            2,
+          )
+        : `${describePlan(projectLabel, songs, skipped)}\n(dry run: nothing created or uploaded)`,
+    );
+    return;
+  }
+
+  let created = false;
+  if (!projectId) {
+    projectId = await createProjectNamed(client, projectName ?? path.basename(dir));
+    created = true;
+    log(`project "${projectName}" ${projectId}`);
+  }
+  const results: { id: string | null; title: string; tracks: UploadedFile[] }[] = [];
+  const failures: Failure[] = [];
+  for (const song of songs) {
+    const r = await uploadSong(client, projectId, song, options, log);
+    results.push({ id: r.songId, title: song.title, tracks: r.files });
+    failures.push(...r.failures);
+  }
+
+  const uploaded = results.flatMap((r) => r.tracks).filter((t) => t.trackVersionId !== null);
+  if (o.wait && uploaded.length > 0) {
+    log(`waiting for ${uploaded.length} version(s) to be processed…`);
+    const statuses = await waitForVersions(
+      client,
+      uploaded.flatMap((t) =>
+        t.trackId && t.trackVersionId
+          ? [{ trackId: t.trackId, trackVersionId: t.trackVersionId }]
+          : [],
+      ),
+      { timeoutMs: 10 * 60_000 + uploaded.length * 60_000 },
+    );
+    for (const t of uploaded) {
+      t.status = statuses.get(t.trackVersionId ?? "");
+      if (t.status === "failed") failures.push({ file: t.file, error: "processing failed" });
+    }
+  }
+
+  const statusCounts = new Map<string, number>();
+  for (const t of uploaded)
+    if (t.status) statusCounts.set(t.status, (statusCounts.get(t.status) ?? 0) + 1);
+  const data = {
+    project: { id: projectId, name: projectName, created },
+    songs: results,
+    skipped,
+    failures,
+  };
+  out(
+    o.json
+      ? JSON.stringify(data, null, 2)
+      : [
+          `${uploaded.length} track(s) uploaded to ${results.filter((r) => r.id).length} song(s) in project ${projectId}${skipped.length ? `; ${skipped.length} skipped` : ""}`,
+          ...(statusCounts.size
+            ? [`status: ${[...statusCounts].map(([k, v]) => `${k} ${v}`).join(", ")}`]
+            : o.wait
+              ? []
+              : ["processing; check with: pnpm remote songs " + projectId]),
+        ].join("\n"),
+  );
+  if (failures.length > 0) throw new PartialFailureError(failures);
 }
 
 async function update(client: Client, rest: string[], o: Options, out: Out): Promise<void> {
