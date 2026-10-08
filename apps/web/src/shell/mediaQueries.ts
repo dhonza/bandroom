@@ -14,3 +14,9 @@ export const EDITOR_SPLIT_QUERY = "(min-width: 62em)";
 
 /** A finger is the main pointer (touch targets ≥ 44 px, SPEC §11.1.3). */
 export const COARSE_POINTER_QUERY = "(pointer: coarse)";
+
+/**
+ * A short viewport (a phone in landscape): wider than PHONE_QUERY, but too low for popovers and
+ * centered modals, so larger panels go full screen there too.
+ */
+export const SHORT_QUERY = "(max-height: 40em)";

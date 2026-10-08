@@ -1,7 +1,7 @@
 import i18next from "i18next";
 import { beforeAll, describe, expect, it } from "vitest";
 import { initI18n } from "../i18n/i18n";
-import { practiceLabel, signed } from "./practiceLabel";
+import { practiceLabel, practiceShortLabel, signed } from "./practiceLabel";
 
 const en = i18next.createInstance();
 const cs = i18next.createInstance();
@@ -19,6 +19,14 @@ describe("practiceLabel (SPEC §30.7)", () => {
       "150 %, +3 pt, −32 ct",
     );
     expect(practiceLabel({ rate: 1, semitones: 0, cents: 0 }, en.t)).toBe("");
+  });
+
+  it("keeps the phone caption short: speed and semitones", () => {
+    expect(practiceShortLabel({ rate: 0.75, semitones: -2, cents: 8 }, en.t)).toBe("75 % · −2");
+    expect(practiceShortLabel({ rate: 1, semitones: 3, cents: 0 }, en.t)).toBe("+3");
+    expect(practiceShortLabel({ rate: 0.5, semitones: 0, cents: 0 }, cs.t)).toBe("50 %");
+    expect(practiceShortLabel({ rate: 1, semitones: 0, cents: -32 }, en.t)).toBe("−32 ct");
+    expect(practiceShortLabel({ rate: 1, semitones: 0, cents: 0 }, en.t)).toBe("");
   });
 
   it("signs whole numbers with a real minus", () => {
