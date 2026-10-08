@@ -32,7 +32,7 @@ interface Exports {
   br_input_latency(h: number): number;
   br_output_latency(h: number): number;
   br_set_transpose(h: number, semitones: number, tonalityLimit: number): void;
-  br_set_formant(h: number, compensate: number, base: number): void;
+  br_set_formant(h: number, compensate: number, base: number, shift: number): void;
   br_reset(h: number): void;
   br_seek(h: number, frames: number, rate: number): void;
   br_process(h: number, inFrames: number, outFrames: number): void;
@@ -131,9 +131,12 @@ export class Stretcher {
     this.x.br_set_transpose(this.h, semitones, tonalityHz / SAMPLE_RATE);
   }
 
-  /** Keeps the formants in place (`compensate`); `baseHz` = rough fundamental, 0 = estimate. */
-  setFormant(compensate: boolean, baseHz: number): void {
-    this.x.br_set_formant(this.h, compensate ? 1 : 0, baseHz / SAMPLE_RATE);
+  /**
+   * Keeps the formants in place (`compensate`) and/or moves them by `shiftSemitones`; `baseHz` =
+   * rough fundamental, 0 = estimate.
+   */
+  setFormant(compensate: boolean, baseHz: number, shiftSemitones = 0): void {
+    this.x.br_set_formant(this.h, compensate ? 1 : 0, baseHz / SAMPLE_RATE, shiftSemitones);
   }
 
   reset(): void {

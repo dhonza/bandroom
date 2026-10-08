@@ -12,6 +12,10 @@ export interface StretchSpec {
   quality: StretchQuality;
   /** Rough fundamental for vocal formant compensation (0 = estimate). */
   voiceBaseHz: number;
+  /** Formant compensation; default: the profile's (on for voices). */
+  formant?: boolean;
+  /** Formant shift in semitones (0 = none). */
+  formantSemitones?: number;
   /** Largest input block the caller pushes at once (it is split internally anyway). */
   maxIn?: number;
 }
@@ -34,7 +38,11 @@ export function createStretch(
     maxOut: Math.ceil(maxIn / Math.min(1, spec.rate)) + 1,
   });
   stretcher.setTranspose(spec.semitones, settings.tonalityHz);
-  stretcher.setFormant(settings.formant, spec.voiceBaseHz);
+  stretcher.setFormant(
+    spec.formant ?? settings.formant,
+    spec.voiceBaseHz,
+    spec.formantSemitones ?? 0,
+  );
   const stream = new StretchStream(stretcher, spec.rate) as StretchStream & { dispose(): void };
   stream.dispose = () => {
     stretcher.dispose();

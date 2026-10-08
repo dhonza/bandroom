@@ -64,10 +64,11 @@ __attribute__((used)) void br_set_transpose(Instance *s, float semitones, float 
 	s->stretch.setTransposeSemitones(semitones, tonalityLimit);
 }
 
-// `compensate` keeps the formants in place while the pitch moves; `base` is the rough
-// fundamental relative to the sample rate (0 = estimate it).
-__attribute__((used)) void br_set_formant(Instance *s, int compensate, float base) {
-	s->stretch.setFormantSemitones(0, compensate != 0);
+// `compensate` keeps the formants in place while the pitch moves; `shift` then moves them by
+// that many semitones (brighter/darker voice); `base` is the rough fundamental relative to the
+// sample rate (0 = estimate it).
+__attribute__((used)) void br_set_formant(Instance *s, int compensate, float base, float shift) {
+	s->stretch.setFormantSemitones(shift, compensate != 0);
 	s->stretch.setFormantBase(base);
 }
 

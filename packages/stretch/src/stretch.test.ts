@@ -248,6 +248,53 @@ describe("stretch.wasm", () => {
   });
 });
 
+describe("formants", () => {
+  /** Magnitude of a DFT bin at `f` Hz over `len` frames from `from` (Hann window). */
+  function magnitude(x: Float32Array, from: number, len: number, f: number): number {
+    let re = 0;
+    let im = 0;
+    const w = (2 * Math.PI * f) / SR;
+    for (let i = 0; i < len; i++) {
+      const v = (x[from + i] ?? 0) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / len));
+      re += v * Math.cos(w * i);
+      im -= v * Math.sin(w * i);
+    }
+    return Math.hypot(re, im);
+  }
+
+  /** Energy-weighted mean harmonic number of a 220 Hz tone. */
+  function centroid(x: Float32Array): number {
+    let num = 0;
+    let den = 0;
+    for (let k = 1; k <= 30; k++) {
+      const m = magnitude(x, SR, SR / 2, 220 * k) ** 2;
+      num += k * m;
+      den += m;
+    }
+    return num / den;
+  }
+
+  it("shifts the formants up without moving the pitch", async () => {
+    const mod = await loadStretch();
+    const input = new Float32Array(SR * 3);
+    for (let i = 0; i < input.length; i++) {
+      let v = 0;
+      for (let k = 1; k <= 30; k++) v += Math.sin((2 * Math.PI * 220 * k * i) / SR) / k;
+      input[i] = 0.2 * v;
+    }
+    const plain = run(createStretch(mod, spec({ semitones: 0.0001 })), input, SR / 2);
+    const brighter = run(
+      createStretch(mod, spec({ semitones: 0.0001, formant: true, formantSemitones: 6 })),
+      input,
+      SR / 2,
+    );
+    expect(centroid(brighter)).toBeGreaterThan(centroid(plain) * 1.15);
+    // The fundamental stays at 220 Hz: its bin dominates the neighbouring quarter tones.
+    const f0 = magnitude(brighter, SR, SR / 2, 220);
+    expect(f0).toBeGreaterThan(3 * magnitude(brighter, SR, SR / 2, 220 * 2 ** (1 / 24)));
+  });
+});
+
 describe("stretchSettings", () => {
   it("uses the default preset, a short block for drums and formants for voices", () => {
     expect(stretchSettings("tonal", "high")).toEqual({
