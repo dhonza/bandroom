@@ -3,7 +3,10 @@ import path from "node:path";
 import type { Upload } from "@tus/server";
 import {
   activeAdminNames,
+  getAsset,
   getDocumentRow,
+  getTrackRow,
+  getTrackVersionRow,
   resolveApiKey,
   resolveSession,
   type UserRow,
@@ -155,5 +158,22 @@ export function parseStoredTarget(json: string): UploadTarget | null {
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Client-side dedupe (SPEC §29.5): a new version whose declared SHA-256 equals the original of
+ * the track's current version is refused before any byte is sent.
+ */
+export function refuseDuplicateVersion(ctx: AppContext, trackId: string, sha256: string): void {
+  const track = getTrackRow(ctx.db, trackId);
+  const current = track?.currentVersionId
+    ? getTrackVersionRow(ctx.db, track.currentVersionId)
+    : undefined;
+  const asset = current ? getAsset(ctx.db, current.assetId) : undefined;
+  if (asset?.originalHash === sha256) {
+    throw tusError("DUPLICATE_VERSION", 409, "Same file as the current version", {
+      trackVersionId: current?.id ?? "",
+    });
   }
 }

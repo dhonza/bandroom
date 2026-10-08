@@ -12,7 +12,7 @@ declare module "fastify" {
     user: UserRow | null;
     session: SessionRow | null;
     /** The API key of a bearer request (SPEC §29.3); null for cookie sessions. */
-    apiKey: { id: string; scopes: ApiScope[] } | null;
+    apiKey: { id: string; name: string; scopes: ApiScope[]; expiresAt: number | null } | null;
   }
 }
 
@@ -84,7 +84,12 @@ export function installSessionResolution(
         return;
       }
       request.user = key.user;
-      request.apiKey = { id: key.key.id, scopes: key.scopes };
+      request.apiKey = {
+        id: key.key.id,
+        name: key.key.name,
+        scopes: key.scopes,
+        expiresAt: key.key.expiresAt,
+      };
       done();
       return;
     }

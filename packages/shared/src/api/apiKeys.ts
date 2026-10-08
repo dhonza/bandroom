@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AdminApiKeyInfoSchema, ApiKeyInfoSchema, ApiKeyNameSchema } from "../apiKeys";
+import { GlobalRoleSchema } from "../permissions/global";
 import { ApiScopeSchema } from "../permissions/apiScopes";
 import { OkSchema } from "./auth";
 import { defineContract } from "./contract";
@@ -58,4 +59,33 @@ export const adminRevokeApiKey = defineContract({
   errors: ["NOT_FOUND"],
   auth: { global: "admin.access" },
   apiKey: false,
+});
+
+/**
+ * Who am I, through which key, on which server (SPEC §29.5): a client's "Test connection".
+ * Also works with a session (`key: null`).
+ */
+export const getWhoami = defineContract({
+  method: "GET",
+  path: "/whoami",
+  response: z.object({
+    user: z.object({
+      id: z.string(),
+      username: z.string(),
+      displayName: z.string(),
+      globalRole: GlobalRoleSchema,
+    }),
+    key: z
+      .object({
+        id: z.string(),
+        name: z.string(),
+        scopes: z.array(ApiScopeSchema),
+        expiresAt: z.number().nullable(),
+      })
+      .nullable(),
+    server: z.object({ version: z.string(), maxUploadBytes: z.number() }),
+    /** `quotaBytes` null = unlimited. */
+    quota: z.object({ usedBytes: z.number(), quotaBytes: z.number().nullable() }),
+  }),
+  auth: { user: true },
 });

@@ -119,6 +119,14 @@ export const UploadTargetSchema = z.discriminatedUnion("type", [
     type: z.literal("newVersion"),
     trackId: z.string(),
     options: UploadOptionsSchema.optional(),
+    /**
+     * SHA-256 (lowercase hex) of the file, computed by the client: equal to the current
+     * version's original → `DUPLICATE_VERSION`, nothing is uploaded (SPEC §29.5).
+     */
+    sha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
   }),
   z.object({ type: z.literal("projectImage"), projectId: z.string() }),
   /** A new document on the project (SPEC §10, §28.4). */

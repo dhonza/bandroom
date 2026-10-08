@@ -21,6 +21,7 @@ import {
   clientApiKeys,
   clientIps,
   parseTarget,
+  refuseDuplicateVersion,
   toTusError,
   tusError,
   UPLOAD_EXPIRY_MS,
@@ -80,6 +81,8 @@ export function registerUploadRoutes(
           }
           const { target, filename } = parseTarget(upload);
           authorizeTarget(ctx, user, target);
+          if (target.type === "newVersion" && target.sha256 !== undefined)
+            refuseDuplicateVersion(ctx, target.trackId, target.sha256);
 
           const quota = effectiveQuota(ctx, user);
           // Uploads still in progress hold their declared size (review M8).

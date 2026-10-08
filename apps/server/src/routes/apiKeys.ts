@@ -1,6 +1,7 @@
 import {
   ApiKeyLimitError,
   createApiKey,
+  getUsage,
   listAllApiKeys,
   listUserApiKeys,
   revokeApiKey,
@@ -10,6 +11,7 @@ import {
   adminListApiKeys,
   adminRevokeApiKey,
   createMyApiKey,
+  getWhoami,
   listMyApiKeys,
   revokeMyApiKey,
   scopesAllowedFor,
@@ -19,10 +21,23 @@ import type { AppContext } from "../context";
 import { audit } from "../http/audit";
 import { registerContract, userOrIpKey } from "../http/contracts";
 import { AppError } from "../http/errors";
+import { effectiveQuota } from "../quota";
 
 /** API key management (SPEC §29.4). Keys themselves cannot reach these routes. */
 export function registerApiKeyRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { db } = ctx;
+
+  registerContract(app, getWhoami, ({ user }, request) => ({
+    user: {
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      globalRole: user.globalRole,
+    },
+    key: request.apiKey,
+    server: { version: ctx.version, maxUploadBytes: ctx.config.maxUploadBytes },
+    quota: { usedBytes: getUsage(db, user.id), quotaBytes: effectiveQuota(ctx, user) },
+  }));
 
   registerContract(app, listMyApiKeys, ({ user }) => ({ keys: listUserApiKeys(db, user.id) }));
 

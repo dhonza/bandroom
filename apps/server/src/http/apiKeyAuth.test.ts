@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import { BWF_FILE } from "@bandroom/fixtures";
 import { listEvents, revokeApiKey, updateUser } from "@bandroom/server-core";
@@ -7,6 +8,7 @@ import {
   adminListUsers,
   createProject,
   getMyUsage,
+  getWhoami,
   listMySessions,
   listProjects,
   UploadResultSchema,
@@ -131,5 +133,71 @@ describe("API key authentication (SPEC §29.3)", () => {
     });
     expect(event?.apiKeyId).not.toBeNull();
     expect(event?.actorUserId).toBe(memberId);
+  });
+
+  it("answers whoami for keys and sessions", async () => {
+    const token = keyFor(t, memberId, ["read"], 30);
+    const res = await callWithKey(t, getWhoami, {}, token);
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      user: { username: string };
+      key: { scopes: string[]; expiresAt: number | null; name: string } | null;
+      server: { maxUploadBytes: number; version: string };
+      quota: { usedBytes: number };
+    }>();
+    expect(body.user.username).toBe("petr");
+    expect(body.key).toMatchObject({ name: "test key", scopes: ["read"] });
+    expect(body.key?.expiresAt).toBeGreaterThan(Date.now());
+    expect(body.server.maxUploadBytes).toBe(t.config.maxUploadBytes);
+    const session = await t.app.inject({
+      method: "GET",
+      url: `${t.basePath}${API_PREFIX}/whoami`,
+      headers: { cookie: admin },
+    });
+    expect(session.json<{ key: null }>().key).toBeNull();
+  });
+
+  it("refuses a new version equal to the current one (sha256 dedupe)", async () => {
+    const data = await fs.readFile(BWF_FILE());
+    const sha256 = createHash("sha256").update(data).digest("hex");
+    const writeKey = keyFor(t, memberId, ["write"]);
+    const auth = { authorization: `Bearer ${writeKey}` };
+    const first = await tusUpload(
+      t,
+      "",
+      data,
+      "b.wav",
+      { type: "newTrack", songId, name: "Dedupe" },
+      auth,
+    );
+    const trackId = UploadResultSchema.parse(JSON.parse(first.body)).trackId ?? "";
+    const dup = await tusUpload(
+      t,
+      "",
+      data,
+      "b.wav",
+      { type: "newVersion", trackId, sha256 },
+      auth,
+    );
+    expect(dup.status).toBe(409);
+    expect(JSON.parse(dup.body)).toMatchObject({ code: "DUPLICATE_VERSION" });
+    const other = await tusUpload(
+      t,
+      "",
+      data,
+      "b.wav",
+      { type: "newVersion", trackId, sha256: "0".repeat(64) },
+      auth,
+    );
+    expect(other.status).toBe(200);
+    const bad = await tusUpload(
+      t,
+      "",
+      data,
+      "b.wav",
+      { type: "newVersion", trackId, sha256: "XYZ" },
+      auth,
+    );
+    expect(bad.status).toBe(400);
   });
 });
