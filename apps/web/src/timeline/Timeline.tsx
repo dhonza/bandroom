@@ -110,6 +110,8 @@ export function Timeline({
   }, [view, followOn]);
 
   const overviewRef = useRef<HTMLCanvasElement>(null);
+  /** The overview's playhead: an overlay, so the overview itself is not repainted per frame. */
+  const overviewHeadRef = useRef<HTMLCanvasElement>(null);
   const staticRef = useRef<HTMLCanvasElement>(null);
   const dynamicRef = useRef<HTMLCanvasElement>(null);
   const { lanesTop, height: detailH } = detailLayout({
@@ -218,14 +220,28 @@ export function Timeline({
     paintOverview,
   ]);
 
-  // Dynamic layer: the playhead. While playing it is redrawn every animation frame and follow
-  // mode pages the view; while paused there is no rAF loop: it is redrawn when the view changes
-  // or a seek moved it (checked a few times a second).
+  // Dynamic layer: the playhead, in the detail view and on the overview. While playing it is
+  // redrawn every animation frame and follow mode pages the view; while paused there is no rAF
+  // loop: it is redrawn when the view changes or a seek moved it (checked a few times a second).
+  // Each canvas is cleared and redrawn only when its rounded playhead x changes.
   const drawPlayhead = useRef<(() => void) | null>(null);
   useEffect(() => {
     let drawnX = Number.NaN;
     let drawnW = 0;
+    let drawnOverviewX = Number.NaN;
     let drawnSec = 0;
+    const overviewView = durationSec > 0 && overviewW > 0 ? fitAll(durationSec, overviewW) : null;
+    const drawOverviewHead = (pos: number) => {
+      const c = overviewHeadRef.current;
+      if (!c || !overviewView) return;
+      const x = Math.round(secToX(overviewView, pos)) + 0.5;
+      if (x === drawnOverviewX) return;
+      drawnOverviewX = x;
+      const ctx = setupCanvas(c, overviewW, overviewH);
+      if (!ctx) return;
+      ctx.clearRect(0, 0, overviewW, overviewH);
+      if (x >= 0 && x <= overviewW) drawPlayheadLine(ctx, x, overviewH, colors().playhead);
+    };
     const draw = () => {
       const v = viewRef.current;
       const c = dynamicRef.current;
@@ -240,6 +256,7 @@ export function Timeline({
         const f = follow(v, pos);
         if (f !== v) setView(f);
       }
+      drawOverviewHead(pos);
       const x = Math.round(secToX(v, pos)) + 0.5;
       if (x === drawnX && v.widthPx === drawnW) return;
       drawnX = x;
@@ -263,7 +280,7 @@ export function Timeline({
       cancelAnimationFrame(raf);
       if (timer) clearTimeout(timer);
     };
-  }, [getPosition, playing, detailH, colors, scheme]);
+  }, [getPosition, playing, detailH, colors, scheme, durationSec, overviewW, overviewH]);
 
   // A new view (scroll, zoom, resize) moves the playhead and the overview box right away.
   useEffect(() => {
@@ -484,27 +501,41 @@ export function Timeline({
       data-lanes={lanesShown.length}
       data-overview-height={overviewH}
     >
-      <canvas
-        ref={overviewRef}
-        style={{
-          display: "block",
-          width: overviewW || "100%",
-          height: overviewH,
-          cursor: "pointer",
-          touchAction: "pan-y",
-          borderRadius: 4,
-          background: "var(--mantine-color-default-hover)",
-        }}
-        onPointerDown={overviewSeek}
-        onPointerMove={overviewSeek}
-        aria-label={t("timeline.overview")}
-        role="slider"
-        aria-valuemin={0}
-        aria-valuemax={Math.round(durationSec)}
-        // Kept current by the playhead loop below (no re-render per second).
-        aria-valuenow={0}
-        data-testid="timeline-overview"
-      />
+      <Box pos="relative">
+        <canvas
+          ref={overviewRef}
+          style={{
+            display: "block",
+            width: overviewW || "100%",
+            height: overviewH,
+            cursor: "pointer",
+            touchAction: "pan-y",
+            borderRadius: 4,
+            background: "var(--mantine-color-default-hover)",
+          }}
+          onPointerDown={overviewSeek}
+          onPointerMove={overviewSeek}
+          aria-label={t("timeline.overview")}
+          role="slider"
+          aria-valuemin={0}
+          aria-valuemax={Math.round(durationSec)}
+          // Kept current by the playhead loop below (no re-render per second).
+          aria-valuenow={0}
+          data-testid="timeline-overview"
+        />
+        <canvas
+          ref={overviewHeadRef}
+          style={{
+            display: "block",
+            position: "absolute",
+            inset: 0,
+            width: overviewW || "100%",
+            height: overviewH,
+            pointerEvents: "none",
+          }}
+          data-testid="timeline-overview-playhead"
+        />
+      </Box>
       {belowOverview && <Box mt={6}>{belowOverview}</Box>}
       <Box mt={6} style={{ display: "flex", alignItems: "flex-start" }}>
         {(trackHeaders || labelColumn) && (
