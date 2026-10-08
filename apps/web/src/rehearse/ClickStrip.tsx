@@ -1,18 +1,9 @@
 import { clickAudible } from "@bandroom/shared";
-import {
-  ActionIcon,
-  Box,
-  Drawer,
-  Group,
-  Popover,
-  Slider,
-  Stack,
-  Text,
-  UnstyledButton,
-} from "@mantine/core";
+import { ActionIcon, Box, Group, Slider, Stack, Text, UnstyledButton } from "@mantine/core";
 import { IconAdjustmentsHorizontal, IconMetronome } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { PanelPopover } from "../components/ResponsivePanel";
 import { trackTint } from "../timeline/render";
 import { ClickSettingsForm, useClickSettings } from "./ClickControls";
 import { setClickSettings, usePlayerView } from "./controller";
@@ -161,27 +152,20 @@ export function ClickStrip({ height, compact = false }: { height: number; compac
     </Stack>
   );
 
-  // Phones: a bottom sheet; wider headers: a popover beside the header (like a track's ⚙).
-  const settings = compact ? (
-    <>
-      {target}
-      <Drawer
-        opened={settingsOpen}
-        onClose={() => {
-          setSettingsOpen(false);
-        }}
-        position="bottom"
-        size="auto"
-        title={settingsLabel}
-      >
-        <Box pb="md">{panel}</Box>
-      </Drawer>
-    </>
-  ) : (
-    <Popover opened={settingsOpen} onChange={setSettingsOpen} position="right" withArrow trapFocus>
-      <Popover.Target>{target}</Popover.Target>
-      <Popover.Dropdown w={320}>{panel}</Popover.Dropdown>
-    </Popover>
+  // Phones and short screens: a full-screen panel; wider headers: a popover beside the header
+  // (like a track's ⚙).
+  const settings = (
+    <PanelPopover
+      opened={settingsOpen}
+      onChange={setSettingsOpen}
+      position="right"
+      withArrow
+      width={320}
+      title={settingsLabel}
+      target={target}
+    >
+      {panel}
+    </PanelPopover>
   );
 
   let content;

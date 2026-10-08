@@ -7,6 +7,7 @@ import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "../i18n/i18n";
 import { mockApi } from "../test/mockApi";
+import { setPhoneViewport } from "../test/setup";
 import { useTempoUi } from "../tempo/store";
 import { ClickToggles } from "./ClickControls";
 import { ClickStrip } from "./ClickStrip";
@@ -79,12 +80,15 @@ describe("ClickStrip (SPEC §11.3, DECISIONS 2026-10-07)", () => {
     expect(click()?.gainDb).toBe(-5);
   });
 
-  it("phones: the header opens the click settings in a bottom sheet with the volume", async () => {
+  it("phones: the header opens the click settings full screen with the volume", async () => {
+    setPhoneViewport(true);
     renderStrip(66, true);
     expect(screen.getByTestId("click-strip")).toHaveAttribute("data-tier", "two");
     expect(screen.queryByTestId("click-fader")).toBeNull();
     await userEvent.click(screen.getByTestId("click-strip-settings"));
     expect(await screen.findByTestId("click-settings")).toBeInTheDocument();
     expect(screen.getByRole("slider", { name: "Click volume" })).toBeInTheDocument();
+    expect(document.querySelector("[data-sheet='true']")).not.toBeNull();
+    setPhoneViewport(false);
   });
 });
