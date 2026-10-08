@@ -108,8 +108,24 @@ export const SongSummarySchema = z.object({
   lossy: SongLossySchema.optional(),
   /** Bytes of the stored files of its tracks and tempo MIDI (SPEC §28.6); not on public links. */
   bytes: z.number().optional(),
+  /**
+   * Only in project song lists (SPEC §11.2): where the longest current ready version ends on the
+   * timeline, in seconds (the song length the Player shows). Absent without ready audio.
+   */
+  durationSec: z.number().optional(),
+  /**
+   * Only in project song lists: how many current ready versions of live tracks play stereo and
+   * how many mono (by the Opus that plays; dual mono plays mono). Absent without ready audio.
+   */
+  channels: z.object({ stereo: z.number(), mono: z.number() }).optional(),
 });
 export type SongSummary = z.infer<typeof SongSummarySchema>;
+
+/** The song list's length and mono/stereo counts of one song. */
+export interface SongStats {
+  durationSec: number;
+  channels: { stereo: number; mono: number };
+}
 
 /** A locked song (SPEC §25.12): when and by whom. */
 export const SongLockSchema = z.object({

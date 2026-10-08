@@ -1,4 +1,7 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
+import { FIXTURES_DIR, generateFixtures } from "@bandroom/fixtures";
 import {
   apiLogin,
   createUser,
@@ -136,4 +139,76 @@ test("deleting a project requires typing its name", async ({ page, request }, te
   await page.getByTestId("confirm-delete").click();
   await expect(page).toHaveURL(/\/library$/);
   await expect(page.getByTestId("project-card").filter({ hasText: name })).toHaveCount(0);
+});
+
+test("song rows show the length, mono/stereo and size, also at 360 px", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(240_000);
+  test.skip(
+    !["chromium", "iphone", "pixel"].includes(testInfo.project.name),
+    "row layout on desktop and phones",
+  );
+  await generateFixtures();
+  await loginAsNewUser(page, request, testInfo, "member");
+  const csrf = { "X-Requested-With": "bandroom" };
+  const p = await page.request.post("api/v1/projects", {
+    headers: csrf,
+    data: { name: `Stats ${uniqueUsername(testInfo)}` },
+  });
+  const { project } = (await p.json()) as { project: { id: string } };
+  const songOf = async (title: string) => {
+    const s = await page.request.post(`api/v1/projects/${project.id}/songs`, {
+      headers: csrf,
+      data: { title },
+    });
+    return ((await s.json()) as { song: { id: string } }).song.id;
+  };
+  const songId = await songOf("A song with a rather long title that has to truncate on phones");
+  await songOf("Empty");
+
+  // One stereo and one mono track, 6 s each.
+  await page.goto(`songs/${songId}`);
+  const files = await Promise.all(
+    ["stereo", "mono"].map(async (layout) => ({
+      name: `${layout}.wav`,
+      mimeType: "audio/wav",
+      buffer: await fs.readFile(path.join(FIXTURES_DIR, `imp_48000_s16_${layout}.wav`)),
+    })),
+  );
+  await page.getByTestId("track-dropzone").locator('input[type="file"]').setInputFiles(files);
+  await expect(page.getByTestId("track-row")).toHaveCount(2, { timeout: 60_000 });
+  await expect(page.getByTestId("track-processing")).toHaveCount(0, { timeout: 120_000 });
+
+  for (const width of [null, 360]) {
+    if (width) await page.setViewportSize({ width, height: 740 });
+    await page.goto(`projects/${project.id}`);
+    const row = page.getByTestId("song-row").filter({ hasText: "rather long title" });
+    await expect(row.getByTestId("song-length")).toHaveText("0:06", { timeout: 30_000 });
+    const mark = row.getByTestId("song-channels");
+    await expect(mark).toHaveAttribute("data-channels", "stereo");
+    await expect(mark).toHaveAccessibleName("2 tracks: 1 stereo, 1 mono");
+    // The size: on the right when there is room, else under the title.
+    await expect(row.getByText(/\d+(\.\d+)?\s?[kKM]B/)).toBeVisible();
+    // A song without audio has no length or mark.
+    const empty = page.getByTestId("song-row").filter({ hasText: "Empty" });
+    await expect(empty).toBeVisible();
+    await expect(empty.getByTestId("song-row-stats")).toHaveCount(0);
+    // The meta stays on one line, inside the row, and the title keeps its room.
+    const box = await row.boundingBox();
+    const stats = await row.getByTestId("song-row-stats").boundingBox();
+    const title = await row.getByText("rather long title").boundingBox();
+    expect(box && stats && title).toBeTruthy();
+    if (box && stats && title) {
+      expect(stats.x + stats.width).toBeLessThanOrEqual(box.x + box.width + 0.5);
+      expect(stats.height).toBeLessThan(24);
+      expect(title.width).toBeGreaterThan(80);
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBeLessThanOrEqual(0);
+  }
 });

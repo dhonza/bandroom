@@ -9,6 +9,7 @@ import {
   listVisibleProjects,
   listVisibleSongs,
   lossyBySong,
+  songStatsBySong,
   projectGrantRows,
   noProcessing,
   processingBySong,
@@ -174,12 +175,14 @@ export function registerProjectRoutes(app: FastifyInstance, ctx: AppContext): vo
     const processing = processingBySong(db, access.project.id);
     const lossy = lossyBySong(db, access.project.id);
     const bytes = bytesBySong(db, access.project.id);
+    const stats = songStatsBySong(db, access.project.id);
     return {
       songs: listVisibleSongs(db, user, access.project.id).map((s) => ({
         ...toSongSummary(s.song, s.role),
         processing: processing.get(s.song.id) ?? noProcessing(),
         lossy: lossy.get(s.song.id) ?? "none",
         bytes: bytes.get(s.song.id) ?? 0,
+        ...stats.get(s.song.id),
       })),
     };
   });

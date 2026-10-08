@@ -38,14 +38,33 @@ export function ChannelsIcon({
       </Group>
     );
   }
+  return <ChannelsMark stereo={channels !== 1} label={label} size={size} testId="track-channels" />;
+}
+
+/**
+ * The mono (one circle) / stereo (two circles) mark itself, dimmed, with its label in a tooltip
+ * and aria-label: the Mixer headers and the song list rows look the same.
+ */
+export function ChannelsMark({
+  stereo,
+  label,
+  size = 14,
+  testId,
+}: {
+  stereo: boolean;
+  label: string;
+  size?: number;
+  testId: string;
+}) {
+  const Icon = stereo ? IconChartCircles : IconCircle;
   return (
     <Tooltip label={label}>
       <Box
         component="span"
         role="img"
         aria-label={label}
-        data-testid="track-channels"
-        data-channels={channels === 1 ? "mono" : "stereo"}
+        data-testid={testId}
+        data-channels={stereo ? "stereo" : "mono"}
         c="dimmed"
         style={{ display: "inline-flex", flex: "none", verticalAlign: "middle", lineHeight: 0 }}
       >

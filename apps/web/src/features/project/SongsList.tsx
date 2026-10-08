@@ -65,6 +65,7 @@ import { useApiError } from "../../api/useApiError";
 import { projectKeys, queueKey, useProjectSongs } from "../library/queries";
 import { useProjectPlay } from "./PlayAllButton";
 import { SongPlayButton } from "./SongPlayButton";
+import { SongRowStats } from "./SongRowStats";
 import { CreateSongModal } from "./CreateSongModal";
 import { FolderDrop } from "./FolderDrop";
 import { offlineItemFor, useOffline } from "../../offline/controller";
@@ -83,6 +84,11 @@ import { SongsTransferDialog, type SongsTransferRequest } from "../../transfer/S
 
 /** Devices with a mouse show the selection checkboxes all the time (SPEC §26.1). */
 export const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
+/**
+ * From Mantine's `xs` up the song size joins the length and mono/stereo mark on the right of a
+ * row; on phones it stays under the title so the title keeps the room.
+ */
+const WIDE_ROW_QUERY = "(min-width: 36em)";
 
 /** Whether the user may move this song to the Trash (SPEC §26.3). */
 const canDeleteSong = (s: SongSummary) => canDeleteContent(s.access.role, "song", false);
@@ -110,6 +116,7 @@ export function SongsList({ project }: { project: Project }) {
   const caps = new Set(project.access.capabilities);
   const canReorder = caps.has("edit.any");
   const finePointer = useMediaQuery(FINE_POINTER_QUERY, false);
+  const wide = useMediaQuery(WIDE_ROW_QUERY, false);
   const list0 = songs.data?.songs ?? [];
   const selection = useSelection(
     songSelection,
@@ -243,6 +250,7 @@ export function SongsList({ project }: { project: Project }) {
                   selecting={selection.active}
                   selected={selection.ids.has(s.id)}
                   showCheckbox={selectable && (selection.active || finePointer)}
+                  wide={wide}
                   onToggle={() => {
                     selection.toggle(s.id);
                   }}
@@ -373,6 +381,7 @@ function SongRow({
   selecting,
   selected,
   showCheckbox,
+  wide,
   onToggle,
   ready,
   onPlay,
@@ -384,6 +393,8 @@ function SongRow({
   selecting: boolean;
   selected: boolean;
   showCheckbox: boolean;
+  /** Room for the size on the right (else it stays under the title). */
+  wide: boolean;
   onToggle: () => void;
   /** Has audio to play (the queue's `ready`). */
   ready: boolean;
@@ -474,9 +485,9 @@ function SongRow({
               <Text fw={600} truncate>
                 {song.title}
               </Text>
-              {(song.subtitle || song.key || !!song.bytes) && (
+              {(song.subtitle || song.key || (!wide && !!song.bytes)) && (
                 <Text size="xs" c="dimmed" truncate data-testid="song-row-meta">
-                  {[song.subtitle, song.key, song.bytes ? fmt.bytes(song.bytes) : null]
+                  {[song.subtitle, song.key, !wide && song.bytes ? fmt.bytes(song.bytes) : null]
                     .filter(Boolean)
                     .join(" · ")}
                 </Text>
@@ -496,6 +507,7 @@ function SongRow({
                   />
                 </Tooltip>
               )}
+              <SongRowStats song={song} withBytes={wide} />
             </Group>
           </Group>
         </UnstyledButton>

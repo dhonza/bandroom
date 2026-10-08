@@ -560,6 +560,14 @@
     "uploadFolder": "Upload folder",
     "createdFromFolder_one": "Created {{count}} song from your files.",
     "createdFromFolder_other": "Created {{count}} songs from your files.",
+    "length": "Length {{duration}}",
+    "channels": {
+      "tracks_one": "{{count}} track",
+      "tracks_other": "{{count}} tracks",
+      "stereo": "{{count}} stereo",
+      "mono": "{{count}} mono",
+      "summary": "{{tracks}}: {{parts}}"
+    },
     "lock": {
       "lock": "Lock song",
       "unlock": "Unlock song",

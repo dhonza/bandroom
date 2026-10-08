@@ -582,6 +582,16 @@
     "createdFromFolder_few": "Vytvořeny {{count}} písně z vašich souborů.",
     "createdFromFolder_many": "Vytvořeno {{count}} písně z vašich souborů.",
     "createdFromFolder_other": "Vytvořeno {{count}} písní z vašich souborů.",
+    "length": "Délka {{duration}}",
+    "channels": {
+      "tracks_one": "{{count}} stopa",
+      "tracks_few": "{{count}} stopy",
+      "tracks_many": "{{count}} stopy",
+      "tracks_other": "{{count}} stop",
+      "stereo": "{{count}} stereo",
+      "mono": "{{count}} mono",
+      "summary": "{{tracks}}: {{parts}}"
+    },
     "lock": {
       "lock": "Zamknout píseň",
       "unlock": "Odemknout píseň",
