@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { BOUNCE_MAX_TRACKS, BounceRequestSchema, bounceTracks } from "./bounce";
+import {
+  BOUNCE_MAX_TRACKS,
+  BounceRequestSchema,
+  bounceTracks,
+  practiceKeyShift,
+  scaleTempoMap,
+} from "./bounce";
 import type { MixerTrackState } from "./mixer";
 
 const s = (over: Partial<MixerTrackState> = {}): MixerTrackState => ({
@@ -34,7 +40,12 @@ describe("BounceRequestSchema (SPEC §5.5)", () => {
 
   it("defaults the options like an older client: tempo and markers copied, no click", () => {
     const r = BounceRequestSchema.parse(base);
-    expect(r).toMatchObject({ copyTempo: true, copyMarkers: true, includeClick: false });
+    expect(r).toMatchObject({
+      copyTempo: true,
+      copyMarkers: true,
+      includeClick: false,
+      applyPractice: false,
+    });
     const off = BounceRequestSchema.parse({
       ...base,
       copyTempo: false,
@@ -111,5 +122,37 @@ describe("bounceTracks (engine rules, SPEC §5.5, §6.6)", () => {
   it("returns nothing when everything is silent", () => {
     const mix = { tracks: { a: s({ mute: true }), b: s({ mute: true }), c: s({ mute: true }) } };
     expect(bounceTracks(versions, mix, none)).toEqual([]);
+  });
+});
+
+describe("practice bounce helpers (SPEC §30.7)", () => {
+  const meter = { num: 4, den: 4 };
+  const tempo = {
+    map: {
+      segments: [
+        { startBeat: 0, bpm: 120, meter, barIndex: 0 },
+        { startBeat: 16, bpm: 100, bpmEnd: 140, meter, barIndex: 4 },
+        { startBeat: 32, bpm: 15, meter, barIndex: 8 },
+      ],
+    },
+    bar1OffsetSec: 0.3,
+  };
+
+  it("scales every tempo by the rate and bar 1 by its inverse, within the stored limits", () => {
+    const r = scaleTempoMap(tempo, 0.5);
+    expect(r.bar1OffsetSec).toBeCloseTo(0.6, 12);
+    expect(r.map.segments.map((x) => [x.startBeat, x.bpm, x.bpmEnd, x.barIndex])).toEqual([
+      [0, 60, undefined, 0],
+      [16, 50, 70, 4],
+      [32, 10, undefined, 8], // 7.5 is below MIN_BPM
+    ]);
+    expect(scaleTempoMap(tempo, 1)).toEqual(tempo);
+  });
+
+  it("shifts the key by whole semitones, cents rounded in", () => {
+    expect(practiceKeyShift({ semitones: -2, cents: 0 })).toBe(-2);
+    expect(practiceKeyShift({ semitones: -2, cents: 8 })).toBe(-2);
+    expect(practiceKeyShift({ semitones: 0, cents: -60 })).toBe(-1);
+    expect(practiceKeyShift({ semitones: 0, cents: 32 })).toBe(0);
   });
 });

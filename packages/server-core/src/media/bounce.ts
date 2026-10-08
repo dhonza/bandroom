@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { dbToGain } from "@bandroom/shared";
+import { dbToGain, PracticeSchema } from "@bandroom/shared";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getUserById } from "../auth/users";
@@ -14,6 +14,12 @@ import { enqueueAudioIngest } from "./ingestJobs";
 import { mixChannels, mixGain, panLaw, renderMix, type MixInput } from "./mixGraph";
 import type { Probe } from "./probe";
 import { quotaCheck } from "./quota";
+import {
+  BounceStretchSchema,
+  needsStretch,
+  stretchInputToWav,
+  stretchSemitones,
+} from "./stretchInput";
 import { mediaTimeLimitMs, withTimeLimit } from "./tools";
 import { getVariant } from "./variants";
 
@@ -29,6 +35,8 @@ export const BounceInputSchema = z.object({
   pan: z.number().min(-1).max(1),
   /** The version's timeline offset at 48 kHz. */
   offsetSamples: z.number().int().min(0),
+  /** How the track follows the practice setting (SPEC §30.7); absent in older payloads. */
+  stretch: BounceStretchSchema.optional(),
 });
 export type BounceInput = z.infer<typeof BounceInputSchema>;
 
@@ -46,6 +54,11 @@ export const BouncePayloadSchema = z
     inputs: z.array(BounceInputSchema),
     /** The click track, when the bounce includes it (SPEC §5.5). */
     click: BounceClickSchema.optional(),
+    /**
+     * The practice setting the bounce applies (SPEC §30.7), never neutral; absent = none (and in
+     * payloads queued before M24). The click above is already on the scaled tempo map.
+     */
+    practice: PracticeSchema.optional(),
   })
   .refine((p) => p.inputs.length > 0 || p.click !== undefined, { message: "Nothing to render" });
 export type BouncePayload = z.infer<typeof BouncePayloadSchema>;
@@ -134,7 +147,11 @@ export const audioBounceHandler: JobHandler<BouncePayload, BounceResult> = {
     }
     setAssetStatus(db, asset.id, "processing");
 
-    const inputs: MixInput[] = [];
+    const { practice } = payload;
+    const rate = practice?.rate ?? 1;
+    const sources: { input: BounceInput; path: string; variant: string; probe: Probe | null }[] =
+      [];
+    // The output length (SPEC §30.7: the time limit follows the stretched length).
     let lengthSec = 0;
     for (const input of payload.inputs) {
       const source = getAsset(db, input.assetId);
@@ -145,19 +162,48 @@ export const audioBounceHandler: JobHandler<BouncePayload, BounceResult> = {
         );
       }
       const probe = assetProbe(source);
-      lengthSec = Math.max(lengthSec, (probe?.durationSec ?? 0) + input.offsetSamples / 48_000);
+      const sec = (probe?.durationSec ?? 0) + input.offsetSamples / 48_000;
+      lengthSec = Math.max(lengthSec, sec / rate);
       const file = await ctx.input({ assetId: source.id, variant });
-      inputs.push(bounceMixInput(input, { path: file, variant, probe }));
+      sources.push({ input, path: file, variant, probe });
+    }
+    if (payload.click) lengthSec = Math.max(lengthSec, payload.click.lengthFrames / 48_000);
+    const signal = withTimeLimit(ctx.signal, mediaTimeLimitMs(lengthSec));
+
+    // Stage 1 (SPEC §30.7): every input that changes goes through the stretcher into a float
+    // WAV on the output timeline, one at a time; the others are mixed from their source.
+    const inputs: MixInput[] = [];
+    const stretching = sources.filter((s) => needsStretch(practice, s.input.stretch)).length;
+    let stretched = 0;
+    for (const [i, s] of sources.entries()) {
+      const mix = bounceMixInput(s.input, s);
+      if (!needsStretch(practice, s.input.stretch)) {
+        inputs.push(mix);
+        continue;
+      }
+      ctx.progress(0.05 + (0.45 * stretched) / stretching, "stretch");
+      const file = path.join(ctx.tmpDir, `stretch-${i}.wav`);
+      const stretch = s.input.stretch;
+      await stretchInputToWav(
+        { tools, signal },
+        { path: s.path, channels: mix.channels, offsetSamples: s.input.offsetSamples },
+        {
+          rate: practice.rate,
+          semitones: stretchSemitones(practice, stretch),
+          profile: stretch?.profile ?? "tonal",
+          voiceBaseHz: stretch?.voiceBaseHz ?? 0,
+        },
+        file,
+      );
+      stretched++;
+      inputs.push({ ...mix, path: file, offsetSamples: 0 });
     }
     if (payload.click) {
       const file = path.join(ctx.tmpDir, "click.wav");
       await writeClickWav(file, payload.click);
-      lengthSec = Math.max(lengthSec, payload.click.lengthFrames / 48_000);
       inputs.push(bounceClickInput(file, payload.click));
     }
-
-    const signal = withTimeLimit(ctx.signal, mediaTimeLimitMs(lengthSec));
-    ctx.progress(0.1, "render");
+    ctx.progress(0.5, "render");
     const rendered = await renderMix(
       { tools, tmpDir: ctx.tmpDir, signal, codec: "pcm_s24le" },
       inputs,
@@ -191,6 +237,7 @@ export const audioBounceHandler: JobHandler<BouncePayload, BounceResult> = {
         userId: payload.userId,
         inputs: inputs.length,
         click: payload.click !== undefined,
+        ...(practice && { practice, stretched }),
         limited: rendered.limited,
         bytes: size,
       },
