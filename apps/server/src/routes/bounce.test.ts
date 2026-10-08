@@ -158,6 +158,7 @@ describe("POST /songs/:id/bounce (SPEC §5.5)", () => {
       expect(created).toHaveLength(1);
       expect(created[0]?.name).toBe("Song (bounce)");
       expect(created[0]?.current?.status).toBe("queued");
+      expect(created[0]?.instrument).toBe("mix"); // SPEC §30.7
       const order = (await call(t, listProjectSongs, { params: { id: projectId } }, admin)).json<{
         songs: { id: string }[];
       }>().songs;

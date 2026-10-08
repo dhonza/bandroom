@@ -1,4 +1,4 @@
-import { autoTrackColor, uuidv7 } from "@bandroom/shared";
+import { autoTrackColor, uuidv7, type Instrument, type VoiceRange } from "@bandroom/shared";
 import { and, asc, desc, eq, inArray, isNull, max, sql } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { MEDIA_JOB_TYPES } from "./processing";
@@ -57,6 +57,8 @@ export function createTrackWithVersion(
     assetId: string;
     uploadedBy: string;
     source?: TrackVersionRow["source"];
+    /** Stored instrument (SPEC §30.3), e.g. `mix` for a bounce; default: guessed at read time. */
+    instrument?: Instrument | null;
   },
   now: number = Date.now(),
 ): { track: TrackRow; version: TrackVersionRow } {
@@ -80,10 +82,11 @@ export function createTrackWithVersion(
         name,
         // SPEC §25.10: by instrument, else a colour the song does not use yet, else round-robin.
         color: autoTrackColor(
-          { name },
+          { name, instrument: input.instrument ?? null },
           { usedColors: siblings.map((t) => t.color), trackCount: siblings.length },
         ),
         sortOrder: (last?.m ?? -1) + 1,
+        instrument: input.instrument ?? null,
         createdBy: input.uploadedBy,
         createdAt: now,
       })
@@ -378,6 +381,9 @@ export interface TrackPatch {
   defaultPan?: number;
   defaultMuted?: boolean;
   instrumentTag?: string;
+  instrument?: Instrument | null;
+  transpose?: boolean | null;
+  voiceRange?: VoiceRange | null;
 }
 
 export function updateTrack(

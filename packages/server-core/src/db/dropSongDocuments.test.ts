@@ -1,7 +1,6 @@
 import path from "node:path";
 import { uuidv7 } from "@bandroom/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { insertUser } from "../auth/users";
 import { createProjectRow } from "../content/projects";
 import { createSongRow } from "../content/songs";
 import { listEvents } from "../events/record";
@@ -90,13 +89,23 @@ function doc(
   return { id, assetId: a.id };
 }
 
+/** Raw SQL: the schema here predates later user columns (0021 instrument). */
+function user(username: string, displayName: string, globalRole: string): string {
+  const id = uuidv7();
+  run(
+    `INSERT INTO users (id, username, display_name, password_hash, global_role, created_at)
+     VALUES (?, ?, ?, 'x', ?, ?)`,
+    id,
+    username,
+    displayName,
+    globalRole,
+    now,
+  );
+  return id;
+}
+
 function seed() {
-  const admin = insertUser(db, {
-    username: "admin",
-    displayName: "A",
-    passwordHash: "x",
-    globalRole: "admin",
-  }).id;
+  const admin = user("admin", "A", "admin");
   const project = createProjectRow(db, { name: "P", createdBy: admin }, now).id;
   const song = createSongRow(db, { projectId: project, title: "S", createdBy: admin }, now).id;
   const shared = blob(100);

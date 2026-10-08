@@ -151,6 +151,9 @@ const FROZEN: [string, ContractDef, () => Record<string, unknown>][] = [
     updateTrack,
     () => ({ params: { id: trackId }, body: { name: "Bass 2", defaultMuted: true } }),
   ],
+  ["instrument", updateTrack, () => ({ params: { id: trackId }, body: { instrument: "bass" } })],
+  ["transpose", updateTrack, () => ({ params: { id: trackId }, body: { transpose: null } })],
+  ["voice range", updateTrack, () => ({ params: { id: trackId }, body: { voiceRange: "low" } })],
   ["version gain", updateTrackVersion, () => ({ params: { id: versionId }, body: { gainDb: 2 } })],
 ];
 

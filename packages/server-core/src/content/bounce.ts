@@ -197,6 +197,7 @@ export function createBounce(
         assetId: asset.id,
         uploadedBy: input.userId,
         source: "render",
+        instrument: "mix",
       },
       now,
     );

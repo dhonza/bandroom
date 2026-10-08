@@ -8,6 +8,7 @@ import {
   ThemeSchema,
 } from "../auth";
 import { DocFontSizeSchema } from "../documents";
+import { InstrumentSchema } from "../instruments";
 import { LocaleSchema } from "../locales";
 import { OkSchema } from "./auth";
 import { defineContract } from "./contract";
@@ -22,6 +23,7 @@ export const updateMe = defineContract({
       locale: LocaleSchema.nullable(),
       theme: ThemeSchema,
       instrumentTag: z.string().trim().max(40),
+      instrument: InstrumentSchema.nullable(),
       docFontSize: DocFontSizeSchema,
     })
     .partial(),
