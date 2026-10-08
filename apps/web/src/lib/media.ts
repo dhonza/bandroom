@@ -1,4 +1,10 @@
-import { API_PREFIX, brandingLogoPath, joinBasePath } from "@bandroom/shared";
+import {
+  API_PREFIX,
+  brandingLogoPath,
+  isAudioName,
+  joinBasePath,
+  trackNamesFromFiles,
+} from "@bandroom/shared";
 import { basePathFromDocument } from "../config/clientConfig";
 import { linkPathPrefix } from "../links/linkMode";
 import { expandZip, isZipFile } from "./zip";
@@ -67,46 +73,12 @@ export function formatBytes(bytes: number, locale: string): string {
   }).format(v);
 }
 
-const AUDIO_EXT = /\.(wav|wave|aif|aiff|flac|mp3|m4a|aac|ogg|oga|opus|wv|alac)$/i;
-
 export function isProbablyAudio(file: File): boolean {
-  return file.type.startsWith("audio/") || AUDIO_EXT.test(file.name);
+  return file.type.startsWith("audio/") || isAudioName(file.name);
 }
 
-/** Whether a file name looks like audio (zip entries carry no MIME type). */
-export function isAudioName(name: string): boolean {
-  return AUDIO_EXT.test(name);
-}
-
-/**
- * Track names for a batch of dropped files (SPEC §5.1): extension and the common prefix removed,
- * e.g. `MySong_Bass.wav`, `MySong_Drums.wav` → "Bass", "Drums".
- */
-export function trackNamesFromFiles(names: readonly string[]): string[] {
-  const bases = names.map((n) => n.replace(/\.[^.]+$/, ""));
-  if (bases.length < 2) return bases.map((b) => b.trim() || "Track");
-  let prefix = bases[0] ?? "";
-  for (const b of bases) {
-    while (!b.startsWith(prefix)) prefix = prefix.slice(0, -1);
-  }
-  // Only cut at a separator so "Bass" and "Bassoon" do not become "" and "oon".
-  const cut = Math.max(
-    prefix.lastIndexOf("_"),
-    prefix.lastIndexOf("-"),
-    prefix.lastIndexOf(" "),
-    prefix.lastIndexOf("."),
-  );
-  const strip = cut >= 0 ? cut + 1 : 0;
-  return bases.map(
-    (b) =>
-      b
-        .slice(strip)
-        .replace(/^[\s_\-.]+/, "")
-        .trim() ||
-      b.trim() ||
-      "Track",
-  );
-}
+// Shared with brctl so the CLI names tracks like the web folder drop (SPEC §5.1).
+export { isAudioName, trackNamesFromFiles };
 
 /** Name normalization for matching files to tracks: lowercase letters and digits only. */
 export function normalizeName(name: string): string {

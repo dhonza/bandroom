@@ -30,3 +30,4 @@ export * from "./tempo";
 export * from "./tracks";
 export * from "./trash";
 export * from "./trackColors";
+export * from "./uploadNames";
