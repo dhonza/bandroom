@@ -56,4 +56,28 @@ describe("BouncePayloadSchema", () => {
       BouncePayloadSchema.safeParse({ ...base, inputs: [{ ...one, offsetSamples: -1 }] }).success,
     ).toBe(false);
   });
+
+  it("parses payloads queued before M24 (no practice, no stretch) and the new fields", () => {
+    const base = {
+      assetId: "a",
+      projectId: "p",
+      songId: "s",
+      trackVersionId: "v",
+      sourceSongId: "src",
+      userId: "u",
+    };
+    const one = { trackId: "t", versionId: "v", assetId: "a", ...input };
+    const old = BouncePayloadSchema.parse({ ...base, inputs: [one] });
+    expect(old.practice).toBeUndefined();
+    expect(old.inputs[0]?.stretch).toBeUndefined();
+    const stretch = { profile: "voice", transpose: true, voiceBaseHz: 100 };
+    const practice = { rate: 0.85, semitones: -2, cents: 8 };
+    const now = BouncePayloadSchema.parse({ ...base, practice, inputs: [{ ...one, stretch }] });
+    expect(now.practice).toEqual(practice);
+    expect(now.inputs[0]?.stretch).toEqual(stretch);
+    expect(
+      BouncePayloadSchema.safeParse({ ...base, practice: { ...practice, rate: 3 }, inputs: [one] })
+        .success,
+    ).toBe(false);
+  });
 });

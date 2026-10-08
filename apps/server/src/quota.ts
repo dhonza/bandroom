@@ -17,11 +17,16 @@ export function effectiveQuota(ctx: Pick<AppContext, "db">, user: UserRow): numb
   return userQuotaBytes(ctx.db, user);
 }
 
-/** Quota (size × 1.1) and free-disk checks for content created without tus (SPEC §5.1, §15.1). */
+/**
+ * Quota (size × 1.1) and free-disk checks for content created without tus (SPEC §5.1, §15.1).
+ * `tempBytes` is scratch space the work needs on top (free disk only, e.g. a practice bounce's
+ * stretched inputs, SPEC §30.7).
+ */
 export async function checkQuotaAndDisk(
   ctx: Pick<AppContext, "db" | "config">,
   user: UserRow,
   size: number,
+  tempBytes = 0,
 ): Promise<void> {
   const quota = quotaCheck(ctx.db, user, size);
   if (!quota.ok) {
@@ -31,7 +36,7 @@ export async function checkQuotaAndDisk(
     });
   }
   const disk = await diskUsage(ctx.config.dataDir);
-  if (disk.freeBytes - size < MIN_FREE_AFTER_UPLOAD) {
+  if (disk.freeBytes - size - tempBytes < MIN_FREE_AFTER_UPLOAD) {
     throw new AppError("DISK_FULL", "Server storage is full");
   }
 }

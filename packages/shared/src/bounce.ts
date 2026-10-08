@@ -2,7 +2,14 @@ import { z } from "zod";
 import { dbToGain } from "./audio/pan";
 import { UploadOptionsSchema } from "./audioQuality";
 import { SongTitleSchema } from "./content";
-import { dimmedTrackIds, MixerStateSchema, type MixerState, type MixerTrackState } from "./mixer";
+import {
+  dimmedTrackIds,
+  MixerStateSchema,
+  type MixerState,
+  type MixerTrackState,
+  type Practice,
+} from "./mixer";
+import { MAX_BPM, MIN_BPM, type TempoMap } from "./tempo/model";
 
 /**
  * Most tracks one bounce renders (SPEC §5.5): ffmpeg opens every input at once, and the worker
@@ -36,6 +43,11 @@ export const BounceRequestSchema = z
     includeClick: z.boolean().default(false),
     /** Lossy only and the Opus preset for the rendered file (SPEC §28.2); absent = defaults. */
     options: UploadOptionsSchema.optional(),
+    /**
+     * Apply `mix.practice` (speed and pitch, SPEC §30.7). Off for older clients; a neutral
+     * setting changes nothing.
+     */
+    applyPractice: z.boolean().default(false),
   })
   .refine((r) => Object.keys(r.versions).length + (r.includeClick ? 1 : 0) <= BOUNCE_MAX_TRACKS, {
     message: `At most ${BOUNCE_MAX_TRACKS} inputs, the click included`,
@@ -80,4 +92,32 @@ export function bounceTracks(
     out.push({ trackId, versionId, gainDb: s.gainDb, pan: s.pan });
   }
   return out;
+}
+
+/**
+ * A tempo map as it sounds at `rate` (SPEC §30.7): every tempo × rate, bar 1 at its time / rate,
+ * so beats keep their place on the stretched audio. Tempos stay inside the stored limits.
+ */
+export function scaleTempoMap(
+  tempo: { map: TempoMap; bar1OffsetSec: number },
+  rate: number,
+): { map: TempoMap; bar1OffsetSec: number } {
+  if (rate === 1) return { map: tempo.map, bar1OffsetSec: tempo.bar1OffsetSec };
+  const bpm = (v: number) => Math.min(MAX_BPM, Math.max(MIN_BPM, v * rate));
+  return {
+    map: {
+      ...tempo.map,
+      segments: tempo.map.segments.map((s) => ({
+        ...s,
+        bpm: bpm(s.bpm),
+        ...(s.bpmEnd !== undefined && { bpmEnd: bpm(s.bpmEnd) }),
+      })),
+    },
+    bar1OffsetSec: tempo.bar1OffsetSec / rate,
+  };
+}
+
+/** The whole semitones a practice setting shifts the song's key by (cents rounded in). */
+export function practiceKeyShift(p: Pick<Practice, "semitones" | "cents">): number {
+  return Math.round(p.semitones + p.cents / 100);
 }

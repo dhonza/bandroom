@@ -2,7 +2,9 @@ import {
   lengthsDiffer,
   multitrackTrackNames,
   parseCommentContext,
+  scaleTempoMap,
   suggestMultitrackName,
+  TempoMapSchema,
   uuidv7,
   type ContentRole,
   type MultitrackPreview,
@@ -568,18 +570,42 @@ export function copyTimelineToBounce(
   fromSongId: string,
   songId: string,
   userId: string,
-  opts: { tempo: boolean; markers: boolean },
+  opts: { tempo: boolean; markers: boolean; rate?: number },
   now: number = Date.now(),
 ): { tempoRevisionId: string | null; markers: Pick<MarkerRow, "id" | "type" | "name">[] } {
   const maps = newMaps();
   const tempo =
     opts.tempo && copyTempo(db, fromSongId, songId, 0, maps, { history: false, userId }, now);
   const copied = opts.markers ? copyMarkers(db, fromSongId, songId, 0, null, now, userId) : [];
+  if (opts.rate !== undefined && opts.rate !== 1) scaleTimeline(db, songId, opts.rate);
   if (tempo || copied.length > 0) afterTimelineChange(db, songId, now);
   const revisionId = tempo
     ? (db.select().from(tempoMaps).where(eq(tempoMaps.songId, songId)).get()?.revisionId ?? null)
     : null;
   return { tempoRevisionId: revisionId, markers: copied };
+}
+
+/**
+ * A practice bounce's timeline (SPEC §30.7): the copied tempo map plays at `rate` (tempos × rate,
+ * bar 1 / rate) and markers and sections sit at their time / rate (beats unchanged), so they line
+ * up with the stretched audio. Only the new song's rows, right after they were copied.
+ */
+function scaleTimeline(db: Db, songId: string, rate: number): void {
+  const row = db.select().from(tempoMaps).where(eq(tempoMaps.songId, songId)).get();
+  const parsed = row && TempoMapSchema.safeParse(JSON.parse(row.data));
+  if (row && parsed?.success) {
+    const scaled = scaleTempoMap({ map: parsed.data, bar1OffsetSec: row.bar1OffsetSec }, rate);
+    const set = { data: JSON.stringify(scaled.map), bar1OffsetSec: scaled.bar1OffsetSec };
+    db.update(tempoMaps).set(set).where(eq(tempoMaps.songId, songId)).run();
+    db.update(tempoMapRevisions).set(set).where(eq(tempoMapRevisions.id, row.revisionId)).run();
+  }
+  const rows = db.select().from(markers).where(eq(markers.songId, songId)).all();
+  for (const m of rows) {
+    db.update(markers)
+      .set({ startSec: m.startSec / rate, endSec: m.endSec === null ? null : m.endSec / rate })
+      .where(eq(markers.id, m.id))
+      .run();
+  }
 }
 
 // ——— songs to another project ———————————————————————————————————————————————————————————

@@ -76,13 +76,15 @@ export function registerSongRoutes(app: FastifyInstance, ctx: AppContext): void 
         ? new AppError("BOUNCE_SILENT", "Every track of the mix is silent")
         : new AppError("BOUNCE_INVALID", "A track or version is not in the song or not ready");
     }
-    await checkQuotaAndDisk(ctx, user, plan.estimateBytes);
+    // The stretched inputs (SPEC §30.7) are temporary: free disk only, not the quota.
+    await checkQuotaAndDisk(ctx, user, plan.estimateBytes, plan.tempBytes);
     const created = createBounce(db, {
       source: access.song,
       title: body.title,
       userId: user.id,
       inputs: plan.inputs,
       click: plan.click,
+      practice: plan.practice,
       request: body,
       event: {
         sessionId: request.session?.id ?? null,

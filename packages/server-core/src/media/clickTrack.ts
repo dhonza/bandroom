@@ -33,9 +33,9 @@ export type BounceClick = z.infer<typeof BounceClickSchema>;
 const BLOCK = 48_000;
 const HEADER_BYTES = 44;
 
-/** RIFF header of a mono 32-bit float WAV at 48 kHz with `frames` samples. */
-export function floatWavHeader(frames: number): Buffer {
-  const data = frames * 4;
+/** RIFF header of a 32-bit float WAV at 48 kHz with `frames` frames (mono by default). */
+export function floatWavHeader(frames: number, channels: 1 | 2 = 1): Buffer {
+  const data = frames * 4 * channels;
   const h = Buffer.alloc(HEADER_BYTES);
   h.write("RIFF", 0, "ascii");
   h.writeUInt32LE(36 + data, 4);
@@ -43,10 +43,10 @@ export function floatWavHeader(frames: number): Buffer {
   h.write("fmt ", 12, "ascii");
   h.writeUInt32LE(16, 16);
   h.writeUInt16LE(3, 20); // IEEE float
-  h.writeUInt16LE(1, 22); // mono
+  h.writeUInt16LE(channels, 22);
   h.writeUInt32LE(48_000, 24);
-  h.writeUInt32LE(48_000 * 4, 28);
-  h.writeUInt16LE(4, 32);
+  h.writeUInt32LE(48_000 * 4 * channels, 28);
+  h.writeUInt16LE(4 * channels, 32);
   h.writeUInt16LE(32, 34);
   h.write("data", 36, "ascii");
   h.writeUInt32LE(data, 40);

@@ -1,4 +1,19 @@
-import { bounceTracks, clickSettingsOf, uuidv7, type BounceRequest } from "@bandroom/shared";
+import {
+  bounceTracks,
+  clickSettingsOf,
+  effectiveInstrument,
+  effectiveTranspose,
+  isNeutralPractice,
+  practiceKeyShift,
+  practiceOf,
+  profileFor,
+  scaleTempoMap,
+  transposeKeyName,
+  uuidv7,
+  voiceBaseHz,
+  type BounceRequest,
+  type Practice,
+} from "@bandroom/shared";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { jobs, tracks } from "../db/schema";
@@ -8,6 +23,8 @@ import { assetProbe, createAsset, getAsset, type AssetRow } from "../media/asset
 import type { BounceInput, BouncePayload } from "../media/bounce";
 import type { BounceClick } from "../media/clickTrack";
 import { durationSamples48k } from "../media/ingest";
+import { mixChannels } from "../media/mixGraph";
+import { needsStretch, stretchedFrames, stretchTempBytes } from "../media/stretchInput";
 import type { SongRow } from "./access";
 import { createSongRow } from "./songs";
 import { songTempo } from "./tempo";
@@ -27,8 +44,13 @@ export type BouncePlan =
       ok: true;
       inputs: BounceInput[];
       click: BounceClick | null;
+      /** The practice setting the bounce applies (never neutral), or null. */
+      practice: Practice | null;
+      /** Length of the rendered file (stretched with the practice setting). */
       lengthSec: number;
       estimateBytes: number;
+      /** Temporary disk the worker needs on top (the stretched inputs, SPEC §30.7). */
+      tempBytes: number;
     }
   | { ok: false; reason: "invalid" | "silent" };
 
@@ -43,11 +65,20 @@ export type BouncePlan =
  * click settings, as long as the song in the Player; its mute and "solo excludes click" do not
  * apply (the option asks for it), its solo silences the unsoloed tracks like in the engine. A
  * bounce of the click alone is allowed.
+ *
+ * `applyPractice` with a practice setting that is not neutral (SPEC §30.7) stretches the bounce:
+ * every input carries how its track follows it (profile, transpose flag, voice range, resolved
+ * from the track record; a song with one track counts as a mix), the click is built on the scaled
+ * tempo map, and the length is ⌈L / rate⌉. The stretched inputs need temporary float WAVs
+ * (`tempBytes`), which count toward the free disk but not the quota.
  */
 export function planBounce(
   db: Db,
   songId: string,
-  req: Pick<BounceRequest, "mix" | "versions"> & { includeClick?: boolean },
+  req: Pick<BounceRequest, "mix" | "versions"> & {
+    includeClick?: boolean;
+    applyPractice?: boolean;
+  },
 ): BouncePlan {
   const songTracks = new Map(
     db
@@ -65,6 +96,10 @@ export function planBounce(
       return { ok: false, reason: "invalid" };
     chosen.set(trackId, { version, asset });
   }
+  const requested = practiceOf(req.mix);
+  const practice = req.applyPractice && !isNeutralPractice(requested) ? requested : null;
+  const rate = practice?.rate ?? 1;
+  const singleTrack = songTracks.size === 1;
   const settings = clickSettingsOf(req.mix);
   const tempo = req.includeClick ? songTempo(db, songId) : null;
   if (req.includeClick && !tempo) return { ok: false, reason: "invalid" };
@@ -86,24 +121,29 @@ export function planBounce(
       const frames = p ? durationSamples48k(p.durationSamples, p.sampleRate) : 0;
       lengthFrames = Math.max(lengthFrames, c.version.offsetSamples + frames);
     }
+    // With practice: the click on the scaled map, as long as the stretched song (never stretched).
+    const scaled = scaleTempoMap(tempo, rate);
     click = {
       gainDb: settings.gainDb,
       sound: settings.sound,
       subdivision: settings.subdivision,
       accent: settings.accent,
       compoundEighths: settings.compoundEighths,
-      tempo: { map: tempo.map, bar1OffsetSec: tempo.bar1OffsetSec },
-      lengthFrames,
+      tempo: { map: scaled.map, bar1OffsetSec: scaled.bar1OffsetSec },
+      lengthFrames: stretchedFrames(lengthFrames, rate),
     };
   }
   if (audible.length === 0 && !click) return { ok: false, reason: "silent" };
   let lengthSec = click ? click.lengthFrames / 48_000 : 0;
+  let tempBytes = 0;
   const inputs = audible.map((b): BounceInput => {
     const c = chosen.get(b.trackId);
-    if (!c) throw new Error("unreachable: audible track without a version");
-    const durationSec = assetProbe(c.asset)?.durationSec ?? 0;
-    lengthSec = Math.max(lengthSec, c.version.offsetSamples / 48_000 + durationSec);
-    return {
+    const track = songTracks.get(b.trackId);
+    if (!c || !track) throw new Error("unreachable: audible track without a version");
+    const probe = assetProbe(c.asset);
+    const outSec = (c.version.offsetSamples / 48_000 + (probe?.durationSec ?? 0)) / rate;
+    lengthSec = Math.max(lengthSec, outSec);
+    const input: BounceInput = {
       trackId: b.trackId,
       versionId: c.version.id,
       assetId: c.asset.id,
@@ -112,13 +152,26 @@ export function planBounce(
       pan: b.pan,
       offsetSamples: c.version.offsetSamples,
     };
+    if (!practice) return input;
+    const instrument = effectiveInstrument(track, { singleTrack });
+    input.stretch = {
+      profile: profileFor(instrument),
+      transpose: effectiveTranspose(track, { singleTrack }),
+      voiceBaseHz: instrument === "vocals" ? voiceBaseHz(track.voiceRange) : 0,
+    };
+    // At most the stored channels (a dual-mono flac has one, its kept original two).
+    if (needsStretch(practice, input.stretch))
+      tempBytes += stretchTempBytes(outSec, mixChannels(probe, "original"));
+    return input;
   });
   return {
     ok: true,
     inputs,
     click,
+    practice,
     lengthSec,
     estimateBytes: Math.ceil(lengthSec * BOUNCE_WAV_BYTES_PER_SEC),
+    tempBytes,
   };
 }
 
@@ -136,6 +189,8 @@ export interface CreatedBounce {
  * `song.bounced` event. The source's subtitle and key are copied; with the options also its tempo
  * map and markers and sections (by the user, `tempo.changed` and `marker.*`/`section.*` created
  * events with the bounce's `batchId`). The worker renders the file, then the normal ingest runs.
+ * With a `practice` setting (from {@link planBounce}) the copied tempo map and markers are scaled
+ * to the stretched audio and the key is transposed when it parses as a key name (SPEC §30.7).
  */
 export function createBounce(
   db: Db,
@@ -145,12 +200,20 @@ export function createBounce(
     userId: string;
     inputs: BounceInput[];
     click?: BounceClick | null;
+    /** The practice setting the bounce applies ({@link BouncePlan}). */
+    practice?: Practice | null;
     request: Pick<BounceRequest, "mix" | "versions"> &
       Partial<Pick<BounceRequest, "copyTempo" | "copyMarkers" | "includeClick" | "options">>;
     event?: { sessionId?: string | null; ip?: string | null; userAgent?: string | null };
   },
   now: number = Date.now(),
 ): CreatedBounce {
+  const practice = input.practice ?? null;
+  const shift = practice ? practiceKeyShift(practice) : 0;
+  const key =
+    shift !== 0 && input.source.key
+      ? (transposeKeyName(input.source.key, shift) ?? input.source.key)
+      : input.source.key;
   return db.transaction(() => {
     const song = createSongRow(
       db,
@@ -158,7 +221,7 @@ export function createBounce(
         projectId: input.source.projectId,
         title: input.title,
         subtitle: input.source.subtitle,
-        key: input.source.key,
+        key,
         createdBy: input.userId,
         after: input.source,
       },
@@ -172,7 +235,7 @@ export function createBounce(
       input.source.id,
       song.id,
       input.userId,
-      { tempo: copyTempo, markers: copyMarkers },
+      { tempo: copyTempo, markers: copyMarkers, ...(practice && { rate: practice.rate }) },
       now,
     );
     const asset = createAsset(
@@ -210,6 +273,7 @@ export function createBounce(
       userId: input.userId,
       inputs: input.inputs,
       ...(input.click && { click: input.click }),
+      ...(practice && { practice }),
     };
     enqueueBounceJob(db, payload, input.userId, now);
     const actor = {
@@ -237,6 +301,12 @@ export function createBounce(
         includeClick: input.click != null,
         ...(input.click && { click: input.request.mix.click ?? {} }),
         ...(input.request.options && { options: input.request.options }),
+        ...(practice && {
+          practice,
+          transposed: Object.fromEntries(
+            input.inputs.map((i) => [i.trackId, i.stretch?.transpose ?? true]),
+          ),
+        }),
       },
     });
     if (copied.tempoRevisionId !== null) {
