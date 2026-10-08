@@ -22,7 +22,8 @@
     "test:ios-sim": "node e2e/ios-sim/run.mjs",
     "test:e2e:install": "PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:-$PWD/.cache/ms-playwright} playwright install chromium webkit",
     "db:generate": "pnpm --filter server db:generate",
-    "fixtures": "pnpm --filter @bandroom/fixtures generate"
+    "fixtures": "pnpm --filter @bandroom/fixtures generate",
+    "remote": "pnpm --silent --filter @bandroom/brctl brctl"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

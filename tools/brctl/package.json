@@ -1,0 +1,17 @@
+{
+  "name": "@bandroom/brctl",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "brctl": "tsx src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@bandroom/shared": "workspace:*",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15"
+  }
+}
