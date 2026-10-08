@@ -328,6 +328,8 @@ export function PracticeMenuItem({ onOpen }: { onOpen: () => void }) {
   return (
     <Menu.Item
       leftSection={<IconPlayerTrackNext size={14} />}
+      // The "⋯" menu stays open on item clicks; the sheet must not open under it.
+      closeMenuOnClick
       onClick={onOpen}
       data-testid="menu-practice"
     >
