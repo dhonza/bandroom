@@ -1,5 +1,6 @@
 import { Stack, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
+import { ApiKeysSection } from "./ApiKeysSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { AudioSection } from "./AudioSection";
 import { KeyboardSection } from "./KeyboardSection";
@@ -21,6 +22,7 @@ export function SettingsPage() {
       <PasswordSection />
       <StorageSection />
       <SessionsSection />
+      <ApiKeysSection />
     </Stack>
   );
 }

@@ -235,6 +235,23 @@
         "pageNext": "Next page (document)",
         "pagePrev": "Previous page (document)"
       }
+    },
+    "apiKeys": {
+      "title": "API keys",
+      "description": "Keys let scripts and plugins (for example a Reaper script) use BandRoom as you. Treat a key like a password.",
+      "empty": "No API keys.",
+      "create": "Create API key",
+      "createSubmit": "Create key",
+      "createdTitle": "Your new API key",
+      "copyNow": "Copy the key now. It is shown only once; if you lose it, revoke it and create a new one.",
+      "token": "API key",
+      "name": "Name",
+      "nameHint": "Where the key is used, e.g. \"Reaper on the studio Mac\".",
+      "scopes": "Allowed to",
+      "expiry": "Expires",
+      "expiryDays_one": "In {{count}} day",
+      "expiryDays_other": "In {{count}} days",
+      "expiryNever": "Never"
     }
   },
   "admin": {
@@ -439,6 +456,12 @@
         "comment": "Comments",
         "insight": "Insights"
       }
+    },
+    "apiKeys": {
+      "tab": "API keys",
+      "explain": "Every user's API keys. Revoking one stops it at once.",
+      "empty": "No API keys.",
+      "owner": "Owner: {{name}}"
     }
   },
   "colors": {
@@ -1676,5 +1699,26 @@
         "low": "Low"
       }
     }
+  },
+  "apiKeys": {
+    "scope": {
+      "read": "Read",
+      "write": "Write",
+      "admin:read": "Admin: read",
+      "admin:ops": "Admin: operations"
+    },
+    "scopeHint": {
+      "read": "See projects, songs, tracks and downloads you can see.",
+      "write": "Also upload and change things you are allowed to change.",
+      "admin_read": "Instance status, jobs, logs, activity and storage.",
+      "admin_ops": "Retry or cancel jobs, request updates, change instance settings."
+    },
+    "revoke": "Revoke",
+    "revokeNamed": "Revoke {{name}}",
+    "neverUsed": "never used",
+    "lastUsed": "used {{when}}",
+    "neverExpires": "never expires",
+    "expires": "expires {{when}}",
+    "expired": "expired"
   }
 }

@@ -237,6 +237,25 @@
         "pageNext": "Další stránka (dokument)",
         "pagePrev": "Předchozí stránka (dokument)"
       }
+    },
+    "apiKeys": {
+      "title": "API klíče",
+      "description": "Klíče umožní skriptům a pluginům (třeba skriptu v Reaperu) používat BandRoom vaším jménem. Chraňte klíč jako heslo.",
+      "empty": "Žádné API klíče.",
+      "create": "Vytvořit API klíč",
+      "createSubmit": "Vytvořit klíč",
+      "createdTitle": "Váš nový API klíč",
+      "copyNow": "Klíč si teď zkopírujte. Zobrazí se jen jednou; když ho ztratíte, zrušte ho a vytvořte nový.",
+      "token": "API klíč",
+      "name": "Název",
+      "nameHint": "Kde se klíč používá, např. „Reaper na Macu ve zkušebně“.",
+      "scopes": "Smí",
+      "expiry": "Platnost",
+      "expiryDays_one": "{{count}} den",
+      "expiryDays_few": "{{count}} dny",
+      "expiryDays_many": "{{count}} dne",
+      "expiryDays_other": "{{count}} dní",
+      "expiryNever": "Neomezená"
     }
   },
   "admin": {
@@ -451,6 +470,12 @@
         "comment": "Komentáře",
         "insight": "Statistiky"
       }
+    },
+    "apiKeys": {
+      "tab": "API klíče",
+      "explain": "API klíče všech uživatelů. Zrušený klíč přestane okamžitě fungovat.",
+      "empty": "Žádné API klíče.",
+      "owner": "Vlastník: {{name}}"
     }
   },
   "colors": {
@@ -1830,5 +1855,26 @@
         "low": "Nízká"
       }
     }
+  },
+  "apiKeys": {
+    "scope": {
+      "read": "Čtení",
+      "write": "Zápis",
+      "admin:read": "Správa: čtení",
+      "admin:ops": "Správa: provoz"
+    },
+    "scopeHint": {
+      "read": "Vidí projekty, písně, stopy a stahování, které vidíte vy.",
+      "write": "Může také nahrávat a měnit, co smíte měnit vy.",
+      "admin_read": "Stav instance, úlohy, logy, aktivita a úložiště.",
+      "admin_ops": "Opakovat nebo zrušit úlohy, žádat o aktualizace, měnit nastavení instance."
+    },
+    "revoke": "Zrušit",
+    "revokeNamed": "Zrušit {{name}}",
+    "neverUsed": "zatím nepoužit",
+    "lastUsed": "použit {{when}}",
+    "neverExpires": "bez konce platnosti",
+    "expires": "platí do {{when}}",
+    "expired": "prošlý"
   }
 }

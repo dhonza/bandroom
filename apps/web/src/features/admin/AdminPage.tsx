@@ -2,6 +2,7 @@ import { Alert, Stack, Tabs, Text, Title } from "@mantine/core";
 import {
   IconAdjustments,
   IconFileImport,
+  IconKey,
   IconLink,
   IconMailForward,
   IconTrash,
@@ -11,6 +12,7 @@ import { LinksPanel } from "../../links/LinksPanel";
 import { useTranslation } from "react-i18next";
 import { useOnline } from "../../offline/online";
 import { useSearchParams } from "react-router";
+import { ApiKeysPanel } from "./ApiKeysPanel";
 import { ImportPanel } from "./imports/ImportPanel";
 import { InstanceSettingsPanel } from "./InstanceSettingsPanel";
 import { InvitesPanel } from "./InvitesPanel";
@@ -18,7 +20,7 @@ import { UsersPanel } from "./UsersPanel";
 import { TrashPanel } from "../../trash/TrashPanel";
 import { useAdminTrash } from "../../trash/queries";
 
-const TABS = ["invites", "links", "settings", "import", "trash"] as const;
+const TABS = ["invites", "links", "settings", "import", "trash", "apiKeys"] as const;
 type Tab = "users" | (typeof TABS)[number];
 const isTab = (v: string | null): v is (typeof TABS)[number] =>
   TABS.includes(v as (typeof TABS)[number]);
@@ -84,6 +86,14 @@ export function AdminPage() {
           >
             {t("trash.title")}
           </Tabs.Tab>
+          <Tabs.Tab
+            value="apiKeys"
+            leftSection={<IconKey size={16} />}
+            mih={44}
+            data-testid="admin-api-keys-tab"
+          >
+            {t("admin.apiKeys.tab")}
+          </Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="users" pt="md">
           <UsersPanel />
@@ -107,6 +117,9 @@ export function AdminPage() {
         </Tabs.Panel>
         <Tabs.Panel value="trash" pt="md">
           <AdminTrash />
+        </Tabs.Panel>
+        <Tabs.Panel value="apiKeys" pt="md">
+          <ApiKeysPanel />
         </Tabs.Panel>
       </Tabs>
     </Stack>
