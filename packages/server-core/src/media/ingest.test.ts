@@ -22,6 +22,7 @@ import {
   createHarness,
   decodeMono,
   peakNear,
+  retryJob,
   runOneJob,
   variantPath,
   type Harness,
@@ -178,10 +179,11 @@ describe("audio.ingest details", () => {
       const asset = await addOriginal(h, BWF_FILE(), uploader);
       const payload = { assetId: asset.id };
       const failed = await runOneJob(h, "audio.ingest", payload, { ...DEFAULT_TOOLS, ffmpeg });
-      expect(failed.status).not.toBe("done");
+      expect(failed.status).toBe("queued");
       expect(getVariant(db, asset.id, "original")).toBeDefined();
 
-      const retry = await runOneJob(h, "audio.ingest", payload);
+      // The same job again (a new one would leave this one queued for a later test to claim).
+      const retry = await retryJob(h, failed.job);
       expect(getJob(db, retry.job.id)?.error ?? null).toBeNull();
       expect(retry.status).toBe("done");
       expect(getVariant(db, asset.id, "original")).toBeUndefined();

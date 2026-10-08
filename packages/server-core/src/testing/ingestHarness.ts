@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { Readable } from "node:stream";
 import type { Db } from "../db/connection";
-import { claimJob, enqueueJob } from "../jobs/queue";
+import { claimJob, enqueueJob, getJob, type JobRow } from "../jobs/queue";
 import { executeJob, handlerRegistry } from "../jobs/runner";
 import type { JobEvent } from "../jobs/types";
 import { createAsset } from "../media/assets";
@@ -55,10 +55,26 @@ export async function addOriginal(
   return asset;
 }
 
+/**
+ * Enqueues a job and runs exactly that job. Throws if the queue hands out another one (a job a
+ * previous test left queued for a retry would otherwise be claimed first once its backoff ends).
+ */
 export async function runOneJob(h: Harness, type: string, payload: unknown, tools?: ToolPaths) {
-  enqueueJob(h.db, { type, capability: type, payload });
-  const job = claimJob(h.db, "test-worker", [type]);
+  const queued = enqueueJob(h.db, { type, capability: type, payload });
+  return claimAndRun(h, queued, Date.now(), tools);
+}
+
+/** Runs a job that failed and was requeued, as the worker would once its backoff ends. */
+export async function retryJob(h: Harness, failed: JobRow, tools?: ToolPaths) {
+  const queued = getJob(h.db, failed.id);
+  if (queued?.status !== "queued") throw new Error(`job ${failed.id} is not queued for a retry`);
+  return claimAndRun(h, queued, Math.max(Date.now(), queued.runAfter), tools);
+}
+
+async function claimAndRun(h: Harness, queued: JobRow, now: number, tools?: ToolPaths) {
+  const job = claimJob(h.db, "test-worker", [queued.capability], now);
   if (!job) throw new Error("no job claimed");
+  if (job.id !== queued.id) throw new Error(`claimed job ${job.id} instead of ${queued.id}`);
   const status = await executeJob(
     {
       db: h.db,
