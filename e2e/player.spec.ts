@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
-import { generateFixtures, TONE_FILE } from "@bandroom/fixtures";
-import { isMobile, loginAsNewUser, TAP_NAME, uniqueUsername } from "./helpers";
+import { AIFF_FILE, generateFixtures, TONE_FILE } from "@bandroom/fixtures";
+import { isMobile, loginAsNewUser, openMixer, TAP_NAME, uniqueUsername } from "./helpers";
 
 test.beforeAll(async () => {
   await generateFixtures();
@@ -535,4 +535,79 @@ test("Mixer: post-fader peak meters move while playing, in every header tier", a
   await expect(meter).toHaveAttribute("data-orientation", orientation(await tierOf()));
   await expect.poll(() => meterFill(strip), { timeout: 5_000 }).toBeGreaterThan(0);
   await page.getByTestId("rehearse-play").click();
+});
+
+/** Drags with the mouse from the centre of one element through the centres of the others. */
+async function dragThrough(page: Page, path: Locator[]): Promise<void> {
+  // All of the path on screen: centre its middle.
+  await path[Math.floor(path.length / 2)]?.evaluate((el) => {
+    el.scrollIntoView({ block: "center" });
+  });
+  const points = [];
+  for (const l of path) {
+    const b = await box(l);
+    points.push({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
+  }
+  const [first, ...rest] = points;
+  if (!first) return;
+  await page.mouse.move(first.x, first.y);
+  await page.mouse.down();
+  for (const p of rest) await page.mouse.move(p.x, p.y, { steps: 6 });
+  await page.mouse.up();
+}
+
+test("Mixer: a drag across M/S buttons sets them all to the first one's new value", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(540_000);
+  await loginAsNewUser(page, request, testInfo, "member");
+  await newProject(page, testInfo);
+  await newSong(page, "Paint");
+  await page
+    .getByTestId("track-dropzone")
+    .locator('input[type="file"]')
+    .setInputFiles([TONE_FILE(), AIFF_FILE()]);
+  await expect(page.getByTestId("track-row").filter({ hasText: "kHz" })).toHaveCount(2, {
+    timeout: 420_000,
+  });
+  // A tempo map brings the click lane, whose M/S paint along with the tracks'.
+  const songId = /songs\/([^/?#]+)/.exec(page.url())?.[1] ?? "";
+  const put = await page.request.put(`api/v1/songs/${songId}/tempo`, {
+    headers: { "X-Requested-With": "bandroom" },
+    data: {
+      map: { segments: [{ startBeat: 0, bpm: 120, meter: { num: 4, den: 4 } }] },
+      bar1OffsetSec: 0,
+    },
+  });
+  expect(put.status()).toBe(200);
+  await page.reload();
+  await openMixer(page);
+  const headers = page.getByTestId("track-headers");
+  const strips = headers.getByTestId("track-strip");
+  await expect(strips).toHaveCount(2);
+  await expect(headers.getByTestId("click-strip")).toBeVisible({ timeout: 30_000 });
+  const solos = [
+    strips.nth(0).getByTestId("track-solo"),
+    strips.nth(1).getByTestId("track-solo"),
+    headers.getByTestId("click-solo"),
+  ];
+  const mutes = [strips.nth(0).getByTestId("track-mute"), strips.nth(1).getByTestId("track-mute")];
+  const pressed = (ls: Locator[]) => Promise.all(ls.map((l) => l.getAttribute("aria-pressed")));
+
+  // From an unsoloed S: every S the pointer passes is soloed; M stays as it was.
+  await dragThrough(page, solos);
+  await expect.poll(() => pressed(solos)).toEqual(["true", "true", "true"]);
+  expect(await pressed(mutes)).toEqual(["false", "false"]);
+
+  // From a soloed S: every S passed is cleared (set, not toggled: the first one too).
+  await solos[1]?.click();
+  await expect.poll(() => pressed(solos)).toEqual(["true", "false", "true"]);
+  await dragThrough(page, solos);
+  await expect.poll(() => pressed(solos)).toEqual(["false", "false", "false"]);
+
+  // M paints the same way, and only M.
+  await dragThrough(page, mutes);
+  await expect.poll(() => pressed(mutes)).toEqual(["true", "true"]);
+  expect(await pressed(solos)).toEqual(["false", "false", "false"]);
 });

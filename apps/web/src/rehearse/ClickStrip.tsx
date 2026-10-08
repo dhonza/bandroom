@@ -8,6 +8,7 @@ import { trackTint } from "../timeline/render";
 import { ClickSettingsForm, useClickSettings } from "./ClickControls";
 import { setClickSettings, usePlayerView } from "./controller";
 import { headerButtonSize, headerTier } from "./headerTier";
+import { CLICK_PAINT_ID, paintProps } from "./paintToggle";
 
 /** The click lane's colour (SPEC §11.3): grape, like the transport's Click toggle. */
 export const CLICK_LANE_COLOR = "grape";
@@ -54,9 +55,7 @@ export function ClickStrip({ height, compact = false }: { height: number; compac
         color={muted ? "red" : "gray"}
         aria-pressed={muted}
         aria-label={t("click.mute")}
-        onClick={() => {
-          setClickSettings({ enabled: muted });
-        }}
+        {...paintProps("mute", CLICK_PAINT_ID, muted)}
         data-testid="click-mute"
       >
         <Text fw={700} size={btn < 32 ? "xs" : "sm"}>
@@ -69,9 +68,7 @@ export function ClickStrip({ height, compact = false }: { height: number; compac
         color={c.solo ? "yellow" : "gray"}
         aria-pressed={c.solo}
         aria-label={t("click.solo")}
-        onClick={() => {
-          setClickSettings({ solo: !c.solo });
-        }}
+        {...paintProps("solo", CLICK_PAINT_ID, c.solo)}
         data-testid="click-solo"
       >
         <Text fw={700} size={btn < 32 ? "xs" : "sm"} c={c.solo ? "dark" : undefined}>

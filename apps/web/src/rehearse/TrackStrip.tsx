@@ -31,6 +31,7 @@ import { ChannelsIcon } from "./ChannelsIcon";
 import { headerButtonSize, headerTier } from "./headerTier";
 import { Meter } from "./Meter";
 import type { PlayableTrack } from "./model";
+import { paintProps } from "./paintToggle";
 import { TrackColorBar, TrackColorPalette } from "./TrackColor";
 import { PitchLockedBadge, TrackPracticeSettings } from "./TrackTranspose";
 import { PanelPopover } from "../components/ResponsivePanel";
@@ -177,9 +178,7 @@ export function TrackStrip({
         color={state.mute ? "red" : "gray"}
         aria-pressed={state.mute}
         aria-label={t("rehearse.muteTrack", { track: track.name })}
-        onClick={() => {
-          setTrack(track.id, { mute: !state.mute });
-        }}
+        {...paintProps("mute", track.id, state.mute)}
         data-testid="track-mute"
       >
         <Text fw={700} size={btn < 32 ? "xs" : "sm"}>
@@ -192,9 +191,7 @@ export function TrackStrip({
         color={state.solo ? "yellow" : "gray"}
         aria-pressed={state.solo}
         aria-label={t("rehearse.soloTrack", { track: track.name })}
-        onClick={() => {
-          setTrack(track.id, { solo: !state.solo });
-        }}
+        {...paintProps("solo", track.id, state.solo)}
         data-testid="track-solo"
       >
         <Text fw={700} size={btn < 32 ? "xs" : "sm"} c={state.solo ? "dark" : undefined}>
