@@ -11,6 +11,7 @@ import {
 import { flacSeekPoint, opusSeekPoint, type SeekIndex } from "../decode/seek";
 import { FADE_FRAMES, type ClipRange } from "../mixer/types";
 import type { Chunk } from "../mixer/queue";
+import type { StretchModule } from "@bandroom/stretch";
 import type { EngineClip, EngineVariant } from "../types";
 import { WINDOW_BLOCK, type FileFetcher } from "./bytes";
 
@@ -19,6 +20,8 @@ export interface ProducerDeps {
   seekIndex(variant: EngineVariant): Promise<SeekIndex | null>;
   opusCodec(channels: number): Promise<OpusCodec>;
   flacCodec(): Promise<FlacCodec>;
+  /** The stretch WASM module (practice speed/pitch, SPEC §30), loaded on first use. */
+  stretch(): Promise<StretchModule>;
 }
 
 /** Bytes kept per `window`-mode file before blocks behind the playhead are dropped. */
@@ -60,20 +63,29 @@ export class TrackProducer {
   cached = false;
   /** The current segment started at the loop start (a full lap if it runs to its end). */
   private fromStart = false;
+  /**
+   * Emit silence for gaps between and after clips instead of skipping them (a continuous input
+   * for a stretcher, see `StretchProducer`).
+   */
+  fillGaps = false;
 
   constructor(
     readonly index: number,
     readonly source: number,
     readonly clips: EngineClip[],
-    private readonly deps: ProducerDeps,
-    private readonly emit: (chunk: Chunk) => void,
-    private length: number,
+    protected readonly deps: ProducerDeps,
+    protected readonly emit: (chunk: Chunk) => void,
+    protected length: number,
     private loop: ClipRange | null,
   ) {}
+
+  /** Production restarts elsewhere (a seek, a new lap number, a dispose): drop work in flight. */
+  protected restarted(): void {}
 
   /** Restarts production at `(lap, frame)`. */
   reset(lap: number, frame: number, loop: ClipRange | null = this.loop): void {
     this.gen++;
+    this.restarted();
     if (this.failed) {
       // Try again (a seek or a new start): reopen the clip, the fetcher retries.
       this.failed = null;
@@ -125,6 +137,7 @@ export class TrackProducer {
 
   private restart(lap: number, frame: number, looped: boolean, segEnd: number) {
     this.gen++;
+    this.restarted();
     this.lap = lap;
     this.frame = frame;
     this.looped = looped;
@@ -151,6 +164,7 @@ export class TrackProducer {
 
   dispose(): void {
     this.gen++;
+    this.restarted();
     this.cursor?.dec.free();
     this.cursor = null;
   }
@@ -168,7 +182,16 @@ export class TrackProducer {
       this.startSegment(this.frame);
       this.fromStart = true;
     }
-    const gen = this.gen;
+    return this.produce(this.gen, this.segEnd);
+  }
+
+  /** The production generation; bumped by every restart (async work checks it). */
+  protected get generation(): number {
+    return this.gen;
+  }
+
+  /** Produces data from `frame` towards the segment end `segEnd` and emits it. */
+  protected async produce(gen: number, segEnd: number): Promise<StepResult> {
     const clip = this.clips.find(
       (c) => c.startFrame <= this.frame && this.frame < c.startFrame + c.lengthFrames,
     );
@@ -177,10 +200,12 @@ export class TrackProducer {
         .map((c) => c.startFrame)
         .filter((s) => s > this.frame)
         .reduce((a, b) => Math.min(a, b), Infinity);
-      this.frame = Math.min(next, this.segEnd);
+      const to = Math.min(next, segEnd);
+      if (this.fillGaps) this.emitZeros(this.clips[0]?.variant.channels ?? 2, to);
+      else this.frame = to;
       return "produced";
     }
-    const to = Math.min(this.segEnd, clip.startFrame + clip.lengthFrames);
+    const to = Math.min(segEnd, clip.startFrame + clip.lengthFrames);
     const src = clip.sourceOffsetFrame + this.frame - clip.startFrame;
     try {
       let cur = this.cursor;
@@ -293,16 +318,22 @@ export class TrackProducer {
   }
 
   private emitSilence(clip: EngineClip, to: number) {
+    const n = this.emitZeros(clip.variant.channels, to);
+    if (this.cursor) this.cursor.next += n;
+  }
+
+  /** Emits up to one chunk of silence towards `to`; returns its length. */
+  protected emitZeros(channels: number, to: number): number {
     const n = Math.min(CHUNK_FRAMES, to - this.frame);
-    const ch = clip.variant.channels;
+    if (n <= 0) return 0;
     this.emit({
       lap: this.lap,
       frame: this.frame,
       length: n,
-      data: Array.from({ length: ch }, () => new Float32Array(n)),
+      data: Array.from({ length: channels }, () => new Float32Array(n)),
     });
     this.frame += n;
-    if (this.cursor) this.cursor.next += n;
+    return n;
   }
 }
 

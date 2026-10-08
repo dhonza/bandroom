@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+import { loadStretch } from "@bandroom/stretch/browser";
 import { createFlacCodec, createOpusCodec } from "../decode/wasm";
 import type { ToDecoder } from "../mixer/protocol";
 import type { WorkerCommand, WorkerEvent } from "../types";
@@ -24,6 +25,7 @@ self.onmessage = (e: MessageEvent<WorkerCommand>) => {
         fetch: fetchSameOrigin,
         opusCodec: createOpusCodec,
         flacCodec: createFlacCodec,
+        stretch: loadStretch,
         toMixer: (msg, transfer) => {
           port.postMessage(msg, transfer);
         },
@@ -51,7 +53,7 @@ self.onmessage = (e: MessageEvent<WorkerCommand>) => {
       s.load(cmd.id, cmd.tracks, cmd.lengthFrames, cmd.mixer);
       break;
     case "source":
-      s.setSource(cmd.index, cmd.source, cmd.clips, cmd.offsetDb, cmd.trimDb);
+      s.setSource(cmd.index, cmd.source, cmd.clips, cmd.offsetDb, cmd.trimDb, cmd.stretch ?? null);
       break;
     case "unload":
       s.unload();

@@ -6,8 +6,11 @@ export { CLICK_SOUNDS, type ClickSound, type ClickTrack, type CountInSpec } from
 export {
   clipRanges,
   type EngineClip,
+  type EnginePractice,
   type EngineTrack,
   type EngineVariant,
   type SongTimeline,
+  type TrackStretchPolicy,
 } from "./types";
+export { isNeutralPractice, NEUTRAL_PRACTICE } from "./practice";
 export { clickTrackFor, countInSpecAt } from "./tempo";

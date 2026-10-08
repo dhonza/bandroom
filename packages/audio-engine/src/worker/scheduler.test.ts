@@ -5,8 +5,10 @@ import type { FlacCodec } from "../decode/streams";
 import { createFlacCodec, createOpusCodec } from "../decode/wasm";
 import { applyMixerCommand } from "../mixer/apply";
 import { LAPS_PER_SEEK, MixerCore, type MixerEvent, type MixerTrackConfig } from "../mixer/core";
+import { loadStretch } from "@bandroom/stretch/node";
+import { mixerClips, playbackLength, workerStretch } from "../practice";
 import { IngestedFixtures } from "../testing/ingested";
-import { clipRanges, type EngineClip, type EngineVariant } from "../types";
+import type { EngineClip, EnginePractice, EngineVariant, TrackStretchPolicy } from "../types";
 import type { FetchLike, FileFetcher } from "./bytes";
 import { DecodeScheduler } from "./scheduler";
 
@@ -66,6 +68,7 @@ class Rig {
         fetch: (url, init) => this.fetch(url, init),
         opusCodec: createOpusCodec,
         flacCodec,
+        stretch: loadStretch,
         toMixer: (msg) => {
           applyMixerCommand(this.core, msg);
         },
@@ -86,22 +89,33 @@ class Rig {
   errors: number[] = [];
   private length = 0;
 
-  load(clips: EngineClip[][]) {
-    this.length = Math.max(...clips.flat().map((c) => c.startFrame + c.lengthFrames));
+  /** Loads tracks; with `practice`, positions are playback frames (the engine converts). */
+  load(
+    clips: EngineClip[][],
+    practice?: EnginePractice,
+    opts: { policies?: TrackStretchPolicy[]; muted?: boolean[] } = {},
+  ) {
+    const timeline = Math.max(...clips.flat().map((c) => c.startFrame + c.lengthFrames));
+    this.length = playbackLength(timeline, practice?.rate ?? 1);
+    const stretches = clips.map((cs, i) =>
+      practice
+        ? workerStretch(practice, opts.policies?.[i], opts.muted?.[i] ?? false, cs, timeline)
+        : null,
+    );
     const mixer: MixerTrackConfig[] = clips.map((cs, i) => ({
       id: `t${i}`,
       source: 1,
       channels: cs[0]?.variant.channels ?? 2,
-      clips: clipRanges(cs),
+      clips: mixerClips(cs, stretches[i], this.length),
       gainDb: 0,
       pan: 0,
-      mute: false,
+      mute: opts.muted?.[i] ?? false,
       solo: false,
     }));
     this.heard.clear();
     this.sched.load(
       1,
-      clips.map((cs, index) => ({ index, source: 1, clips: cs })),
+      clips.map((cs, index) => ({ index, source: 1, clips: cs, stretch: stretches[index] })),
       this.length,
       mixer,
     );
@@ -124,7 +138,8 @@ class Rig {
       if (Date.now() > deadline) throw new Error(`timeout after ${played} frames`);
       const pos = this.core.position;
       if (pos.state === "stopped") break;
-      const need = Math.min(this.sched.windowFrames, this.length - pos.frame) - 2048;
+      // Producers stop short of a full window; near the end every remaining frame is needed.
+      const need = Math.min(this.sched.windowFrames - 2048, this.length - pos.frame);
       const ahead = this.sched.ahead().filter((_, i) => !this.errors.includes(i));
       if (pos.state === "playing" && Math.min(...ahead) < need) {
         await new Promise((res) => setTimeout(res, 1));
@@ -508,6 +523,117 @@ describe("decoder worker + mixer", () => {
     for (const lap of [2 * LAPS_PER_SEEK, 2 * LAPS_PER_SEEK + 1, 3 * LAPS_PER_SEEK]) {
       expect(Math.abs(rig.peak(lap, "l", 144_000) - 144_000), `lap ${lap}`).toBeLessThanOrEqual(1);
     }
+    rig.dispose();
+  });
+});
+
+describe("decoder worker + mixer with practice speed and pitch (SPEC §30.5)", () => {
+  const T = [24_000, 144_000, 264_000]; // impulses of imp_48000 (0.5, 3, 5.5 s)
+
+  it.each([0.5, 0.75, 1.5])(
+    "plays Opus and resampled FLAC at %s× with the impulses at t / rate, mutually aligned",
+    { timeout: 180_000 },
+    async (rate) => {
+      // One track per rig: in a shared mix the other track's impulse can be the louder peak.
+      const at = async (variant: EngineVariant, offset: number, ch: "l" | "r") => {
+        const rig = new Rig();
+        rig.load([[clip(variant, offset)]], { rate, semitones: 0, quality: "high" });
+        await rig.play(Math.floor((6 * 48_000 + offset) / rate));
+        expect(rig.underruns).toEqual([]);
+        const peaks = T.map((t) => rig.peak(0, ch, Math.round((t + offset) / rate), 1500));
+        rig.dispose();
+        return peaks;
+      };
+      const a = await fx.variant(mono48, "opus");
+      const b = await fx.variant(stereo44, "flac");
+      const pa = await at(a, 0, "l");
+      const pb = await at(b, 1000, "r");
+      const pa2 = await at(a, 1000, "l");
+      T.forEach((t, i) => {
+        const want = Math.round(t / rate);
+        expect(Math.abs((pa[i] ?? 0) - want), `opus ${t}`).toBeLessThan(400);
+        expect(Math.abs((pb[i] ?? 0) - want - 1000 / rate), `flac ${t}`).toBeLessThan(400);
+        // Same content, same configuration: shifting a clip shifts its output by offset / rate.
+        expect(Math.abs((pa2[i] ?? 0) - (pa[i] ?? 0) - 1000 / rate), `sync ${t}`).toBeLessThan(16);
+      });
+    },
+  );
+
+  it("transposes without moving the impulses at 100 %", { timeout: 180_000 }, async () => {
+    const rig = new Rig();
+    const a = await fx.variant(mono48, "opus");
+    rig.load([[clip(a)]], { rate: 1, semitones: -3, quality: "economy" });
+    await rig.play(6 * 48_000);
+    for (const t of T) expect(Math.abs(rig.peak(0, "l", t, 1500) - t)).toBeLessThan(400);
+    expect(rig.underruns).toEqual([]);
+    rig.dispose();
+  });
+
+  it("keeps a track that is not transposed bit-identical at 100 %", async () => {
+    const plain = new Rig();
+    const practice = new Rig();
+    const a = await fx.variant(mono48, "opus");
+    plain.load([[clip(a)]]);
+    const drums: TrackStretchPolicy = { transpose: false, profile: "percussive", voiceBaseHz: 0 };
+    practice.load([[clip(a)]], { rate: 1, semitones: 2, quality: "high" }, { policies: [drums] });
+    await plain.play(3 * 48_000);
+    await practice.play(3 * 48_000);
+    expect(practice.heard.get(0)?.l).toEqual(plain.heard.get(0)?.l);
+    plain.dispose();
+    practice.dispose();
+  });
+
+  it("seeks at 75 % to the stretched position", { timeout: 180_000 }, async () => {
+    const rig = new Rig();
+    const a = await fx.variant(mono48, "opus");
+    rig.load([[clip(a)]], { rate: 0.75, semitones: 0, quality: "high" });
+    const p = Math.round(120_000 / 0.75);
+    rig.seek(p, LAPS_PER_SEEK);
+    await rig.play(96_000);
+    const want = Math.round(144_000 / 0.75);
+    expect(Math.abs(rig.peak(LAPS_PER_SEEK, "l", want, 1500) - want)).toBeLessThan(400);
+    expect(rig.underruns).toEqual([]);
+    rig.dispose();
+  });
+
+  it.each([false, true])(
+    "loops at 50 % with the impulse on the same frame every lap (cache %s)",
+    { timeout: 240_000 },
+    async (cache) => {
+      const rig = new Rig();
+      const a = await fx.variant(mono48, "opus");
+      rig.load([[clip(a)]], { rate: 0.5, semitones: -1, quality: "high" });
+      const loop = { start: 200_000, end: 320_000 }; // 100 000…160 000 on the timeline
+      rig.core.setLoop(loop, LAPS_PER_SEEK, cache);
+      const B = 2 * LAPS_PER_SEEK;
+      rig.seek(loop.start, B);
+      await rig.play(3 * 120_000);
+      const first = rig.peak(B, "l", 288_000, 1500);
+      expect(Math.abs(first - 288_000)).toBeLessThan(400);
+      for (const lap of [B + 1, B + 2]) {
+        expect(Math.abs(rig.peak(lap, "l", 288_000, 1500) - first), `lap ${lap}`).toBeLessThan(2);
+      }
+      if (cache) expect(rig.core.loopCache.complete).toEqual([true]);
+      expect(rig.underruns).toEqual([]);
+      rig.dispose();
+    },
+  );
+
+  it("plays a muted track as silence and switches it back in when unmuted", async () => {
+    const rig = new Rig();
+    const a = await fx.variant(mono48, "opus");
+    const practice: EnginePractice = { rate: 0.75, semitones: 0, quality: "high" };
+    rig.load([[clip(a)]], practice, { muted: [true] });
+    await rig.play(48_000);
+    expect(rig.sched.ahead()[0]).toBeGreaterThan(0);
+    // Unmuted: the engine switches the source (a stretched producer) after the switch lead.
+    const stretch = workerStretch(practice, undefined, false, [clip(a)], 6 * 48_000);
+    rig.sched.setSource(0, 2, [clip(a)], 0, 0, stretch);
+    applyMixerCommand(rig.core, { t: "track", index: 0, params: { mute: false } });
+    await rig.play(4 * 48_000);
+    const want = Math.round(144_000 / 0.75);
+    expect(Math.abs(rig.peak(0, "l", want, 1500) - want)).toBeLessThan(400);
+    expect(rig.underruns).toEqual([]);
     rig.dispose();
   });
 });

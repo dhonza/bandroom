@@ -4,20 +4,25 @@ import type { SeekIndex } from "../decode/seek";
 import type { FlacCodec, OpusCodec } from "../decode/streams";
 import type { ClipRange, MixerTrackConfig } from "../mixer/core";
 import type { MixerCommand, ToDecoder } from "../mixer/protocol";
-import {
-  clipRanges,
-  type EngineClip,
-  type EngineVariant,
-  type WorkerEvent,
-  type WorkerTrackSpec,
+import type { StretchModule } from "@bandroom/stretch";
+import { mixerClips } from "../practice";
+import type {
+  EngineClip,
+  EngineVariant,
+  WorkerEvent,
+  WorkerStretch,
+  WorkerTrackSpec,
 } from "../types";
 import { FileFetcher, SparseFile, type FetchLike, type RetryPolicy } from "./bytes";
-import { framesAhead, TrackProducer } from "./producer";
+import { framesAhead, TrackProducer, type ProducerDeps } from "./producer";
+import { SilentProducer, StretchProducer } from "./stretchProducer";
 
 export interface SchedulerDeps {
   fetch: FetchLike;
   opusCodec(channels: number): Promise<OpusCodec>;
   flacCodec(): Promise<FlacCodec>;
+  /** The stretch WASM module, loaded on first use (practice speed/pitch, SPEC §30). */
+  stretch(): Promise<StretchModule>;
   /** To the mixer worklet; `transfer` lists buffers to move. */
   toMixer(msg: MixerCommand, transfer: ArrayBuffer[]): void;
   toMain(msg: WorkerEvent): void;
@@ -90,7 +95,9 @@ export class DecodeScheduler {
     this.playLap = 0;
     this.playFrame = 0;
     this.deps.toMixer({ t: "load", id, tracks: mixer, lengthFrames }, []);
-    this.producers = tracks.map((t) => this.producer(t.index, t.source, t.clips, 0, 0));
+    this.producers = tracks.map((t) =>
+      this.producer(t.index, t.source, t.clips, t.stretch ?? null, 0, 0),
+    );
     this.inUse = new Set(tracks.flatMap((t) => t.clips.map((c) => c.variant.hash)));
     for (const [hash, e] of this.files) if (!this.inUse.has(hash)) e.fetcher.stop();
     this.applyWholeLimit();
@@ -152,7 +159,14 @@ export class DecodeScheduler {
   }
 
   /** Switches a track to a new source from shortly after the playhead (SPEC §6.5, A/B). */
-  setSource(index: number, source: number, clips: EngineClip[], offsetDb = 0, trimDb = 0): void {
+  setSource(
+    index: number,
+    source: number,
+    clips: EngineClip[],
+    offsetDb = 0,
+    trimDb = 0,
+    stretch: WorkerStretch | null = null,
+  ): void {
     const old = this.producers[index];
     if (!old || source <= old.source) return;
     let lap = this.playLap;
@@ -171,7 +185,7 @@ export class DecodeScheduler {
         source,
         channels,
         dualMono,
-        clips: clipRanges(clips),
+        clips: mixerClips(clips, stretch, this.length),
         offsetDb,
         trimDb,
       },
@@ -179,7 +193,14 @@ export class DecodeScheduler {
     );
     old.dispose();
     this.waiting.delete(old);
-    this.producers[index] = this.producer(index, source, clips, lap, Math.min(frame, this.length));
+    this.producers[index] = this.producer(
+      index,
+      source,
+      clips,
+      stretch,
+      lap,
+      Math.min(frame, this.length),
+    );
     for (const c of clips) this.inUse.add(c.variant.hash);
     this.applyWholeLimit();
     for (const c of clips) this.fetcher(c.variant).begin();
@@ -209,26 +230,41 @@ export class DecodeScheduler {
     );
   }
 
-  private producer(index: number, source: number, clips: EngineClip[], lap: number, frame: number) {
-    const p = new TrackProducer(
-      index,
-      source,
-      clips,
-      {
-        file: (v) => this.fetcher(v),
-        seekIndex: (v) => this.seekIndex(v),
-        opusCodec: (ch) => this.deps.opusCodec(ch),
-        flacCodec: () => this.deps.flacCodec(),
-      },
-      (chunk) => {
-        this.deps.toMixer(
-          { t: "chunk", index, source, lap: chunk.lap, frame: chunk.frame, data: chunk.data },
-          chunk.data.map((d) => d.buffer as ArrayBuffer),
-        );
-      },
-      this.length,
-      this.loop,
-    );
+  private producer(
+    index: number,
+    source: number,
+    clips: EngineClip[],
+    stretch: WorkerStretch | null,
+    lap: number,
+    frame: number,
+  ) {
+    const deps: ProducerDeps = {
+      file: (v) => this.fetcher(v),
+      seekIndex: (v) => this.seekIndex(v),
+      opusCodec: (ch) => this.deps.opusCodec(ch),
+      flacCodec: () => this.deps.flacCodec(),
+      stretch: () => this.deps.stretch(),
+    };
+    const emit = (chunk: { lap: number; frame: number; data: Float32Array[] }) => {
+      this.deps.toMixer(
+        { t: "chunk", index, source, lap: chunk.lap, frame: chunk.frame, data: chunk.data },
+        chunk.data.map((d) => d.buffer as ArrayBuffer),
+      );
+    };
+    const p = !stretch
+      ? new TrackProducer(index, source, clips, deps, emit, this.length, this.loop)
+      : stretch.silent
+        ? new SilentProducer(
+            index,
+            source,
+            clips,
+            deps,
+            emit,
+            this.length,
+            this.loop,
+            stretch.channels,
+          )
+        : new StretchProducer(index, source, clips, deps, emit, this.length, this.loop, stretch);
     p.cacheOn = this.cache;
     p.reset(lap, frame, this.loop);
     return p;

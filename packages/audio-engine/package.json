@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@bandroom/shared": "workspace:*",
+    "@bandroom/stretch": "workspace:*",
     "@wasm-audio-decoders/flac": "0.2.11",
     "opus-decoder": "0.7.12"
   },

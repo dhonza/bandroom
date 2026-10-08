@@ -442,6 +442,9 @@ importers:
       '@bandroom/shared':
         specifier: workspace:*
         version: link:../shared
+      '@bandroom/stretch':
+        specifier: workspace:*
+        version: link:../stretch
       '@wasm-audio-decoders/flac':
         specifier: 0.2.11
         version: 0.2.11

@@ -22,11 +22,21 @@ import {
 import type { MixerCommand, MixerMessage } from "./mixer/protocol";
 import { countInAt, NO_REPORT, playheadAt, type Report } from "./playhead";
 import {
-  clipRanges,
-  type EngineClip,
-  type SongTimeline,
-  type WorkerCommand,
-  type WorkerEvent,
+  mixerClips,
+  NEUTRAL_PRACTICE,
+  playbackLength,
+  samePractice,
+  toPlayback,
+  toTimeline,
+  workerStretch,
+} from "./practice";
+import type {
+  EngineClip,
+  EnginePractice,
+  SongTimeline,
+  WorkerCommand,
+  WorkerEvent,
+  WorkerStretch,
 } from "./types";
 
 export * from "./engineTypes";
@@ -60,8 +70,15 @@ export class Engine {
   private _state: EngineState = "idle";
   private trackIds: string[] = [];
   private sources: number[] = [];
+  /** Song length in timeline frames (the API's frames; the mixer's are playback frames). */
   private length = 0;
+  /** The loop in timeline frames (`mixerLoop`: the same in playback frames). */
   private loop: ClipRange | null = null;
+  private mixerLoop: ClipRange | null = null;
+  /** Practice speed and pitch (SPEC §30); the worker and the mixer run at `practice.rate`. */
+  private practice: EnginePractice = NEUTRAL_PRACTICE;
+  /** What each track's producer does under the practice setting (null = plays as is). */
+  private stretches: (WorkerStretch | null)[] = [];
   private cacheOn = false;
   private seekCount = 0;
   private report: Report = NO_REPORT;
@@ -208,17 +225,22 @@ export class Engine {
     this.sources = song.tracks.map(() => 1);
     this.length = song.lengthFrames;
     this.loop = null;
+    this.mixerLoop = null;
     this.cacheOn = false;
+    const length = this.mixerLength;
+    this.stretches = song.tracks.map((t) =>
+      workerStretch(this.practice, t.stretch, t.mute, t.clips, song.lengthFrames),
+    );
     this.report = NO_REPORT;
     this.seekTarget = null;
     this.seekCount = 0;
     this.underruns = 0;
-    const mixer: MixerTrackConfig[] = song.tracks.map((t) => ({
+    const mixer: MixerTrackConfig[] = song.tracks.map((t, i) => ({
       id: t.id,
       source: 1,
       channels: t.clips[0]?.variant.channels ?? 2,
       dualMono: t.clips[0]?.variant.dualMono ?? false,
-      clips: clipRanges(t.clips),
+      clips: mixerClips(t.clips, this.stretches[i], length),
       gainDb: t.gainDb,
       pan: t.pan,
       mute: t.mute,
@@ -234,11 +256,69 @@ export class Engine {
     this.toWorker({
       t: "load",
       id,
-      tracks: song.tracks.map((t, index) => ({ index, source: 1, clips: t.clips })),
-      lengthFrames: song.lengthFrames,
+      tracks: song.tracks.map((t, index) => ({
+        index,
+        source: 1,
+        clips: t.clips,
+        stretch: this.stretches[index] ?? null,
+      })),
+      lengthFrames: length,
       mixer,
     });
     return done;
+  }
+
+  /** Song length in the mixer's playback frames. */
+  private get mixerLength(): number {
+    return playbackLength(this.length, this.practice.rate);
+  }
+
+  /**
+   * Practice speed and pitch (SPEC §30.5). A change reloads the song in place (like a seek: the
+   * stretchers restart at the current position; the downloaded bytes stay) and restores the
+   * mix, loop, click and play state.
+   */
+  setPractice(practice: EnginePractice): void {
+    if (samePractice(practice, this.practice)) return;
+    if (!this.song || this._state === "idle" || this._state === "loading") {
+      this.practice = { ...practice };
+      return;
+    }
+    const at = this.getPositionFrames();
+    this.practice = { ...practice };
+    this.reload(at);
+  }
+
+  get practiceSetting(): EnginePractice {
+    return this.practice;
+  }
+
+  /** Reloads the current song into the running context and restores its state. */
+  private reload(at: number) {
+    const song = this.song;
+    if (!song) return;
+    const loop = this.loop;
+    const offsets = [...this.offsets];
+    const sources = this.song?.tracks.map((t) => t.clips);
+    this.restoring = true;
+    if (this.wantPlaying) this.setState("buffering");
+    const loading = this.load(song);
+    const restored = this.song;
+    this.seekTarget = at;
+    void loading.then((ok) => {
+      if (!ok || this.song !== restored || !sources) return;
+      offsets.forEach((offsetDb, index) => {
+        if (offsetDb !== 0) this.toMixer({ t: "track", index, params: { offsetDb } });
+      });
+      this.setClick(this.click);
+      this.setClickTrack(this.clickTrack);
+      this.setRepeatCountIn(this.repeatCountIn);
+      this.seek(at);
+      this.setLoop(loop);
+      this.restoring = false;
+      if (this.wantPlaying) this.toMixer({ t: "play", countIn: null });
+      else this.setState("stopped");
+    });
   }
 
   private settleLoad(done: boolean) {
@@ -266,7 +346,7 @@ export class Engine {
     void ctx.resume();
     this.wantPlaying = true;
     if (this._state === "interrupted") this.setState("buffering");
-    this.toMixer({ t: "play", countIn });
+    this.toMixer({ t: "play", countIn: this.scaledCountIn(countIn) });
     this.watchResume();
   }
 
@@ -319,7 +399,7 @@ export class Engine {
         this.setState("stopped");
         return;
       }
-      this.toMixer({ t: "play", countIn });
+      this.toMixer({ t: "play", countIn: this.scaledCountIn(countIn) });
       this.watchResume();
     };
     restore().catch(() => {
@@ -333,11 +413,20 @@ export class Engine {
   /** The song's click pulses (SPEC §6.7), precomputed from the tempo map; null clears them. */
   setClickTrack(track: ClickTrack | null): void {
     this.clickTrack = track;
+    const rate = this.practice.rate;
+    const frames = track?.frames ?? new Float64Array(0);
     this.toMixer({
       t: "clickTrack",
-      frames: track?.frames ?? new Float64Array(0),
+      // The click is never stretched: its pulses move to the playback frames (SPEC §30.5).
+      frames: rate === 1 ? frames : frames.map((f) => f / rate),
       levels: track?.levels ?? new Uint8Array(0),
     });
+  }
+
+  /** A count-in in timeline frames → its spacing in output frames at the practice rate. */
+  private scaledCountIn(c: CountInSpec | null): CountInSpec | null {
+    const rate = this.practice.rate;
+    return c && rate !== 1 ? { ...c, intervalFrames: c.intervalFrames / rate } : c;
   }
 
   /** Click on/off, volume, accent, sound, solo and "solo excludes click" (SPEC §6.6, §6.7). */
@@ -353,7 +442,7 @@ export class Engine {
   /** "Count-in every repeat": the count-in inserted at each loop wrap, or null (SPEC §6.7). */
   setRepeatCountIn(countIn: CountInSpec | null): void {
     this.repeatCountIn = countIn;
-    this.toMixer({ t: "repeatCountIn", countIn });
+    this.toMixer({ t: "repeatCountIn", countIn: this.scaledCountIn(countIn) });
   }
 
   /** The count-in inserted at every loop wrap (debug state). */
@@ -400,7 +489,11 @@ export class Engine {
     const lap = this.seekCount * LAPS_PER_SEEK;
     this.seekTarget = f;
     // The mixer forwards the seek to the decoder worker (ordered with loop changes).
-    this.toMixer({ t: "seek", frame: f, lap });
+    this.toMixer({
+      t: "seek",
+      frame: Math.min(toPlayback(f, this.practice.rate), this.mixerLength),
+      lap,
+    });
   }
 
   /**
@@ -414,11 +507,18 @@ export class Engine {
     const loop = range && end - start >= MIN_LOOP_FRAMES ? { start, end } : null;
     if (loop === null && this.loop === null) return;
     this.loop = loop;
-    this.cacheOn = loop !== null && loopCacheFits(loop, this.trackIds.length, FADE_FRAMES);
+    const rate = this.practice.rate;
+    const mixerLoop = loop && {
+      start: toPlayback(loop.start, rate),
+      end: Math.min(toPlayback(loop.end, rate), this.mixerLength),
+    };
+    this.mixerLoop = mixerLoop;
+    this.cacheOn =
+      mixerLoop !== null && loopCacheFits(mixerLoop, this.trackIds.length, FADE_FRAMES);
     this.seekCount++;
     this.toMixer({
       t: "loop",
-      loop,
+      loop: mixerLoop,
       base: this.seekCount * LAPS_PER_SEEK,
       cache: this.cacheOn,
     });
@@ -456,6 +556,14 @@ export class Engine {
     }
     if (s.offsetDb !== undefined) this.offsets[index] = s.offsetDb;
     this.toMixer({ t: "track", index, params });
+    // Under practice, a muted track is silent rather than stretched (SPEC §30.5): (un)muting
+    // switches its source shortly after the playhead, with the version-switch crossfade.
+    if (t && s.mute !== undefined && this.stretches[index]?.silent !== s.mute) {
+      const next = workerStretch(this.practice, t.stretch, t.mute, t.clips, this.length);
+      if ((next?.silent ?? false) !== (this.stretches[index]?.silent ?? false)) {
+        this.switchSource(trackId, t.clips, this.offsets[index] ?? 0, t.trimDb);
+      }
+    }
   }
 
   /**
@@ -475,7 +583,11 @@ export class Engine {
       t.trimDb = trim;
     }
     this.offsets[index] = offsetDb;
-    this.toWorker({ t: "source", index, source, clips, offsetDb, trimDb: trim });
+    const stretch = t
+      ? workerStretch(this.practice, t.stretch, t.mute, clips, this.length)
+      : (this.stretches[index] ?? null);
+    this.stretches[index] = stretch;
+    this.toWorker({ t: "source", index, source, clips, offsetDb, trimDb: trim, stretch });
   }
 
   /** Interpolated position of what is being heard, in frames (SPEC §6.6). */
@@ -483,9 +595,17 @@ export class Engine {
     if (this.seekTarget !== null) return this.seekTarget;
     const ctx = this.ctx;
     const r = this.report;
-    if (!ctx || this._state !== "playing") return r.frame;
+    const rate = this.practice.rate;
+    if (!ctx || this._state !== "playing") return Math.min(toTimeline(r.frame, rate), this.length);
     const elapsed = this.heardSince(r) * SAMPLE_RATE;
-    return playheadAt(r, elapsed, this.loop, this.repeatCountIn, this.length);
+    const p = playheadAt(
+      r,
+      elapsed,
+      this.mixerLoop,
+      this.scaledCountIn(this.repeatCountIn),
+      this.mixerLength,
+    );
+    return Math.min(toTimeline(p, rate), this.length);
   }
 
   on<K extends keyof EngineEvents>(event: K, cb: (e: EngineEvents[K]) => void): () => void {
