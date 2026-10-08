@@ -4,6 +4,7 @@ import { listEvents } from "@bandroom/server-core";
 import {
   ApiErrorSchema,
   cancelAdminUpdate,
+  compareTagsDesc,
   getAdminUpdates,
   requestAdminUpdate,
   type UpdatesState,
@@ -19,7 +20,7 @@ import {
   seedUser,
   type TestApp,
 } from "../testing/testApp";
-import { compareTagsDesc, fetchReleaseTags } from "./updates";
+import { fetchReleaseTags } from "./updates";
 
 let t: TestApp;
 let admin: string;
@@ -62,7 +63,7 @@ beforeEach(() => {
   fail = false;
 });
 
-const state = async (check = false) =>
+const state = async (check: boolean | "force" = false) =>
   (await call(t, getAdminUpdates, { query: { check: String(check) } }, admin)).json<UpdatesState>();
 
 describe("update check (SPEC §29.8)", () => {
@@ -85,6 +86,15 @@ describe("update check (SPEC §29.8)", () => {
     const n = fetches;
     await state(true);
     expect(fetches).toBe(n);
+  });
+
+  it("asks the registry again on check=force", async () => {
+    await state(true);
+    const n = fetches;
+    const forced = await state("force");
+    expect(fetches).toBeGreaterThan(n);
+    expect(forced.available).toEqual(["v0.10.0", "v0.5.0", "v0.4.1", "v0.4.0"]);
+    expect(forced.checkedAt).not.toBeNull();
   });
 
   it("reports a failing registry", async () => {

@@ -249,6 +249,17 @@ export const getAdminLogs = defineContract({
 export const RELEASE_TAG_RE = /^v\d+\.\d+\.\d+$/;
 export const ReleaseTagSchema = z.string().regex(RELEASE_TAG_RE);
 
+/** Compares `vX.Y.Z` tags numerically (newest first when used in sort). */
+export function compareTagsDesc(a: string, b: string): number {
+  const pa = a.slice(1).split(".").map(Number);
+  const pb = b.slice(1).split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const d = (pb[i] ?? 0) - (pa[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
 export const UpdateRequestSchema = z.object({
   id: z.string(),
   action: z.enum(["deploy", "rollback"]),
@@ -288,13 +299,13 @@ export const UpdatesStateSchema = z.object({
 export type UpdatesState = z.infer<typeof UpdatesStateSchema>;
 
 /**
- * Update state. `check=true` asks the registry for release tags (cached 1 h); without it nothing
- * is fetched.
+ * Update state. `check=true` asks the registry for release tags (cached 1 h), `check=force`
+ * asks it even when the cache is fresh; without it nothing is fetched.
  */
 export const getAdminUpdates = defineContract({
   method: "GET",
   path: "/admin/updates",
-  query: z.object({ check: z.enum(["true", "false"]).default("false") }),
+  query: z.object({ check: z.enum(["true", "false", "force"]).default("false") }),
   response: UpdatesStateSchema,
   errors: ["UPDATE_CHECK_FAILED"],
   auth: admin,

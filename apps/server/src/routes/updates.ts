@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   cancelAdminUpdate,
+  compareTagsDesc,
   getAdminUpdates,
   RELEASE_TAG_RE,
   requestAdminUpdate,
@@ -29,17 +30,6 @@ export interface UpdateOptions {
   fetch?: typeof fetch;
   /** Default `https://ghcr.io`. */
   registryUrl?: string;
-}
-
-/** Compares `vX.Y.Z` tags numerically (newest first when used in sort). */
-export function compareTagsDesc(a: string, b: string): number {
-  const pa = a.slice(1).split(".").map(Number);
-  const pb = b.slice(1).split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    const d = (pb[i] ?? 0) - (pa[i] ?? 0);
-    if (d !== 0) return d;
-  }
-  return 0;
 }
 
 const TokenSchema = z.object({ token: z.string().min(1) });
@@ -143,7 +133,7 @@ export function registerUpdateRoutes(
     app,
     getAdminUpdates,
     async ({ query }) => {
-      if (query.check === "true") await check(false);
+      if (query.check !== "false") await check(query.check === "force");
       const host = readStatusFile(path.join(dir, "host-status.json"));
       const hostTs = host && typeof host.ts === "number" ? host.ts : null;
       return {
