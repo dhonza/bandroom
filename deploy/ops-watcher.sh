@@ -156,7 +156,7 @@ write_result() { # $1 id, $2 action, $3 tag, $4 exit code, $5 started, $6 error,
 prune_results() {
   local f
   # Names are result-<uuid>.json, so `ls` output is safe to read line by line.
-  # shellcheck disable=SC2012
+  # shellcheck disable=SC2010,SC2012
   ls -1t -- result-*.json 2>/dev/null | grep -E '^result-[0-9a-f-]{36}\.json$' |
     tail -n +"$((KEEP_RESULTS + 1))" | while read -r f; do rm -f -- "$f"; done
 }
@@ -203,7 +203,7 @@ handle_request() {
 container_states() {
   local svc c state health
   for svc in caddy app worker; do
-    c="$(cd "$APP_DIR" && docker compose ps -a -q "$svc" 2>/dev/null | head -n 1 || true)"
+    c="$(if cd "$APP_DIR"; then docker compose ps -a -q "$svc" 2>/dev/null | head -n 1; fi)" || c=""
     if [ -z "$c" ]; then
       printf '%s missing none\n' "$svc"
       continue
@@ -232,7 +232,7 @@ write_status() {
   if [ -d "$backups" ]; then
     count="$(find "$backups" -maxdepth 1 -name '*.sqlite' -type f | wc -l | tr -d ' ')"
     bytes="$(du -sb "$backups" 2>/dev/null | cut -f1 || echo 0)"
-    # shellcheck disable=SC2012
+    # shellcheck disable=SC2010,SC2012
     latest="$(ls -1t "$backups" 2>/dev/null | grep -E '^[A-Za-z0-9._-]+\.sqlite$' | head -n 1 || true)"
   fi
   [[ $bytes =~ ^[0-9]+$ ]] || bytes=0
