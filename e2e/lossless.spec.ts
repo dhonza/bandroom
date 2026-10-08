@@ -132,7 +132,7 @@ test("remove one version's full quality from the stack on a 360 px phone", async
   await page.getByTestId("remove-lossless-version").click();
   const confirm = page.getByTestId("lossless-confirm");
   await expect(confirm).toBeVisible({ timeout: 30_000 });
-  expect((await confirm.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect((await confirm.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(43.5); // sub-pixel layout, as in touch-targets
   expect(await noHorizontalScroll(page)).toBe(true);
   await confirmRemoval(page);
   await expect(stack.getByTestId("lossy-badge")).toBeVisible({ timeout: 30_000 });
