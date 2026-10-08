@@ -753,7 +753,13 @@
     "copyTempo": "Copy tempo map",
     "copyMarkers": "Copy markers and sections",
     "includeClick": "Include click",
-    "alwaysCopied": "Subtitle and key are copied; comments, documents and sharing are not."
+    "alwaysCopied": "Subtitle and key are copied; comments, documents and sharing are not.",
+    "applyPractice": "Apply practice settings ({{practice}})",
+    "defaultPracticeTitle": "{{title}} ({{practice}})",
+    "keepPitch": "Not transposed: {{tracks}}",
+    "practiceSpeed": "{{value}} %",
+    "practiceSemitones": "{{value}} st",
+    "practiceCents": "{{value}} ct"
   },
   "rehearse": {
     "toStart": "Back to start",

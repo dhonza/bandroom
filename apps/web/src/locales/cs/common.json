@@ -781,7 +781,13 @@
     "copyTempo": "Zkopírovat tempovou mapu",
     "copyMarkers": "Zkopírovat značky a části",
     "includeClick": "Včetně metronomu",
-    "alwaysCopied": "Podtitul a tónina se zkopírují, komentáře, dokumenty a sdílení ne."
+    "alwaysCopied": "Podtitul a tónina se zkopírují, komentáře, dokumenty a sdílení ne.",
+    "applyPractice": "Použít nastavení cvičení ({{practice}})",
+    "defaultPracticeTitle": "{{title}} ({{practice}})",
+    "keepPitch": "Bez transpozice: {{tracks}}",
+    "practiceSpeed": "{{value}} %",
+    "practiceSemitones": "{{value}} pt",
+    "practiceCents": "{{value}} ct"
   },
   "rehearse": {
     "toStart": "Na začátek",

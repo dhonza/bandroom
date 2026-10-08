@@ -95,8 +95,11 @@ describe("BounceModal (SPEC §5.5)", () => {
         copyTempo: true,
         copyMarkers: true,
         includeClick: false,
+        applyPractice: false,
       });
       expect(onClose).toHaveBeenCalled();
+      // No practice setting: no switch.
+      expect(screen.queryByTestId("bounce-applyPractice")).toBeNull();
       await userEvent.click(screen.getByTestId("bounce-open"));
       expect(router.state.location.pathname).toBe("/songs/s2");
     },
@@ -158,6 +161,61 @@ describe("BounceModal (SPEC §5.5)", () => {
         copyMarkers: false,
         includeClick: true,
       });
+    },
+  );
+
+  it(
+    "applies a practice setting by default, with a suffixed title that follows the switch",
+    { timeout: 20_000 },
+    async () => {
+      const fetch = mockApi({
+        "POST /songs/s1/bounce": () => ({ status: 400, body: { code: "BOUNCE_SILENT" } }),
+      });
+      const practiceMix = { ...mix, practice: { rate: 0.85, semitones: -2 } };
+      const before = useRehearse.getState();
+      useRehearse.setState({
+        mix: practiceMix,
+        tracks: [
+          { track: { id: "t1", name: "Keys", transpose: null }, version: { id: "v1" } },
+          { track: { id: "t2", name: "Drums", transpose: null }, version: { id: "v2b" } },
+        ] as unknown as RehearseState["tracks"],
+      });
+      try {
+        renderModal();
+        const title = await screen.findByTestId("bounce-title");
+        expect(title).toHaveValue("Blue Moon (85 %, −2 st)");
+        const apply = screen.getByTestId("bounce-applyPractice");
+        expect(apply).toBeChecked();
+        expect(
+          screen.getByText(i18n.t("bounce.applyPractice", { practice: "85 %, −2 st" })),
+        ).toBeInTheDocument();
+        expect(screen.getByTestId("bounce-pitchLocked")).toHaveTextContent("Drums");
+        expect(screen.getByTestId("bounce-pitchLocked")).not.toHaveTextContent("Keys");
+
+        await userEvent.click(apply);
+        expect(title).toHaveValue("Blue Moon (bounce)");
+        expect(screen.queryByTestId("bounce-pitchLocked")).toBeNull();
+        await userEvent.click(apply);
+        expect(title).toHaveValue("Blue Moon (85 %, −2 st)");
+        // Once edited, the title stays.
+        await userEvent.type(title, "!");
+        await userEvent.click(apply);
+        expect(title).toHaveValue("Blue Moon (85 %, −2 st)!");
+        await userEvent.click(apply);
+
+        await userEvent.click(screen.getByTestId("bounce-submit"));
+        await vi.waitFor(() => {
+          expect(fetch).toHaveBeenCalled();
+        });
+        const init = fetch.mock.calls[0]?.[1] as RequestInit;
+        expect(JSON.parse(init.body as string)).toMatchObject({
+          title: "Blue Moon (85 %, −2 st)!",
+          mix: practiceMix,
+          applyPractice: true,
+        });
+      } finally {
+        useRehearse.setState({ mix: before.mix, tracks: before.tracks });
+      }
     },
   );
 });
