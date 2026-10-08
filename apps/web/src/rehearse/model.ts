@@ -1,9 +1,20 @@
-import type { EngineClip, EngineVariant, SongTimeline } from "@bandroom/audio-engine";
+import type {
+  EngineClip,
+  EnginePractice,
+  EngineVariant,
+  SongTimeline,
+  StretchQuality,
+  TrackStretchPolicy,
+} from "@bandroom/audio-engine";
 import {
   effectiveInstrument,
+  effectiveTranspose,
   guessInstrument,
+  profileFor,
+  voiceBaseHz,
   type Instrument,
   type MixerState,
+  type Practice,
   type MixerTrackState,
   type Track,
   type TrackVersion,
@@ -134,6 +145,7 @@ export function buildTimeline(tracks: readonly PlayableTrack[], mix: MixerState)
       mute: s.mute,
       solo: s.solo,
       trimDb: p.version.gainDb,
+      stretch: stretchPolicyOf(p.track, tracks.length === 1),
     };
   });
   const lengthFrames = Math.max(
@@ -141,6 +153,21 @@ export function buildTimeline(tracks: readonly PlayableTrack[], mix: MixerState)
     ...engineTracks.flatMap((t) => t.clips.map((c) => c.startFrame + c.lengthFrames)),
   );
   return { tracks: engineTracks, lengthFrames };
+}
+
+/** How a track follows the practice setting, from its instrument (SPEC §30.3, §30.4). */
+export function stretchPolicyOf(track: Track, singleTrack: boolean): TrackStretchPolicy {
+  const opts = { singleTrack };
+  return {
+    transpose: effectiveTranspose(track, opts),
+    profile: profileFor(effectiveInstrument(track, opts)),
+    voiceBaseHz: voiceBaseHz(track.voiceRange),
+  };
+}
+
+/** The engine's practice setting: cents join the semitones (SPEC §30.2). */
+export function enginePracticeOf(p: Practice, quality: StretchQuality): EnginePractice {
+  return { rate: p.rate, semitones: p.semitones + p.cents / 100, quality };
 }
 
 /** Track defaults (SPEC §11.3). */
@@ -262,7 +289,14 @@ export function loadKeyOf(songId: string, playable: readonly PlayableTrack[]): s
   return JSON.stringify([
     songId,
     playable
-      .map((p) => [p.track.id, p.version.id, p.chosen.variant.hash, p.version.offsetSamples])
+      .map((p) => [
+        p.track.id,
+        p.version.id,
+        p.chosen.variant.hash,
+        p.version.offsetSamples,
+        // A changed practice policy (instrument, transpose) reloads the song.
+        JSON.stringify(stretchPolicyOf(p.track, playable.length === 1)),
+      ])
       .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
   ]);
 }

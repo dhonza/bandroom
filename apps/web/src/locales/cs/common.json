@@ -237,7 +237,12 @@
         "nudgeForward": "Vpřed o 1 s",
         "addMarker": "Přidat značku",
         "pageNext": "Další stránka (dokument)",
-        "pagePrev": "Předchozí stránka (dokument)"
+        "pagePrev": "Předchozí stránka (dokument)",
+        "practiceSlower": "Cvičení: pomaleji",
+        "practiceFaster": "Cvičení: rychleji",
+        "practicePitchDown": "Cvičení: níž",
+        "practicePitchUp": "Cvičení: výš",
+        "practiceReset": "Cvičení: původní rychlost a ladění"
       }
     },
     "apiKeys": {
@@ -955,7 +960,9 @@
       "toggleClick": "Metronom zap./vyp.",
       "comment": "Komentář na pozici přehrávání",
       "pageTurn": "Další / předchozí stránka v aktivním dokumentu",
-      "toggleChrome": "Skrýt / zobrazit navigaci (na každé stránce)"
+      "toggleChrome": "Skrýt / zobrazit navigaci (na každé stránce)",
+      "practiceSpeed": "Rychlost cvičení −/+ 5 %",
+      "practicePitch": "Ladění cvičení −/+ 1 půltón"
     }
   },
   "whatsNew": {
@@ -974,6 +981,7 @@
     "pickup": "předtakt {{beat}}",
     "barBeat": "Takt a doba",
     "summary": "{{bpm}} BPM · {{meter}}",
+    "summaryPractice": "{{summary}} · {{rate}} %",
     "set": "Nastavit tempo",
     "title": "Tempo",
     "tabs": {
@@ -1900,5 +1908,37 @@
     "off": "Vypnuto",
     "low": "Nízký",
     "high": "Vysoký"
+  },
+  "practice": {
+    "title": "Cvičení",
+    "active": "Cvičení: {{label}}",
+    "speed": "Rychlost",
+    "slower": "Pomaleji (1 %)",
+    "faster": "Rychleji (1 %)",
+    "percent": "{{value}} %",
+    "pitch": "Ladění",
+    "pitchDown": "O půltón níž",
+    "pitchUp": "O půltón výš",
+    "semitones_one": "{{value}} půltón",
+    "semitones_few": "{{value}} půltóny",
+    "semitones_many": "{{value}} půltónu",
+    "semitones_other": "{{value}} půltónů",
+    "semitonesShort": "{{value}} pt",
+    "fineTune": "Jemné doladění",
+    "centsShort": "{{value}} ct",
+    "tuneTo": "A = {{hz}} Hz",
+    "reset": "Původní rychlost a ladění",
+    "hintExtreme": "Při velmi pomalé nebo rychlé rychlosti klesá kvalita zvuku.",
+    "hintDrums": "Bicí mohou pod 70 % znít rozmazaně.",
+    "hintVoice": "Zpěv posunutý o víc než 5 půltónů zní uměle.",
+    "pitchLocked": "Drží ladění",
+    "transposeTrack": "Transponovat tuto stopu",
+    "quality": "Kvalita cvičení",
+    "qualityHint": "Zpracování rychlosti a ladění pro cvičení na tomto zařízení.",
+    "qualities": {
+      "auto": "Automaticky (na telefonu úsporně)",
+      "high": "Vysoká",
+      "economy": "Úsporná (méně výkonu)"
+    }
   }
 }

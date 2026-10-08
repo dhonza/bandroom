@@ -64,6 +64,7 @@ import { CLICK_LANE_COLOR, ClickStrip } from "./ClickStrip";
 import { TrackStrip } from "./TrackStrip";
 import { useTempoUi } from "../tempo/store";
 import type { Lane } from "../timeline/render";
+import { openPracticeSheet, PracticeBadge, practiceShortcut } from "./PracticeControls";
 import { Transport, TransportState } from "./Transport";
 
 const HEADER_W = 320;
@@ -267,6 +268,7 @@ export function RehearsePanel({
               <CountInCountdown />
               <BarBeatText size="lg" c="dimmed" />
               <SectionReadout />
+              <PracticeBadge onOpen={openPracticeSheet} />
               <TransportState />
             </Group>
           )}
@@ -379,5 +381,11 @@ function useRehearseKeys(song: Song) {
     if (op === "mute") setTrack(p.track.id, { mute: !cur.mute });
     if (op === "solo") setTrack(p.track.id, { solo: !cur.solo });
   }, []);
-  useSongShortcuts(song, { onAB, onTrack, onCountIn: toggleCountIn, onClick: toggleClick });
+  useSongShortcuts(song, {
+    onAB,
+    onTrack,
+    onCountIn: toggleCountIn,
+    onClick: toggleClick,
+    onPractice: practiceShortcut,
+  });
 }

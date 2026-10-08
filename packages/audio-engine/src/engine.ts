@@ -202,11 +202,12 @@ export class Engine {
   }
 
   /**
-   * Loads a song. Resolves `true` once the mixer has it, or `false` when another load or
+   * Loads a song (with `practice`: at that speed and pitch). Resolves `true` once the mixer has it, or `false` when another load or
    * `dispose()` superseded it (the caller then leaves the engine alone).
    */
-  async loadSong(song: SongTimeline): Promise<boolean> {
+  async loadSong(song: SongTimeline, practice?: EnginePractice): Promise<boolean> {
     await this.init();
+    if (practice) this.practice = { ...practice };
     this.wantPlaying = false;
     this.restoring = false; // a new song supersedes a rebuild in progress
     this.setState("loading");

@@ -13,4 +13,5 @@ export {
   type TrackStretchPolicy,
 } from "./types";
 export { isNeutralPractice, NEUTRAL_PRACTICE } from "./practice";
+export type { StretchProfile, StretchQuality } from "@bandroom/stretch";
 export { clickTrackFor, countInSpecAt } from "./tempo";

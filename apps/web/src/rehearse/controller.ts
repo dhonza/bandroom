@@ -15,8 +15,10 @@ import {
   compileTempo,
   putSongMixer,
   type ClickSettings,
+  practiceOf,
   type MixerState,
   type MixerTrackState,
+  type Practice,
   type Song,
   type TempoGrid,
   type Track,
@@ -55,6 +57,7 @@ import {
   chooseVariant,
   clickSettingsOf,
   clipFor,
+  enginePracticeOf,
   loadKeyOf,
   loudnessOffsetDb,
   mergeMix,
@@ -75,6 +78,7 @@ import {
   connectionInfo,
   isPhoneDevice,
   loadPrefs,
+  practiceQuality,
   savePrefs,
   type RehearsePrefs,
 } from "./prefs";
@@ -540,6 +544,7 @@ async function loadIntoEngine(args: OpenArgs, carry: Carry | null = null): Promi
   if (key === loadKey) {
     // Same audio: a changed version gain applies in place (SPEC §25.6).
     for (const c of trims) e.setTrackState(c.trackId, { trimDb: c.trimDb });
+    syncPractice();
     return;
   }
   loadKey = key;
@@ -550,7 +555,7 @@ async function loadIntoEngine(args: OpenArgs, carry: Carry | null = null): Promi
   useRehearse.setState({ lengthSec: timeline.lengthFrames / SAMPLE_RATE });
   try {
     // Superseded by another song (or a dispose): that load continues from here.
-    if (!(await e.loadSong(timeline))) return;
+    if (!(await e.loadSong(timeline, enginePractice(mix)))) return;
   } catch {
     // The engine did not start (status "error"): the retry loads the song again.
     if (loadKey === key) loadKey = "";
@@ -1042,6 +1047,7 @@ function applyMix(mix: MixerState) {
   store.setState({ mix });
   if (store === useRehearse) {
     syncClick();
+    syncPractice();
     for (const [id, s] of Object.entries(mix.tracks)) {
       engine?.setTrackState(id, { gainDb: s.gainDb, pan: s.pan, mute: s.mute, solo: s.solo });
     }
@@ -1063,6 +1069,34 @@ export function setTrack(trackId: string, patch: Partial<MixerTrackState>): void
     mute: next.mute,
     solo: next.solo,
   });
+  scheduleSave(store);
+}
+
+// ——— practice speed and pitch (SPEC §30) ———————————————————————————————————————————
+
+/** The engine's practice setting for a mix on this device. */
+function enginePractice(mix: MixerState) {
+  return enginePracticeOf(
+    practiceOf(mix),
+    practiceQuality(useRehearse.getState().prefs.practiceQuality),
+  );
+}
+
+/** Applies the engine song's practice setting (the engine reloads in place when it changed). */
+function syncPractice() {
+  const e = engine;
+  const s = useRehearse.getState();
+  if (!e || !s.songId) return;
+  e.setPractice(enginePractice(s.mix));
+}
+
+/** Changes the page's song's practice setting (personal, saved with the mix). */
+export function setPractice(patch: Partial<Practice>): void {
+  const store = view();
+  const { mix } = store.getState();
+  const practice = { ...practiceOf(mix), ...patch };
+  store.setState({ mix: { ...mix, practice } });
+  if (store === useRehearse) syncPractice();
   scheduleSave(store);
 }
 
@@ -1212,6 +1246,7 @@ export function setPrefs(patch: Partial<RehearsePrefs>): void {
   useRehearse.setState({ prefs });
   usePreview.setState({ prefs });
   if (patch.wakeLock) wake?.setMode(patch.wakeLock);
+  if (patch.practiceQuality !== undefined) syncPractice();
   if (patch.quality !== undefined || patch.preferLossless !== undefined) applyQuality();
 }
 

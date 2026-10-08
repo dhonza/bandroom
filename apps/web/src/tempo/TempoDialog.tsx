@@ -5,6 +5,7 @@ import { IconMetronome } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { LockedHint } from "../features/song/songLock";
+import { usePlayerView } from "../rehearse/controller";
 import { PHONE_QUERY } from "../shell/mediaQueries";
 import { ManualTempo } from "./ManualTempo";
 import { MidiImport } from "./MidiImport";
@@ -121,12 +122,17 @@ function TempoDialog({
 
 /** "120 BPM · 4/4" beside the song title (SPEC §11.3 header). */
 export function SongTempoSummary({ songId }: { songId: string }) {
+  const { t } = useTranslation();
   const { tempo } = useSongTempo(songId);
   const label = useTempoLabel(tempo);
+  // At a practice speed the summary adds it: "120 BPM · 4/4 · 85 %" (SPEC §30.6).
+  const rate = usePlayerView((s) => (s.songId === songId ? (s.mix.practice?.rate ?? 1) : 1));
   if (!label) return null;
   return (
     <Text c="dimmed" size="sm" className="tabular-nums" data-testid="song-tempo">
-      {label}
+      {rate === 1
+        ? label
+        : t("tempo.summaryPractice", { summary: label, rate: Math.round(rate * 100) })}
     </Text>
   );
 }

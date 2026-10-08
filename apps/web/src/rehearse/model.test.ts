@@ -8,6 +8,7 @@ import {
   loudnessOffsetDb,
   clickSettingsOf,
   changedTrims,
+  enginePracticeOf,
   loadKeyOf,
   mergeMix,
   mergeSnapshot,
@@ -16,6 +17,7 @@ import {
   recoveredErrors,
   resetMix,
   resolveQuality,
+  stretchPolicyOf,
   toggleMyInstrument,
   type QualityEnv,
 } from "./model";
@@ -366,5 +368,40 @@ describe("controller helpers", () => {
     expect(abPartner({ a: "1", b: "2" }, "1")).toBe("2");
     expect(abPartner({ a: "1", b: "2" }, "2")).toBe("1");
     expect(abPartner({ a: "1", b: "2" }, "3")).toBe("1");
+  });
+});
+
+describe("practice (SPEC §30.3)", () => {
+  it("derives each track's stretch policy from its instrument", () => {
+    expect(stretchPolicyOf(track("Lead vox"), false)).toEqual({
+      transpose: true,
+      profile: "voice",
+      voiceBaseHz: 0,
+    });
+    expect(stretchPolicyOf(track("Kick"), false)).toMatchObject({
+      transpose: false,
+      profile: "percussive",
+    });
+    expect(stretchPolicyOf(track("Kick", { transpose: true }), false).transpose).toBe(true);
+    expect(
+      stretchPolicyOf(track("x", { voiceRange: "high", instrument: "vocals" }), false),
+    ).toMatchObject({ voiceBaseHz: 400 });
+    expect(stretchPolicyOf(track("Rehearsal 3"), true).profile).toBe("mix");
+  });
+
+  it("joins cents to the semitones for the engine", () => {
+    expect(enginePracticeOf({ rate: 0.8, semitones: -3, cents: 25 }, "economy")).toEqual({
+      rate: 0.8,
+      semitones: -2.75,
+      quality: "economy",
+    });
+  });
+
+  it("reloads when a track's transpose policy changes", () => {
+    const v = version({ id: "v1" });
+    const playable = (t: Track) => playableTracks([t], { [t.id]: v }, "high", url);
+    const a = loadKeyOf("s", playable(track("gtr")));
+    expect(loadKeyOf("s", playable(track("gtr")))).toBe(a);
+    expect(loadKeyOf("s", playable(track("gtr", { transpose: false })))).not.toBe(a);
   });
 });

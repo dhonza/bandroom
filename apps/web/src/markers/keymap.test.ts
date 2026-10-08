@@ -81,3 +81,29 @@ describe("parseClock", () => {
     expect(parseClock("")).toBeNull();
   });
 });
+
+describe("practice shortcuts (SPEC §30.6)", () => {
+  it("maps Shift+, / Shift+. to speed and Alt+↓/↑ to pitch", () => {
+    expect(resolveKey(k({ code: "Comma", key: "<", shiftKey: true }))).toEqual({
+      action: "practiceSlower",
+    });
+    expect(resolveKey(k({ code: "Period", key: ">", shiftKey: true }))).toEqual({
+      action: "practiceFaster",
+    });
+    expect(resolveKey(k({ code: "Comma", key: "," }))).toBeNull();
+    expect(resolveKey(k({ code: "ArrowUp", altKey: true }))).toEqual({
+      action: "practicePitchUp",
+    });
+    expect(resolveKey(k({ code: "ArrowDown", altKey: true }))).toEqual({
+      action: "practicePitchDown",
+    });
+    expect(resolveKey(k({ code: "ArrowDown", altKey: true, shiftKey: true }))).toBeNull();
+    expect(resolveKey(k({ code: "KeyX", altKey: true }))).toBeNull();
+  });
+
+  it("lets a pedal trigger the practice actions", () => {
+    expect(resolveKey(k({ code: "KeyP" }), { KeyP: "practiceReset" })).toEqual({
+      action: "practiceReset",
+    });
+  });
+});

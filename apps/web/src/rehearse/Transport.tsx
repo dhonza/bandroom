@@ -25,6 +25,12 @@ import {
   IconRewindForward5,
 } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
+import {
+  openPracticeSheet,
+  PracticeButton,
+  PracticeMenuItem,
+  PracticeSheet,
+} from "./PracticeControls";
 import { useTranslation } from "react-i18next";
 import { formatClock } from "../player/format";
 import { musicalSnap, SNAP_MODES } from "../markers/model";
@@ -268,6 +274,8 @@ export function Transport({
         {phone && (
           <>
             <Menu.Divider />
+            <PracticeMenuItem onOpen={openPracticeSheet} />
+            <Menu.Divider />
             <ClickMenuItems
               onSettings={() => {
                 setClickSettingsOpen(true);
@@ -367,6 +375,7 @@ export function Transport({
             setClickSettingsOpen(false);
           }}
         />
+        <PracticeSheet />
       </Box>
     );
   }
@@ -391,6 +400,7 @@ export function Transport({
           {state}
         </Group>
         <Group gap={4} wrap="nowrap">
+          <PracticeButton />
           <ClickToggles />
           {options}
         </Group>

@@ -1,5 +1,6 @@
 import type { Engine } from "@bandroom/audio-engine";
 import type { RehearseState } from "./controller";
+import { practiceOf } from "@bandroom/shared";
 import { clickSettingsOf } from "./model";
 
 // ——— test hook (SPEC §20: engine debug state for e2e) ————————————————————————————
@@ -36,6 +37,8 @@ export function debugSnapshot(engine: Engine | null, s: RehearseState, hasTempo:
     countIn: engine?.getCountIn() ?? null,
     lastCountIn: engine?.lastCountInSpec ?? null,
     repeatCountIn: engine?.repeatCountInSpec ?? null,
+    practice: practiceOf(s.mix),
+    enginePractice: engine?.practiceSetting ?? null,
   };
 }
 

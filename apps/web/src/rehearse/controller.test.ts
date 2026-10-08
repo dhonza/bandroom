@@ -52,10 +52,19 @@ const fake = vi.hoisted(() => {
       }
       return Promise.resolve();
     }
-    async loadSong(song: FakeEngine["loads"][number] & { lengthFrames: number }) {
+    practices: unknown[] = [];
+    loadPractices: unknown[] = [];
+    setPractice(p: unknown) {
+      this.practices.push(p);
+    }
+    async loadSong(
+      song: FakeEngine["loads"][number] & { lengthFrames: number },
+      practice?: unknown,
+    ) {
       await this.init();
       this.setState("loading");
       this.loads.push(song);
+      this.loadPractices.push(practice);
       this.lengthFrames = song.lengthFrames;
       this.setState("stopped");
       return true;
@@ -292,6 +301,28 @@ describe("version gain (SPEC §25.6)", () => {
     // Listening to another version brings that version's gain.
     controller.listenToVersion("b", { ...version("b-v2", "b2"), gainDb: -1 });
     expect(engine().switches.at(-1)).toEqual({ trackId: "b", hash: "b2", trimDb: -1 });
+  });
+});
+
+describe("practice speed and pitch (SPEC §30)", () => {
+  it("loads at the saved setting, applies changes and keeps drums at their pitch", async () => {
+    const songId = nextSong();
+    const saved = { tracks: {}, practice: { rate: 0.75, semitones: -2, cents: 8 } };
+    const drums = { ...track("drums"), name: "Drums" };
+    await openSong(songId, [track("gtr"), drums], saved, {}, NO_INSTRUMENT, info(songId));
+    expect(engine().loadPractices.at(-1)).toMatchObject({ rate: 0.75, semitones: -1.92 });
+    const loaded = engine().loads.at(-1) as unknown as {
+      tracks: { id: string; stretch?: { transpose: boolean; profile: string } }[];
+    };
+    expect(loaded.tracks.map((t) => [t.id, t.stretch?.transpose, t.stretch?.profile])).toEqual([
+      ["gtr", true, "tonal"],
+      ["drums", false, "percussive"],
+    ]);
+    controller.setPractice({ rate: 0.5 });
+    expect(useRehearse.getState().mix.practice).toEqual({ rate: 0.5, semitones: -2, cents: 8 });
+    expect(engine().practices.at(-1)).toMatchObject({ rate: 0.5, semitones: -1.92 });
+    controller.resetMix();
+    expect(useRehearse.getState().mix.practice).toEqual({ rate: 0.5, semitones: -2, cents: 8 });
   });
 });
 

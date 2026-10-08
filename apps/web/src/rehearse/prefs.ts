@@ -1,4 +1,4 @@
-import type { WakeLockMode } from "@bandroom/audio-engine";
+import type { StretchQuality, WakeLockMode } from "@bandroom/audio-engine";
 import type { QualityPref } from "./model";
 
 /** Per-device Rehearse settings (SPEC §6.8, §6.9: stored locally). */
@@ -6,11 +6,20 @@ export interface RehearsePrefs {
   quality: QualityPref;
   preferLossless: boolean;
   wakeLock: WakeLockMode;
+  /** Practice speed/pitch processing (SPEC §30.2): auto = economy on phones. */
+  practiceQuality: PracticeQualityPref;
 }
+
+export type PracticeQualityPref = "auto" | "high" | "economy";
 
 const KEY = "bandroom.rehearsePrefs";
 
-const DEFAULTS: RehearsePrefs = { quality: "auto", preferLossless: false, wakeLock: "playing" };
+const DEFAULTS: RehearsePrefs = {
+  quality: "auto",
+  preferLossless: false,
+  wakeLock: "playing",
+  practiceQuality: "auto",
+};
 
 export function loadPrefs(): RehearsePrefs {
   try {
@@ -25,6 +34,9 @@ export function loadPrefs(): RehearsePrefs {
       wakeLock: ["off", "playing", "songOpen"].includes(p.wakeLock ?? "")
         ? (p.wakeLock ?? "playing")
         : "playing",
+      practiceQuality: ["auto", "high", "economy"].includes(p.practiceQuality ?? "")
+        ? (p.practiceQuality ?? "auto")
+        : "auto",
     };
   } catch {
     return DEFAULTS;
@@ -45,6 +57,12 @@ export function isPhoneDevice(): boolean {
   return (
     /iPhone|iPad|iPod|Android/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
   );
+}
+
+/** The stretch quality to use on this device. */
+export function practiceQuality(pref: PracticeQualityPref): StretchQuality {
+  if (pref === "auto") return isPhoneDevice() ? "economy" : "high";
+  return pref;
 }
 
 export function cacheBytes(): number {

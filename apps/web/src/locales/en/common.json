@@ -235,7 +235,12 @@
         "nudgeForward": "Forward 1 s",
         "addMarker": "Add marker",
         "pageNext": "Next page (document)",
-        "pagePrev": "Previous page (document)"
+        "pagePrev": "Previous page (document)",
+        "practiceSlower": "Practice: slower",
+        "practiceFaster": "Practice: faster",
+        "practicePitchDown": "Practice: pitch down",
+        "practicePitchUp": "Practice: pitch up",
+        "practiceReset": "Practice: original speed and pitch"
       }
     },
     "apiKeys": {
@@ -927,7 +932,9 @@
       "toggleClick": "Click on/off",
       "comment": "Comment at the playhead",
       "pageTurn": "Next / previous page in a focused document",
-      "toggleChrome": "Hide / show navigation (any page)"
+      "toggleChrome": "Hide / show navigation (any page)",
+      "practiceSpeed": "Practice speed −/+ 5 %",
+      "practicePitch": "Practice pitch −/+ 1 semitone"
     }
   },
   "whatsNew": {
@@ -944,6 +951,7 @@
     "pickup": "pickup {{beat}}",
     "barBeat": "Bar and beat",
     "summary": "{{bpm}} BPM · {{meter}}",
+    "summaryPractice": "{{summary}} · {{rate}} %",
     "set": "Set tempo",
     "title": "Tempo",
     "tabs": {
@@ -1744,5 +1752,35 @@
     "off": "Off",
     "low": "Low",
     "high": "High"
+  },
+  "practice": {
+    "title": "Practice",
+    "active": "Practice: {{label}}",
+    "speed": "Speed",
+    "slower": "Slower (1 %)",
+    "faster": "Faster (1 %)",
+    "percent": "{{value}} %",
+    "pitch": "Pitch",
+    "pitchDown": "Down a semitone",
+    "pitchUp": "Up a semitone",
+    "semitones_one": "{{value}} semitone",
+    "semitones_other": "{{value}} semitones",
+    "semitonesShort": "{{value}} st",
+    "fineTune": "Fine tune",
+    "centsShort": "{{value}} ct",
+    "tuneTo": "A = {{hz}} Hz",
+    "reset": "Original speed and pitch",
+    "hintExtreme": "Sound quality drops at very slow or fast speeds.",
+    "hintDrums": "Drums may sound smeared below 70 %.",
+    "hintVoice": "Vocals sound processed when moved by more than 5 semitones.",
+    "pitchLocked": "Keeps its pitch",
+    "transposeTrack": "Transpose this track",
+    "quality": "Practice quality",
+    "qualityHint": "Processing for practice speed and pitch on this device.",
+    "qualities": {
+      "auto": "Automatic (Economy on phones)",
+      "high": "High",
+      "economy": "Economy (less CPU)"
+    }
   }
 }

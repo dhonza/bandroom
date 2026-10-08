@@ -8,6 +8,8 @@ import { useUpdateMe } from "../../auth/useAccount";
 import { Section } from "../../components/Section";
 import { setPrefs, useRehearse } from "../../rehearse/controller";
 
+const PRACTICE_QUALITIES = ["auto", "high", "economy"] as const;
+
 /** Select value for "automatic" (null in the API). */
 const AUTO = "auto";
 
@@ -86,6 +88,19 @@ export function AudioSection() {
           value: q,
           label: t(`rehearse.quality.${q}`),
         }))}
+      />
+      <Select
+        label={t("practice.quality")}
+        description={t("practice.qualityHint")}
+        value={prefs.practiceQuality}
+        allowDeselect={false}
+        mt="sm"
+        onChange={(v) => {
+          const q = PRACTICE_QUALITIES.find((x) => x === v);
+          if (q) setPrefs({ practiceQuality: q });
+        }}
+        data={PRACTICE_QUALITIES.map((q) => ({ value: q, label: t(`practice.qualities.${q}`) }))}
+        data-testid="settings-practice-quality"
       />
       <Switch
         checked={prefs.preferLossless}

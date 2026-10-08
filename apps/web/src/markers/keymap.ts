@@ -29,6 +29,12 @@ export const SHORTCUT_ACTIONS = [
   /** Document viewer page turns (SPEC §11.4); only through a pedal mapping on the song page. */
   "pageNext",
   "pagePrev",
+  /** Practice speed and pitch (SPEC §30.6). */
+  "practiceSlower",
+  "practiceFaster",
+  "practicePitchDown",
+  "practicePitchUp",
+  "practiceReset",
 ] as const;
 export type ShortcutAction = (typeof SHORTCUT_ACTIONS)[number];
 
@@ -44,6 +50,11 @@ export const PEDAL_ACTIONS = [
   "addMarker",
   "pageNext",
   "pagePrev",
+  "practiceSlower",
+  "practiceFaster",
+  "practicePitchDown",
+  "practicePitchUp",
+  "practiceReset",
 ] as const satisfies readonly ShortcutAction[];
 export type PedalAction = (typeof PEDAL_ACTIONS)[number];
 
@@ -71,8 +82,21 @@ export function resolveKey(e: KeyLike, custom: KeyMap = {}): Resolved | null {
     const index = Number(digit[1]) - 1;
     return { action: "track", index, op: e.altKey ? "mute" : e.shiftKey ? "solo" : "select" };
   }
-  if (e.altKey) return null;
+  if (e.altKey) {
+    // Practice pitch ±1 semitone (SPEC §30.6).
+    if (e.shiftKey) return null;
+    if (e.code === "ArrowUp") return { action: "practicePitchUp" };
+    if (e.code === "ArrowDown") return { action: "practicePitchDown" };
+    return null;
+  }
   switch (e.code) {
+    // Shift+, / Shift+. (on any layout): practice speed ∓5 % (SPEC §30.6).
+    case "Comma":
+      if (e.shiftKey) return { action: "practiceSlower" };
+      break;
+    case "Period":
+      if (e.shiftKey) return { action: "practiceFaster" };
+      break;
     case "Space":
       return { action: "playPause" };
     case "Enter":

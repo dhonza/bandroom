@@ -32,7 +32,12 @@ export interface ShortcutExtras {
   /** `K` / `C`: count-in and click (Rehearse); false when there is no tempo map. */
   onCountIn?: () => boolean;
   onClick?: () => boolean;
+  /** Practice speed and pitch (Rehearse, SPEC §30.6). */
+  onPractice?: (action: PracticeAction) => void;
 }
+
+export type PracticeAction =
+  "practiceSlower" | "practiceFaster" | "practicePitchDown" | "practicePitchUp" | "practiceReset";
 
 function ignoredTarget(e: KeyboardEvent, r: Resolved): boolean {
   const el = e.target as HTMLElement | null;
@@ -57,7 +62,7 @@ export function useSongShortcuts(song: Song, extras: ShortcutExtras = {}): void 
   const addMarker = useAddMarker(song);
   const { canCreate } = useMarkerPermissions(song);
   const { canComment } = useCommentPermissions(song);
-  const { onAB, onTrack, onCountIn, onClick } = extras;
+  const { onAB, onTrack, onCountIn, onClick, onPractice } = extras;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.repeat) return;
@@ -143,6 +148,14 @@ export function useSongShortcuts(song: Song, extras: ShortcutExtras = {}): void 
         case "pagePrev":
           handled = turnPage(r.action === "pageNext" ? "next" : "prev");
           break;
+        case "practiceSlower":
+        case "practiceFaster":
+        case "practicePitchDown":
+        case "practicePitchUp":
+        case "practiceReset":
+          if (onPractice) onPractice(r.action);
+          else handled = false;
+          break;
         default:
           handled = false;
       }
@@ -152,7 +165,7 @@ export function useSongShortcuts(song: Song, extras: ShortcutExtras = {}): void 
     return () => {
       window.removeEventListener("keydown", onKey);
     };
-  }, [addMarker, canCreate, canComment, onAB, onTrack, onCountIn, onClick, t]);
+  }, [addMarker, canCreate, canComment, onAB, onTrack, onCountIn, onClick, onPractice, t]);
 }
 
 type HelpAction =
@@ -177,6 +190,8 @@ type HelpAction =
   | "clearSelection"
   | "pageTurn"
   | "toggleChrome"
+  | "practiceSpeed"
+  | "practicePitch"
   | "help";
 
 const HELP_ROWS: [string[], HelpAction][] = [
@@ -201,6 +216,8 @@ const HELP_ROWS: [string[], HelpAction][] = [
   [["Esc"], "clearSelection"],
   [["PgDn", "PgUp"], "pageTurn"],
   [["Shift", "F"], "toggleChrome"],
+  [["Shift", ", / ."], "practiceSpeed"],
+  [["Alt", "↓/↑"], "practicePitch"],
   [["?"], "help"],
 ];
 
