@@ -1,6 +1,7 @@
 import type { TrackVersion } from "@bandroom/shared";
 import { Badge, Group, Progress, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
+import { storedQuality } from "../../lib/audioFormat";
 import { formatBytes, formatDuration } from "../../lib/media";
 import { LossyBadge } from "../../lossless/LossyBadge";
 import { OverviewWave } from "./OverviewWave";
@@ -46,8 +47,7 @@ export function VersionStatus({
           <Text size="xs" c="dimmed" className="tabular-nums">
             {[
               formatDuration(m.durationSec),
-              t("tracks.sampleRate", { khz: Math.round(m.sampleRate / 100) / 10 }),
-              m.bitDepth ? t("tracks.bitDepth", { bits: m.bitDepth }) : null,
+              storedQuality(v, t),
               formatBytes(v.storedBytes ?? v.sizeBytes, locale),
               trackBytes !== undefined
                 ? t("storage.trackTotal", { size: formatBytes(trackBytes, locale) })

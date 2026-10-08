@@ -49,6 +49,7 @@ import { api } from "../../api/client";
 import { useApiError } from "../../api/useApiError";
 import { useCurrentUser } from "../../auth/session";
 import { useFormatters } from "../../i18n/format";
+import { storedQuality } from "../../lib/audioFormat";
 import { downloadUrl, formatDuration } from "../../lib/media";
 import { PHONE_QUERY } from "../../shell/mediaQueries";
 import { songKeys } from "../library/queries";
@@ -410,7 +411,7 @@ function VersionItem({
               v.uploaderName ?? t("versions.unknownUploader"),
               fmt.dateTime(v.createdAt),
               v.media ? formatDuration(v.media.durationSec) : null,
-              v.variants.opus ? t("tracks.opusKbps", { kbps: v.variants.opus.bitrate }) : null,
+              storedQuality(v, t),
               v.originalFilename,
               v.storedBytes !== undefined
                 ? t("storage.stored", { size: fmt.bytes(v.storedBytes) })

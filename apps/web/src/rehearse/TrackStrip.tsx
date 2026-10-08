@@ -29,6 +29,7 @@ import { useOptionalUser } from "../auth/session";
 import { songKeys } from "../features/library/queries";
 import { VersionStackModal } from "../features/song/VersionStackModal";
 import { listenToVersion, setTrack, startAB, toggleAB, usePlayerView } from "./controller";
+import { ChannelsIcon } from "./ChannelsIcon";
 import { headerButtonSize, headerTier } from "./headerTier";
 import { Meter, SHOW_METERS } from "./Meter";
 import type { PlayableTrack } from "./model";
@@ -94,6 +95,9 @@ export function TrackStrip({
   const tier = headerTier(height, compact);
   const btn = headerButtonSize(height, compact);
   const inlineFader = !compact && tier !== "one";
+  // What plays: a dual-mono source plays mono.
+  const channels = playable.chosen.variant.channels;
+  const dualMono = version.media?.dualMono ?? false;
 
   const versionButton = (
     <UnstyledButton
@@ -136,6 +140,7 @@ export function TrackStrip({
         {track.name}
       </Text>
       {versionButton}
+      <ChannelsIcon channels={channels} dualMono={dualMono} />
       <VersionGainBadge version={version} />
       {notCurrent}
       {abButton}
@@ -156,7 +161,8 @@ export function TrackStrip({
       {track.name}
       <Text span size="xs" c="dimmed" fw={400}>
         {" "}
-        {t("rehearse.versionButton", { number: version.number })}
+        {t("rehearse.versionButton", { number: version.number })}{" "}
+        <ChannelsIcon channels={channels} dualMono={dualMono} size={12} />
       </Text>
     </Text>
   );
@@ -318,6 +324,7 @@ export function TrackStrip({
             >
               {t("rehearse.versionButton", { number: version.number })}
             </Button>
+            <ChannelsIcon channels={channels} dualMono={dualMono} withText />
             <VersionGainBadge version={version} />
             {notCurrent}
             {abButton}

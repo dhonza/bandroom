@@ -626,8 +626,6 @@
     },
     "versionBadge": "v{{number}}",
     "dragHandle": "Reorder {{name}}",
-    "sampleRate": "{{khz}} kHz",
-    "bitDepth": "{{bits}}-bit",
     "lufs": "{{lufs}} LUFS",
     "edit": "Edit track",
     "fields": {
@@ -644,7 +642,20 @@
       "upload_one": "Upload {{count}} file",
       "upload_other": "Upload {{count}} files"
     },
-    "opusKbps": "Opus {{kbps}} kbps"
+    "quality": {
+      "flac": "FLAC {{bits}}-bit {{khz}} kHz",
+      "flacFromFloat": "FLAC {{bits}}-bit {{khz}} kHz (from float)",
+      "flacNoBits": "FLAC {{khz}} kHz",
+      "opus": "Opus {{rate}}",
+      "both": "{{flac}} + {{opus}}",
+      "lossy": "{{opus}} ({{reason}})",
+      "reason": {
+        "source": "lossy source",
+        "upload": "converted on upload",
+        "reencode": "re-encoded",
+        "removed": "full quality removed"
+      }
+    }
   },
   "listen": {
     "play": "Play",
@@ -770,7 +781,12 @@
     },
     "saveDefaults": "Save as default mix",
     "saveDefaultsHint": "Makes this gain, pan and mute the starting mix for everyone. Personal mixes stay as they are.",
-    "defaultsSaved": "Default mix saved."
+    "defaultsSaved": "Default mix saved.",
+    "channels": {
+      "mono": "Mono",
+      "stereo": "Stereo",
+      "dualMono": "Mono (dual mono source)"
+    }
   },
   "mixer": {
     "playerTitle": "Player"

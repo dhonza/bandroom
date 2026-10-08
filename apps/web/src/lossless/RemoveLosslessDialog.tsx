@@ -29,6 +29,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { api } from "../api/client";
 import { useApiError } from "../api/useApiError";
+import { opusRate } from "../lib/audioFormat";
 import { formatBytes } from "../lib/media";
 import { PHONE_QUERY } from "../shell/mediaQueries";
 import { useInvalidateBatch } from "../trash/queries";
@@ -247,8 +248,7 @@ type CurrentOpus = RemoveLosslessPreview["currentOpus"];
 
 /** "96 kbps stereo / 64 kbps mono": the rates of the entries, stereo first. */
 function ratesOf(t: TFunction, opus: CurrentOpus): string {
-  const rate = (o: CurrentOpus[number]) =>
-    t(o.channels === 1 ? "lossless.now.rateMono" : "lossless.now.rateStereo", { kbps: o.kbps });
+  const rate = (o: CurrentOpus[number]) => opusRate(t, o.kbps, o.channels);
   return [...new Set([...opus].sort((a, b) => b.channels - a.channels).map(rate))].join(" / ");
 }
 

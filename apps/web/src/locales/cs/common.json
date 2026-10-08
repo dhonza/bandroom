@@ -648,8 +648,6 @@
     },
     "versionBadge": "v{{number}}",
     "dragHandle": "Přesunout {{name}}",
-    "sampleRate": "{{khz}} kHz",
-    "bitDepth": "{{bits}} bitů",
     "lufs": "{{lufs}} LUFS",
     "edit": "Upravit stopu",
     "fields": {
@@ -668,7 +666,20 @@
       "upload_many": "Nahrát {{count}} souboru",
       "upload_other": "Nahrát {{count}} souborů"
     },
-    "opusKbps": "Opus {{kbps}} kb/s"
+    "quality": {
+      "flac": "FLAC {{bits}} bitů {{khz}} kHz",
+      "flacFromFloat": "FLAC {{bits}} bitů {{khz}} kHz (z plovoucí čárky)",
+      "flacNoBits": "FLAC {{khz}} kHz",
+      "opus": "Opus {{rate}}",
+      "both": "{{flac}} + {{opus}}",
+      "lossy": "{{opus}} ({{reason}})",
+      "reason": {
+        "source": "ztrátový zdroj",
+        "upload": "převedeno při nahrání",
+        "reencode": "překódováno",
+        "removed": "plná kvalita odstraněna"
+      }
+    }
   },
   "listen": {
     "play": "Přehrát",
@@ -794,7 +805,12 @@
     },
     "saveDefaults": "Uložit jako výchozí mix",
     "saveDefaultsHint": "Nastaví tuto hlasitost, panorámu a ztlumení jako výchozí mix pro všechny. Osobní mixy zůstanou beze změny.",
-    "defaultsSaved": "Výchozí mix uložen."
+    "defaultsSaved": "Výchozí mix uložen.",
+    "channels": {
+      "mono": "Mono",
+      "stereo": "Stereo",
+      "dualMono": "Mono (z duálního mona)"
+    }
   },
   "mixer": {
     "playerTitle": "Přehrávač"

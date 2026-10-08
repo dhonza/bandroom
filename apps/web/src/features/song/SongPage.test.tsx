@@ -132,7 +132,9 @@ describe("song page tracks", () => {
     const row = await screen.findByTestId("track-row");
     expect(within(row).getByText("Bass")).toBeInTheDocument();
     expect(within(row).getByTestId("version-button")).toHaveTextContent("v2 / 2");
-    expect(within(row).getByText("3:07 · 48 kHz · 24-bit · 3 MB · -14.2 LUFS")).toBeInTheDocument();
+    expect(
+      within(row).getByText("3:07 · FLAC 24-bit 48 kHz + Opus 64 kbps mono · 3 MB · -14.2 LUFS"),
+    ).toBeInTheDocument();
     expect(within(row).getByText("dual mono")).toBeInTheDocument();
     expect(screen.getByTestId("track-dropzone")).toBeInTheDocument();
   });
@@ -160,7 +162,9 @@ describe("song page sizes (SPEC §28.6)", () => {
     expect(await screen.findByTestId("song-meta")).toHaveTextContent("7 MB");
     const row = await screen.findByTestId("track-row");
     expect(
-      within(row).getByText("3:07 · 48 kHz · 24-bit · 2 MB · all versions 5 MB · -14.2 LUFS"),
+      within(row).getByText(
+        "3:07 · FLAC 24-bit 48 kHz + Opus 64 kbps mono · 2 MB · all versions 5 MB · -14.2 LUFS",
+      ),
     ).toBeInTheDocument();
   });
 });
