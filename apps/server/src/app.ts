@@ -19,6 +19,7 @@ import { installSecurity, registerRobotsTxt } from "./http/security";
 import { cookieSettings, installSessionResolution } from "./http/session";
 import { registerSpa, type Spa } from "./http/spa";
 import { registerAdminRoutes } from "./routes/admin";
+import { registerApiKeyRoutes } from "./routes/apiKeys";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerBatchRoutes } from "./routes/batch";
 import { registerBatchTransferRoutes } from "./routes/batchTransfer";
@@ -143,6 +144,7 @@ export async function buildApp({
       registerAuthRoutes(api, ctx);
       registerMeRoutes(api, ctx);
       registerAdminRoutes(api, ctx);
+      registerApiKeyRoutes(api, ctx);
       registerDirectoryRoutes(api, ctx);
       registerProjectRoutes(api, ctx);
       registerProjectImageRoutes(api, ctx);
