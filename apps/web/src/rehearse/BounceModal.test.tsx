@@ -27,7 +27,7 @@ function renderModal(onClose = vi.fn()) {
     [
       {
         path: "/songs/:id",
-        element: <BounceModal song={song} opened onClose={onClose} fullScreen={false} />,
+        element: <BounceModal song={song} opened onClose={onClose} />,
       },
     ],
     { initialEntries: ["/songs/s1"] },

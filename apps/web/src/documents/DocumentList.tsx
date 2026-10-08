@@ -12,7 +12,6 @@ import {
   FileButton,
   Group,
   Loader,
-  Modal,
   Paper,
   SegmentedControl,
   Stack,
@@ -42,6 +41,7 @@ import { UploadRow, isDocumentUpload, useUploadErrorText } from "../upload/Uploa
 import { useUploads } from "../upload/uploadStore";
 import { DocumentMenu } from "./DocumentActions";
 import { useDocumentUpload, useInvalidateDocuments } from "./queries";
+import { AppModal } from "../components/ResponsivePanel";
 
 const KIND_ICONS: Record<DocumentKind, typeof IconFile> = {
   markdown: IconMarkdown,
@@ -139,7 +139,7 @@ function NewDocumentModal({ scope, onClose }: { scope: DocumentScope; onClose: (
     },
   });
   return (
-    <Modal opened onClose={onClose} title={t("documents.new")} centered size="lg">
+    <AppModal opened onClose={onClose} title={t("documents.new")} centered size="lg">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -204,7 +204,7 @@ function NewDocumentModal({ scope, onClose }: { scope: DocumentScope; onClose: (
           </Group>
         </Stack>
       </form>
-    </Modal>
+    </AppModal>
   );
 }
 

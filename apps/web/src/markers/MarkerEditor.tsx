@@ -5,17 +5,7 @@ import {
   type PaletteColor,
   type Song,
 } from "@bandroom/shared";
-import {
-  Button,
-  Chip,
-  Group,
-  Modal,
-  Stack,
-  Switch,
-  Text,
-  Textarea,
-  TextInput,
-} from "@mantine/core";
+import { Button, Chip, Group, Stack, Switch, Text, Textarea, TextInput } from "@mantine/core";
 import { IconTrash } from "@tabler/icons-react";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -25,6 +15,7 @@ import { useTempoUi } from "../tempo/store";
 import { numberedName, presetColor, presetForName, validateMarkerForm, type Range } from "./model";
 import { useMarkerActions, useMarkerPermissions } from "./queries";
 import { anchorNow, clearSelection, closeEditor, setSelection, useTimelineUi } from "./store";
+import { AppModal } from "../components/ResponsivePanel";
 
 /** Create or edit a marker/section: name (with section presets), color, note, times, delete. */
 export function MarkerEditor({ song }: { song: Song }) {
@@ -112,7 +103,7 @@ function EditorModal({
   };
 
   return (
-    <Modal opened onClose={closeEditor} title={title} centered data-testid="marker-editor">
+    <AppModal opened onClose={closeEditor} title={title} centered data-testid="marker-editor">
       <form
         onSubmit={(ev) => {
           ev.preventDefault();
@@ -237,6 +228,6 @@ function EditorModal({
           </Group>
         </Stack>
       </form>
-    </Modal>
+    </AppModal>
   );
 }

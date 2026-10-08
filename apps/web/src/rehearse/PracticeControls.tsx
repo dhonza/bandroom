@@ -6,26 +6,16 @@ import {
   practiceOf,
   type Practice,
 } from "@bandroom/shared";
-import {
-  ActionIcon,
-  Box,
-  Button,
-  Drawer,
-  Group,
-  Menu,
-  Popover,
-  Slider,
-  Stack,
-  Text,
-} from "@mantine/core";
-import { IconMinus, IconPlus, IconPlayerTrackNext } from "@tabler/icons-react";
+import { ActionIcon, Box, Button, Group, Menu, Slider, Stack, Text } from "@mantine/core";
+import { IconGauge, IconMinus, IconPlus, IconPlayerTrackNext } from "@tabler/icons-react";
 import type { TFunction } from "i18next";
 import { useMemo } from "react";
 import { create } from "zustand";
 import { useTranslation } from "react-i18next";
 import type { PracticeAction } from "../markers/shortcuts";
 import { pageState, setPractice, usePlayerView } from "./controller";
-import { practiceLabel as label, signed } from "./practiceLabel";
+import { AppModal, CaptionButton, PanelPopover } from "../components/ResponsivePanel";
+import { practiceLabel as label, practiceShortLabel, signed } from "./practiceLabel";
 
 /** Speed limits (SPEC §30.2) and the range where quality holds up. */
 export const PRACTICE_RATE = { min: 0.25, max: 2, goodMin: 0.5, goodMax: 1.5 } as const;
@@ -295,14 +285,20 @@ function Stepper({
   );
 }
 
-/** Desktop transport button (SPEC §30.6): shows the setting when it is not neutral. */
+/**
+ * Desktop transport button (SPEC §30.6): shows the setting when it is not neutral. The form is a
+ * popover; on short screens (a phone in landscape) a full-screen panel.
+ */
 export function PracticeButton() {
   const { t } = useTranslation();
   const p = usePractice();
   const active = !isNeutralPractice(p);
   return (
-    <Popover position="top-end" withinPortal shadow="md" width={340} trapFocus>
-      <Popover.Target>
+    <PanelPopover
+      position="top-end"
+      width={340}
+      title={t("practice.title")}
+      target={
         <Button
           h={44}
           size="sm"
@@ -313,11 +309,10 @@ export function PracticeButton() {
         >
           {active ? practiceLabel(t, p) : t("practice.title")}
         </Button>
-      </Popover.Target>
-      <Popover.Dropdown>
-        <PracticeForm />
-      </Popover.Dropdown>
-    </Popover>
+      }
+    >
+      <PracticeForm />
+    </PanelPopover>
   );
 }
 
@@ -340,49 +335,51 @@ export function PracticeMenuItem({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-/** Phone readout badge: shown while the setting is not neutral; opens the sheet. */
-export function PracticeBadge({ onOpen }: { onOpen: () => void }) {
+/**
+ * Phone readout button (always shown): "Practice", or the setting in a few characters while it
+ * is not neutral; opens the full-screen panel.
+ */
+export function PracticePhoneButton({ onOpen }: { onOpen: () => void }) {
   const { t } = useTranslation();
   const p = usePractice();
-  if (isNeutralPractice(p)) return null;
+  const active = !isNeutralPractice(p);
   return (
-    <Button
-      h={44}
-      size="xs"
+    <CaptionButton
+      icon={<IconGauge size={20} />}
+      caption={active ? practiceShortLabel(p, t) : t("practice.title")}
+      active={active}
       color="teal"
-      variant="light"
       onClick={onOpen}
-      aria-label={t("practice.active", { label: practiceLabel(t, p) })}
-      data-testid="practice-badge"
-    >
-      {practiceLabel(t, p)}
-    </Button>
+      aria-label={
+        active ? t("practice.active", { label: practiceLabel(t, p) }) : t("practice.title")
+      }
+      data-testid="practice-phone-button"
+    />
   );
 }
 
-/** The phone sheet's open state (opened from the "⋯" menu or the readout badge). */
+/** The phone panel's open state (opened from the "⋯" menu or the readout button). */
 export const usePracticeSheet = create<{ open: boolean }>(() => ({ open: false }));
 
 export function openPracticeSheet(): void {
   usePracticeSheet.setState({ open: true });
 }
 
-/** The form as a bottom sheet (phones). */
+/** The form as a full-screen panel (phones). */
 export function PracticeSheet() {
   const { t } = useTranslation();
   const opened = usePracticeSheet((s) => s.open);
   return (
-    <Drawer
+    <AppModal
       opened={opened}
       onClose={() => {
         usePracticeSheet.setState({ open: false });
       }}
-      position="bottom"
-      size="auto"
       title={t("practice.title")}
+      centered
       data-testid="practice-sheet"
     >
       <PracticeForm />
-    </Drawer>
+    </AppModal>
   );
 }

@@ -1,5 +1,5 @@
 import { adminCreateInvite, type GlobalRole } from "@bandroom/shared";
-import { Alert, Button, Group, Modal, NumberInput, Select, Stack, TextInput } from "@mantine/core";
+import { Alert, Button, Group, NumberInput, Select, Stack, TextInput } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
@@ -9,6 +9,7 @@ import { useApiError } from "../../api/useApiError";
 import { LinkResultModal } from "./LinkResultModal";
 import { useInvalidateAdmin } from "./queries";
 import { roleOptions } from "./roleOptions";
+import { AppModal } from "../../components/ResponsivePanel";
 
 export function InviteCreateModal({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const { t } = useTranslation();
@@ -37,7 +38,7 @@ export function InviteCreateModal({ opened, onClose }: { opened: boolean; onClos
 
   return (
     <>
-      <Modal opened={opened} onClose={onClose} title={t("admin.invites.create")} centered>
+      <AppModal opened={opened} onClose={onClose} title={t("admin.invites.create")} centered>
         <form
           onSubmit={form.onSubmit((v) => {
             mutation.mutate(v);
@@ -76,7 +77,7 @@ export function InviteCreateModal({ opened, onClose }: { opened: boolean; onClos
             </Group>
           </Stack>
         </form>
-      </Modal>
+      </AppModal>
       <LinkResultModal
         link={link}
         title={t("admin.invites.linkTitle")}

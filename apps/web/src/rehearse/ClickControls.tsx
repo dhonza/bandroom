@@ -6,8 +6,6 @@ import {
   Button,
   Group,
   Menu,
-  Modal,
-  Popover,
   SegmentedControl,
   Slider,
   Stack,
@@ -18,6 +16,7 @@ import {
 import { IconCheck, IconMetronome, IconSettings } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { AppModal, PanelPopover } from "../components/ResponsivePanel";
 import { useTempoUi } from "../tempo/store";
 import { countInNow, setClickSettings, usePlayerView } from "./controller";
 import { clickSettingsOf } from "./model";
@@ -172,8 +171,11 @@ export function ClickToggles() {
         patch={{ enabled: !c.enabled }}
         testId="click-toggle"
       />
-      <Popover position="top-end" withinPortal shadow="md" width={320} trapFocus>
-        <Popover.Target>
+      <PanelPopover
+        position="top-end"
+        width={320}
+        title={t("click.settings")}
+        target={
           <ActionIcon
             size={44}
             variant="subtle"
@@ -184,11 +186,10 @@ export function ClickToggles() {
           >
             <IconSettings size={18} />
           </ActionIcon>
-        </Popover.Target>
-        <Popover.Dropdown>
-          <ClickSettingsForm />
-        </Popover.Dropdown>
-      </Popover>
+        }
+      >
+        <ClickSettingsForm />
+      </PanelPopover>
     </Group>
   );
 }
@@ -311,13 +312,13 @@ export function LoopCountInOptions() {
   );
 }
 
-/** Settings as a modal (phones). */
+/** Settings as a modal (phones: full screen). */
 export function ClickSettingsModal({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const { t } = useTranslation();
   return (
-    <Modal opened={opened} onClose={onClose} title={t("click.settings")} centered>
+    <AppModal opened={opened} onClose={onClose} title={t("click.settings")} centered>
       <ClickSettingsForm />
-    </Modal>
+    </AppModal>
   );
 }
 

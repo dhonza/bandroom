@@ -4,9 +4,7 @@ import {
   Badge,
   Box,
   Button,
-  Drawer,
   Group,
-  Popover,
   Slider,
   Stack,
   Text,
@@ -35,6 +33,7 @@ import { Meter, SHOW_METERS } from "./Meter";
 import type { PlayableTrack } from "./model";
 import { TrackColorBar, TrackColorPalette } from "./TrackColor";
 import { PitchLockedBadge, TrackPracticeSettings } from "./TrackTranspose";
+import { PanelPopover } from "../components/ResponsivePanel";
 import { trackTint } from "../timeline/render";
 import { VersionGainBadge, VersionGainField } from "./VersionGain";
 
@@ -359,28 +358,20 @@ export function TrackStrip({
     </Stack>
   );
 
-  // Phones: a bottom sheet (a popover below the header would run under the transport); wider
-  // headers: a popover beside the header.
-  const settings = compact ? (
-    <>
-      {target}
-      <Drawer
-        opened={settingsOpen}
-        onClose={() => {
-          setSettingsOpen(false);
-        }}
-        position="bottom"
-        size="auto"
-        title={track.name}
-      >
-        <Box pb="md">{panel}</Box>
-      </Drawer>
-    </>
-  ) : (
-    <Popover opened={settingsOpen} onChange={setSettingsOpen} position="right" withArrow trapFocus>
-      <Popover.Target>{target}</Popover.Target>
-      <Popover.Dropdown w={260}>{panel}</Popover.Dropdown>
-    </Popover>
+  // Phones and short screens: a full-screen panel (a popover below the header would run under
+  // the transport); wider headers: a popover beside the header.
+  const settings = (
+    <PanelPopover
+      opened={settingsOpen}
+      onChange={setSettingsOpen}
+      position="right"
+      withArrow
+      width={260}
+      title={track.name}
+      target={target}
+    >
+      {panel}
+    </PanelPopover>
   );
 
   const modal = versionsOpen && (

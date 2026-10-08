@@ -1,6 +1,5 @@
 import { batchCopySongs, batchMoveSongs } from "@bandroom/shared";
-import { Alert, Button, Group, Modal, Radio, Stack, Text } from "@mantine/core";
-import { useMediaQuery } from "@mantine/hooks";
+import { Alert, Button, Group, Radio, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
@@ -8,10 +7,10 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { api } from "../api/client";
 import { useApiError } from "../api/useApiError";
-import { PHONE_QUERY } from "../shell/mediaQueries";
 import { useInvalidateBatch } from "../trash/queries";
 import { NEW_PROJECT, targetBody } from "./targets";
 import { TargetPicker } from "./TargetPicker";
+import { AppModal } from "../components/ResponsivePanel";
 
 /** What the copy/move dialog is opened for (SPEC §26.6). */
 export interface SongsTransferRequest {
@@ -39,17 +38,15 @@ export function SongsTransferDialog({
   onDone?: () => void;
 }) {
   const { t } = useTranslation();
-  const isPhone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   return (
-    <Modal
+    <AppModal
       opened={request !== null}
       onClose={onClose}
       title={request?.newProject ? t("transfer.newProjectTitle") : t("transfer.songsTitle")}
-      fullScreen={isPhone}
       centered
     >
       {request && <Body request={request} onClose={onClose} onDone={onDone} />}
-    </Modal>
+    </AppModal>
   );
 }
 

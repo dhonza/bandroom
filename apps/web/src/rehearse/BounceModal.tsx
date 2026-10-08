@@ -7,17 +7,7 @@ import {
   type Practice,
   type Song,
 } from "@bandroom/shared";
-import {
-  Alert,
-  Button,
-  Checkbox,
-  Group,
-  Modal,
-  Stack,
-  Switch,
-  Text,
-  TextInput,
-} from "@mantine/core";
+import { Alert, Button, Checkbox, Group, Stack, Switch, Text, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -26,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { api } from "../api/client";
 import { useApiError } from "../api/useApiError";
+import { AppModal } from "../components/ResponsivePanel";
 import { projectKeys } from "../features/library/queries";
 import { useTempoUi } from "../tempo/store";
 import { uploadOptions } from "../upload/prefs";
@@ -114,25 +105,17 @@ export function BounceModal({
   song,
   opened,
   onClose,
-  fullScreen,
 }: {
   song: Pick<Song, "id" | "title">;
   opened: boolean;
   onClose: () => void;
-  fullScreen: boolean;
 }) {
   const { t } = useTranslation();
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title={t("bounce.title")}
-      fullScreen={fullScreen}
-      centered
-    >
+    <AppModal opened={opened} onClose={onClose} title={t("bounce.title")} centered>
       {/* Mounted per opening, so the title starts from the default each time. */}
       {opened && <BounceForm song={song} onClose={onClose} />}
-    </Modal>
+    </AppModal>
   );
 }
 

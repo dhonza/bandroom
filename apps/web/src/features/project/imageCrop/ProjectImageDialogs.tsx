@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useApiError } from "../../../api/useApiError";
+import { AppModal } from "../../../components/ResponsivePanel";
 import { PHONE_QUERY } from "../../../shell/mediaQueries";
 import { defaultSquare, type Square } from "./crop";
 import { cropToFile, loadImage } from "./exportCrop";
@@ -124,19 +125,17 @@ export function CropImageModal({
   onConfirm: (file: File) => void;
 }) {
   const { t } = useTranslation();
-  const isPhone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   return (
-    <Modal
+    <AppModal
       opened={source !== null}
       onClose={onClose}
       title={t("projects.settings.crop.title")}
       size="lg"
-      fullScreen={isPhone}
     >
       {source && (
         <CropBody key={source.id} source={source} onClose={onClose} onConfirm={onConfirm} />
       )}
-    </Modal>
+    </AppModal>
   );
 }
 

@@ -10,7 +10,6 @@ import {
   Button,
   Group,
   Menu,
-  Popover,
   Stack,
   Switch,
   Text,
@@ -41,6 +40,7 @@ import {
   usePlayerView,
 } from "./controller";
 import { isLinkMode } from "../links/linkMode";
+import { PanelPopover } from "../components/ResponsivePanel";
 
 /** Mixer actions (SPEC §11.3): reset, mute my instrument, snapshots, loudness-matched A/B. */
 export function MixerTools({
@@ -173,8 +173,12 @@ export function MixerTools({
                 ))}
               </Menu.Dropdown>
             </Menu>
-            <Popover opened={saveOpen} onChange={setSaveOpen} withinPortal trapFocus>
-              <Popover.Target>
+            <PanelPopover
+              opened={saveOpen}
+              onChange={setSaveOpen}
+              width={264}
+              title={t("rehearse.saveSnapshot")}
+              target={
                 <Button
                   variant="subtle"
                   onClick={() => {
@@ -183,31 +187,30 @@ export function MixerTools({
                 >
                   {t("rehearse.saveSnapshot")}
                 </Button>
-              </Popover.Target>
-              <Popover.Dropdown>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (nameOk) save.mutate();
-                  }}
-                >
-                  <Stack gap="xs" w={240}>
-                    <TextInput
-                      label={t("rehearse.snapshotName")}
-                      placeholder={t("rehearse.snapshotPlaceholder")}
-                      value={name}
-                      maxLength={80}
-                      onChange={(e) => {
-                        setName(e.currentTarget.value);
-                      }}
-                    />
-                    <Button type="submit" disabled={!nameOk} loading={save.isPending}>
-                      {t("common.save")}
-                    </Button>
-                  </Stack>
-                </form>
-              </Popover.Dropdown>
-            </Popover>
+              }
+            >
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (nameOk) save.mutate();
+                }}
+              >
+                <Stack gap="xs">
+                  <TextInput
+                    label={t("rehearse.snapshotName")}
+                    placeholder={t("rehearse.snapshotPlaceholder")}
+                    value={name}
+                    maxLength={80}
+                    onChange={(e) => {
+                      setName(e.currentTarget.value);
+                    }}
+                  />
+                  <Button type="submit" disabled={!nameOk} loading={save.isPending}>
+                    {t("common.save")}
+                  </Button>
+                </Stack>
+              </form>
+            </PanelPopover>
           </>
         )}
         {canSetDefaults && (

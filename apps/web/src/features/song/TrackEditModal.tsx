@@ -12,7 +12,6 @@ import {
   Alert,
   Button,
   Group,
-  Modal,
   SegmentedControl,
   Select,
   Stack,
@@ -28,6 +27,7 @@ import { zodValidator } from "../../api/validate";
 import { ColorSwatchPicker } from "../../components/ColorSwatchPicker";
 import { FormantFields } from "../../rehearse/FormantFields";
 import { songKeys } from "../library/queries";
+import { AppModal } from "../../components/ResponsivePanel";
 
 /** Select value for "automatic" (null in the API). */
 const AUTO = "auto";
@@ -115,7 +115,7 @@ export function TrackEditModal({
     },
   });
   return (
-    <Modal opened onClose={onClose} title={t("tracks.edit")} centered>
+    <AppModal opened onClose={onClose} title={t("tracks.edit")} centered>
       <form
         onSubmit={form.onSubmit((values) => {
           save.mutate(values);
@@ -216,6 +216,6 @@ export function TrackEditModal({
           </Group>
         </Stack>
       </form>
-    </Modal>
+    </AppModal>
   );
 }

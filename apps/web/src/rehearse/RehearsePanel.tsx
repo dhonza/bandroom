@@ -64,7 +64,7 @@ import { CLICK_LANE_COLOR, ClickStrip } from "./ClickStrip";
 import { TrackStrip } from "./TrackStrip";
 import { useTempoUi } from "../tempo/store";
 import type { Lane } from "../timeline/render";
-import { openPracticeSheet, PracticeBadge, practiceShortcut } from "./PracticeControls";
+import { openPracticeSheet, PracticePhoneButton, practiceShortcut } from "./PracticeControls";
 import { Transport, TransportState } from "./Transport";
 
 const HEADER_W = 320;
@@ -268,8 +268,11 @@ export function RehearsePanel({
               <CountInCountdown />
               <BarBeatText size="lg" c="dimmed" />
               <SectionReadout />
-              <PracticeBadge onOpen={openPracticeSheet} />
               <TransportState />
+              {/* Always there, at the right end (it wraps to its own line when needed). */}
+              <Group ml="auto">
+                <PracticePhoneButton onOpen={openPracticeSheet} />
+              </Group>
             </Group>
           )}
           {lengthSec > 0 && (
@@ -326,7 +329,6 @@ export function RehearsePanel({
             <BounceModal
               song={song}
               opened={bounceOpen}
-              fullScreen={isPhone}
               onClose={() => {
                 setBounceOpen(false);
               }}

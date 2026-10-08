@@ -1,5 +1,5 @@
 import { getProjectExportPreview, type DownloadFormat, type Project } from "@bandroom/shared";
-import { Alert, Button, Group, Loader, Modal, Select, Stack, Text } from "@mantine/core";
+import { Alert, Button, Group, Loader, Select, Stack, Text } from "@mantine/core";
 import { IconDownload, IconFileZip } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -8,6 +8,7 @@ import { api } from "../../api/client";
 import { useApiError } from "../../api/useApiError";
 import { useFormatters } from "../../i18n/format";
 import { exportUrl } from "../../lib/media";
+import { AppModal } from "../../components/ResponsivePanel";
 
 const FORMATS = ["flac", "wav", "opus", "original"] as const satisfies readonly DownloadFormat[];
 
@@ -60,7 +61,7 @@ export function ExportProjectDialog({
   });
   const p = preview.data;
   return (
-    <Modal opened onClose={onClose} title={t("projects.export.title")} centered>
+    <AppModal opened onClose={onClose} title={t("projects.export.title")} centered>
       <Stack gap="md" data-testid="export-dialog">
         <Select
           label={t("projects.export.format")}
@@ -124,6 +125,6 @@ export function ExportProjectDialog({
           </Button>
         </Group>
       </Stack>
-    </Modal>
+    </AppModal>
   );
 }

@@ -19,3 +19,17 @@ export function practiceLabel(p: Practice, t: TFunction, separator = ", "): stri
   if (p.cents !== 0) parts.push(t("practice.centsShort", { value: signed(p.cents) }));
   return parts.join(separator);
 }
+
+/**
+ * The phone Practice button's caption (a few characters): speed and semitones only, "75 % · −2";
+ * with only fine tune changed, the cents ("+8 ct").
+ */
+export function practiceShortLabel(p: Practice, t: TFunction): string {
+  const parts: string[] = [];
+  if (p.rate !== 1) parts.push(t("practice.percent", { value: Math.round(p.rate * 100) }));
+  if (p.semitones !== 0) parts.push(signed(p.semitones));
+  if (parts.length === 0 && p.cents !== 0) {
+    return t("practice.centsShort", { value: signed(p.cents) });
+  }
+  return parts.join(" · ");
+}

@@ -15,7 +15,6 @@ import {
   CopyButton,
   Group,
   Loader,
-  Modal,
   Select,
   Stack,
   Text,
@@ -30,6 +29,7 @@ import { useApiError } from "../../api/useApiError";
 import { useCurrentUser } from "../../auth/session";
 import { Section } from "../../components/Section";
 import { KeyMeta, SCOPE_LABEL, ScopeBadges } from "../apiKeys/ApiKeyBits";
+import { AppModal } from "../../components/ResponsivePanel";
 
 export const API_KEYS_QUERY_KEY = ["me", "apiKeys"] as const;
 
@@ -171,7 +171,7 @@ function CreateApiKeyModal({ opened, onClose }: { opened: boolean; onClose: () =
   ];
 
   return (
-    <Modal
+    <AppModal
       opened={opened}
       onClose={close}
       title={token ? t("settings.apiKeys.createdTitle") : t("settings.apiKeys.create")}
@@ -273,6 +273,6 @@ function CreateApiKeyModal({ opened, onClose }: { opened: boolean; onClose: () =
           </Stack>
         </form>
       )}
-    </Modal>
+    </AppModal>
   );
 }
