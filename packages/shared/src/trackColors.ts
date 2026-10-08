@@ -1,40 +1,28 @@
 import type { PaletteColor } from "./content";
+import { guessInstrument, matchesWordPrefix, nameWords, type Instrument } from "./instruments";
 
 /**
  * Colours for new tracks (SPEC §25.10): by instrument when the name or instrument tag tells it,
  * else the first palette colour not used in the song yet, else round-robin by track count.
  */
 
-/**
- * Word prefixes per instrument colour (lower case, without diacritics; English and Czech); `=`
- * marks a whole word ("tom" but not "tomas").
- */
-const INSTRUMENT_WORDS: readonly [PaletteColor, readonly string[]][] = [
-  [
-    "red",
-    [
-      "drum",
-      "kick",
-      "snare",
-      "hihat",
-      "=hat",
-      "=tom",
-      "=toms",
-      "overhead",
-      "cymbal",
-      "perc",
-      "bici",
-      "buben",
-    ],
-  ],
-  ["orange", ["bass", "basa", "baskytar"]],
-  ["yellow", ["guitar", "gtr", "kytar", "gitar"]],
-  ["cyan", ["key", "piano", "klavir", "synth", "organ", "rhodes", "klaves", "varhan"]],
-  ["violet", ["vocal", "voc", "vox", "voice", "sing", "zpev", "hlas", "=bv"]],
-  ["teal", ["string", "violin", "viola", "cello", "housl"]],
-  ["gold", ["brass", "trump", "trubk", "trombon", "pozoun", "horn", "sax"]],
-  ["mint", ["flute", "fletn", "clarinet", "klarinet"]],
-];
+/** The colour of each instrument (SPEC §25.10); `null` = no instrument colour. */
+export const INSTRUMENT_COLORS: Record<Instrument, PaletteColor | null> = {
+  drums: "red",
+  percussion: "red",
+  bass: "orange",
+  guitar: "yellow",
+  keys: "cyan",
+  synth: "cyan",
+  vocals: "violet",
+  strings: "teal",
+  winds: "gold",
+  mix: null,
+  other: null,
+};
+
+/** Winds whose names give them mint instead of the brass gold (woodwinds). */
+const WOODWIND_WORDS = ["flute", "fletn", "clarinet", "klarinet"] as const;
 
 /**
  * The order in which free colours are handed out: the eight colours of the original palette
@@ -59,36 +47,36 @@ export const AUTO_COLOR_ORDER: readonly PaletteColor[] = [
   "slate",
 ];
 
-/** Words of a name or tag: lower case, diacritics removed, split on non-letters and digits. */
-function words(text: string): string[] {
-  return text
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .split(/[^a-z]+/)
-    .filter((w) => w.length > 0);
+/** The colour of an instrument, refined by the name or tag (woodwinds are mint). */
+function colorOf(
+  instrument: Instrument,
+  texts: readonly (string | undefined | null)[],
+): PaletteColor | null {
+  if (instrument === "winds") {
+    const ws = texts.flatMap((t) => (t ? nameWords(t) : []));
+    if (ws.some((w) => WOODWIND_WORDS.some((p) => matchesWordPrefix(w, p)))) return "mint";
+  }
+  return INSTRUMENT_COLORS[instrument];
 }
 
 /** The instrument colour a track name or instrument tag suggests, if any. */
 export function instrumentColor(...texts: readonly string[]): PaletteColor | null {
-  const ws = texts.flatMap(words);
-  for (const [color, prefixes] of INSTRUMENT_WORDS) {
-    const hit = (w: string) =>
-      prefixes.some((p) => (p.startsWith("=") ? w === p.slice(1) : w.startsWith(p)));
-    if (ws.some(hit)) return color;
-  }
-  return null;
+  const instrument = guessInstrument(...texts);
+  return instrument ? colorOf(instrument, texts) : null;
 }
 
 /**
- * The colour of a new track: by instrument, else the first colour (in {@link AUTO_COLOR_ORDER})
- * the song's other tracks do not use, else round-robin over the palette by the number of tracks.
+ * The colour of a new track: by instrument (the stored one, else guessed from the name and tag),
+ * else the first colour (in {@link AUTO_COLOR_ORDER}) the song's other tracks do not use, else
+ * round-robin over the palette by the number of tracks.
  */
 export function autoTrackColor(
-  track: { name: string; instrumentTag?: string },
+  track: { name: string; instrumentTag?: string | null; instrument?: Instrument | null },
   song: { usedColors: readonly string[]; trackCount: number },
 ): PaletteColor {
-  const byInstrument = instrumentColor(track.name, track.instrumentTag ?? "");
+  const texts = [track.name, track.instrumentTag];
+  const instrument = track.instrument ?? guessInstrument(...texts);
+  const byInstrument = instrument ? colorOf(instrument, texts) : null;
   if (byInstrument) return byInstrument;
   const used = new Set(song.usedColors);
   const free = AUTO_COLOR_ORDER.find((c) => !used.has(c));
