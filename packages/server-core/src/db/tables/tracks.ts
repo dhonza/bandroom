@@ -1,3 +1,4 @@
+import { INSTRUMENTS, VOICE_RANGES } from "@bandroom/shared";
 import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { songs } from "./content";
 import { users } from "./identity";
@@ -21,6 +22,12 @@ export const tracks = sqliteTable(
     defaultMuted: integer("default_muted", { mode: "boolean" }).notNull().default(false),
     /** Free text, e.g. "bass"; used by "mute my instrument" (M5). */
     instrumentTag: text("instrument_tag").notNull().default(""),
+    /** Null = guessed at read time from the name and tag (SPEC §30.3). */
+    instrument: text("instrument", { enum: INSTRUMENTS }),
+    /** Null = the instrument's default (drums and percussion are not transposed). */
+    transpose: integer("transpose", { mode: "boolean" }),
+    /** Vocals only: the formant base (SPEC §30.3); null = auto. */
+    voiceRange: text("voice_range", { enum: VOICE_RANGES }),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: integer("created_at").notNull(),
     deletedAt: integer("deleted_at"),

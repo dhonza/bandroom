@@ -18,6 +18,7 @@ import {
   capabilitiesOf,
   CONTENT_ROLES,
   DEFAULT_MIX_FIELDS,
+  TRACK_LOCK_FIELDS,
   DEFAULT_PROJECT_ROLES,
   effectiveDownloadPolicy,
   effectiveRole,
@@ -246,6 +247,18 @@ describe("song lock (SPEC §25.12)", () => {
     expect(track({ name: "Bass", defaultMuted: false })).toBe(true);
     expect(track({ defaultPan: undefined })).toBe(false);
     expect(track(null)).toBe(false);
+    const full = (body: unknown) =>
+      blockedBySongLock(true, {
+        method: "PATCH",
+        capability: "edit.own",
+        lockFields: TRACK_LOCK_FIELDS,
+        body,
+      });
+    expect(full({ name: "Bass", instrumentTag: "lead" })).toBe(false);
+    expect(full({ instrument: null })).toBe(true);
+    expect(full({ transpose: false })).toBe(true);
+    expect(full({ voiceRange: "low" })).toBe(true);
+    expect(full({ defaultPan: 0 })).toBe(true);
     expect(track(undefined)).toBe(false);
     const version = { method: "PATCH", capability: "edit.own" as const };
     expect(

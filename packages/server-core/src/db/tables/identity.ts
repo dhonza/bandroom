@@ -1,3 +1,4 @@
+import { INSTRUMENTS } from "@bandroom/shared";
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 // Identity (SPEC §4.1).
@@ -20,6 +21,8 @@ export const users = sqliteTable(
     avatarBlobHash: text("avatar_blob_hash"),
     /** "My instrument" (e.g. "bass"), matched against tracks.instrumentTag (SPEC §11.3). */
     instrumentTag: text("instrument_tag").notNull().default(""),
+    /** "My instrument" (SPEC §30.3); null = guessed from `instrumentTag`. */
+    instrument: text("instrument", { enum: INSTRUMENTS }),
     /** Document viewer font size in px (SPEC §10: font-size slider persisted per user). */
     docFontSize: integer("doc_font_size").notNull().default(18),
     /** null = instance default, -1 = unlimited (enforced from M3). */

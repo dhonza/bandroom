@@ -11,6 +11,7 @@ export function makeUser(overrides: Partial<CurrentUser> = {}): CurrentUser {
     locale: null,
     theme: "dark",
     instrumentTag: "",
+    instrument: null,
     docFontSize: 18,
     createdAt: 0,
     ...overrides,

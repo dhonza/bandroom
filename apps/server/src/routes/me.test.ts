@@ -52,6 +52,22 @@ describe("profile", () => {
     expect(cleared.json()).toMatchObject({ user: { email: null, locale: null } });
   });
 
+  it("stores my instrument; null is automatic (SPEC §30.3)", async () => {
+    const cookie = await loginAs(t, "jana");
+    const set = await call(
+      t,
+      updateMe,
+      { body: { instrument: "bass", instrumentTag: "lead" } },
+      cookie,
+    );
+    expect(set.json()).toMatchObject({ user: { instrument: "bass", instrumentTag: "lead" } });
+    expect((await call(t, updateMe, { body: { instrument: "tuba" } }, cookie)).statusCode).toBe(
+      400,
+    );
+    const auto = await call(t, updateMe, { body: { instrument: null } }, cookie);
+    expect(auto.json()).toMatchObject({ user: { instrument: null } });
+  });
+
   it("rejects an email used by someone else (or equal to a username)", async () => {
     const petr = await loginAs(t, "petr");
     await call(t, updateMe, { body: { email: "p@x.cz" } }, petr);

@@ -201,6 +201,45 @@ describe("tracks", () => {
     ]);
   });
 
+  it("stores the instrument, transpose and voice range, logging before/after (§30.3)", async () => {
+    const patch = (body: Record<string, unknown>) =>
+      call(t, updateTrack, { params: { id: trackId }, body }, member);
+    const read = async () => (await tracksOf(member)).find((x) => x.id === trackId);
+    expect(await read()).toMatchObject({ instrument: null, transpose: null, voiceRange: null });
+    expect((await patch({ instrument: "piano" })).statusCode).toBe(400);
+    expect((await patch({ voiceRange: "mid" })).statusCode).toBe(400);
+    const before = await read();
+    expect(
+      (await patch({ instrument: "vocals", transpose: false, voiceRange: "high" })).statusCode,
+    ).toBe(200);
+    expect(await read()).toMatchObject({
+      instrument: "vocals",
+      transpose: false,
+      voiceRange: "high",
+    });
+    // Back to automatic; an unchanged name is not logged as a change.
+    expect(
+      (await patch({ instrument: null, transpose: null, name: before?.name })).statusCode,
+    ).toBe(200);
+    expect(await read()).toMatchObject({ instrument: null, transpose: null, voiceRange: "high" });
+    const events = listEvents(t.db, { action: "track.updated" })
+      .filter((e) => e.targetId === trackId)
+      .slice(-2)
+      .map((e) => JSON.parse(e.details ?? "null") as unknown);
+    expect(events).toEqual([
+      {
+        changes: ["instrument", "transpose", "voiceRange"],
+        before: { instrument: null, transpose: null, voiceRange: null },
+        after: { instrument: "vocals", transpose: false, voiceRange: "high" },
+      },
+      {
+        changes: ["instrument", "transpose"],
+        before: { instrument: "vocals", transpose: false },
+        after: { instrument: null, transpose: null },
+      },
+    ]);
+  });
+
   it("colours new tracks by instrument, else with a colour the song does not use (§25.10)", async () => {
     const project = (await call(t, createProject, { body: { name: "Colours" } }, admin)).json<{
       project: { id: string };

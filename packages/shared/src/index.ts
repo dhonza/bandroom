@@ -17,6 +17,7 @@ export * from "./events";
 export * from "./ids";
 export * from "./links";
 export * from "./imports";
+export * from "./instruments";
 export * from "./importPlan";
 export * from "./locales";
 export * from "./lossless";

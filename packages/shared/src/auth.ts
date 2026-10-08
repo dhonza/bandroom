@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { InstrumentSchema } from "./instruments";
 import { LocaleSchema } from "./locales";
 import { GlobalRoleSchema } from "./permissions/global";
 
@@ -31,6 +32,8 @@ export const CurrentUserSchema = z.object({
   theme: ThemeSchema,
   /** "My instrument", matched against track instrument tags (SPEC §11.3). */
   instrumentTag: z.string(),
+  /** "My instrument" category (SPEC §30.3); null = guessed from `instrumentTag`. */
+  instrument: InstrumentSchema.nullable(),
   /** Document viewer font size in px (SPEC §10). */
   docFontSize: z.number(),
   createdAt: z.number(),

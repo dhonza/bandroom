@@ -1,3 +1,4 @@
+import { INSTRUMENTS, InstrumentSchema, guessInstrument } from "@bandroom/shared";
 import { Button, Group, Select, Switch, Text, TextInput } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
@@ -6,6 +7,9 @@ import { useCurrentUser } from "../../auth/session";
 import { useUpdateMe } from "../../auth/useAccount";
 import { Section } from "../../components/Section";
 import { setPrefs, useRehearse } from "../../rehearse/controller";
+
+/** Select value for "automatic" (null in the API). */
+const AUTO = "auto";
 
 /**
  * Audio settings (SPEC §11.2): "my instrument" (account) plus quality, lossless preference and
@@ -16,14 +20,20 @@ export function AudioSection() {
   const user = useCurrentUser();
   const update = useUpdateMe();
   const prefs = useRehearse((s) => s.prefs);
-  const form = useForm({ initialValues: { instrumentTag: user.instrumentTag } });
+  const form = useForm({
+    initialValues: { instrument: user.instrument ?? AUTO, instrumentTag: user.instrumentTag },
+  });
+  const guess = guessInstrument(form.values.instrumentTag);
 
   return (
     <Section title={t("settings.audio.title")} testId="settings-audio">
       <form
         onSubmit={form.onSubmit((v) => {
           update.mutate(
-            { instrumentTag: v.instrumentTag.trim() },
+            {
+              instrument: InstrumentSchema.safeParse(v.instrument).data ?? null,
+              instrumentTag: v.instrumentTag.trim(),
+            },
             {
               onSuccess: () => {
                 form.resetDirty();
@@ -33,10 +43,27 @@ export function AudioSection() {
           );
         })}
       >
-        <TextInput
+        <Select
           label={t("settings.audio.instrument")}
           description={t("settings.audio.instrumentHint")}
+          data-testid="settings-instrument"
+          allowDeselect={false}
+          data={[
+            {
+              value: AUTO,
+              label: guess
+                ? t("instruments.automaticGuess", { guess: t(`instruments.${guess}`) })
+                : t("instruments.automatic"),
+            },
+            ...INSTRUMENTS.map((i) => ({ value: i, label: t(`instruments.${i}`) })),
+          ]}
+          {...form.getInputProps("instrument")}
+        />
+        <TextInput
+          label={t("settings.audio.instrumentTag")}
+          description={t("settings.audio.instrumentTagHint")}
           maxLength={40}
+          mt="sm"
           {...form.getInputProps("instrumentTag")}
         />
         <Group justify="flex-end" mt="sm">

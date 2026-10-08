@@ -282,6 +282,7 @@ export function TracksSection({ song }: { song: Song }) {
                   key={track.id}
                   track={track}
                   song={song}
+                  singleTrack={list.length === 1}
                   draggable={canReorder}
                   selection={
                     selectable

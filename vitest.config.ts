@@ -13,6 +13,7 @@ export default defineConfig({
         "packages/shared/src/tempo/**": { lines: 100, branches: 100, functions: 100 },
         "packages/audio-engine/src/tempo.ts": { lines: 100, branches: 100, functions: 100 },
         "apps/web/src/tempo/model.ts": { lines: 100, branches: 100, functions: 100 },
+        "packages/shared/src/instruments.ts": { lines: 100, functions: 100 },
       },
     },
   },

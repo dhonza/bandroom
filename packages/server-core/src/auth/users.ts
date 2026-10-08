@@ -3,6 +3,7 @@ import type {
   CurrentUser,
   DirectoryUser,
   GlobalRole,
+  Instrument,
   Locale,
   Theme,
 } from "@bandroom/shared";
@@ -23,6 +24,7 @@ export function toCurrentUser(u: UserRow): CurrentUser {
     locale: u.locale,
     theme: u.theme,
     instrumentTag: u.instrumentTag,
+    instrument: u.instrument,
     docFontSize: u.docFontSize,
     createdAt: u.createdAt,
   };
@@ -113,6 +115,7 @@ export interface UserPatch {
   lastSeenAt?: number;
   quotaBytes?: number | null;
   instrumentTag?: string;
+  instrument?: Instrument | null;
   docFontSize?: number;
 }
 

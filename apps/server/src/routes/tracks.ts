@@ -235,6 +235,12 @@ export function registerVersionRoutes(app: FastifyInstance, ctx: AppContext): vo
     if (!track) throw new AppError("NOT_FOUND", "Track not found");
     if (!canActOn(access.role, "edit", track.createdBy === user.id))
       throw new AppError("FORBIDDEN", "Not allowed");
+    // SPEC §30.3: the changed keys with their old and new values.
+    const keys = (Object.keys(body) as (keyof typeof body)[]).filter(
+      (k) => body[k] !== undefined && body[k] !== track[k],
+    );
+    const before = Object.fromEntries(keys.map((k) => [k, track[k]]));
+    const after = Object.fromEntries(keys.map((k) => [k, body[k]]));
     db.transaction(() => {
       updateTrackRepo(db, track.id, body);
       audit(db, request, {
@@ -243,7 +249,7 @@ export function registerVersionRoutes(app: FastifyInstance, ctx: AppContext): vo
         songId: access.song.id,
         targetType: "track",
         targetId: track.id,
-        details: { changes: Object.keys(body) },
+        details: { changes: keys, before, after },
       });
     });
     changed(access, "track.updated", { trackId: track.id });

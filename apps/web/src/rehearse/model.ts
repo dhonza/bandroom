@@ -1,5 +1,8 @@
 import type { EngineClip, EngineVariant, SongTimeline } from "@bandroom/audio-engine";
 import {
+  effectiveInstrument,
+  guessInstrument,
+  type Instrument,
   type MixerState,
   type MixerTrackState,
   type Track,
@@ -166,6 +169,7 @@ export function mergeMix(tracks: readonly Track[], saved: MixerState | null): Mi
     if (s) base.tracks[t.id] = { ...s };
   }
   if (saved.click) base.click = { ...saved.click };
+  if (saved.practice) base.practice = { ...saved.practice };
   return base;
 }
 
@@ -181,16 +185,38 @@ export function resetMix(tracks: readonly Track[], mix: MixerState): MixerState 
     if (cur && b) b.listenedVersionId = cur.listenedVersionId ?? null;
   }
   if (mix.click) base.click = mix.click; // the click is not part of "Reset mix"
+  if (mix.practice) base.practice = mix.practice; // nor the practice setting (SPEC §30.2)
   return base;
 }
 
 const normTag = (s: string) => s.trim().toLocaleLowerCase();
 
-/** Tracks whose instrument tag matches the user's (SPEC §11.3 "Mute my instrument"). */
-export function myInstrumentTracks(tracks: readonly Track[], tag: string): string[] {
-  const t = normTag(tag);
-  if (!t) return [];
-  return tracks.filter((tr) => normTag(tr.instrumentTag) === t).map((tr) => tr.id);
+/** What "Mute my instrument" knows about the user (SPEC §30.3). */
+export interface MyInstrument {
+  instrumentTag: string;
+  instrument?: Instrument | null | undefined;
+}
+
+export const NO_INSTRUMENT: MyInstrument = { instrumentTag: "", instrument: null };
+
+/**
+ * The user's tracks (SPEC §30.3 "Mute my instrument"): the effective instrument equals the user's
+ * (chosen, else guessed from their tag); when both the user and the track have a free-text tag,
+ * the tags must match too. A tag that names no known instrument matches tags exactly (SPEC §11.3).
+ */
+export function myInstrumentTracks(tracks: readonly Track[], me: MyInstrument): string[] {
+  const tag = normTag(me.instrumentTag);
+  const mine = me.instrument ?? guessInstrument(tag);
+  if (!mine)
+    return tag ? tracks.filter((tr) => normTag(tr.instrumentTag) === tag).map((tr) => tr.id) : [];
+  const singleTrack = tracks.length === 1;
+  return tracks
+    .filter((tr) => {
+      if (effectiveInstrument(tr, { singleTrack }) !== mine) return false;
+      const trTag = normTag(tr.instrumentTag);
+      return !tag || !trTag || trTag === tag;
+    })
+    .map((tr) => tr.id);
 }
 
 /** Mutes the user's tracks, or unmutes them when all are muted already. */

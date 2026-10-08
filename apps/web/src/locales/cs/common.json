@@ -213,8 +213,10 @@
     "audio": {
       "title": "Zvuk",
       "instrument": "Můj nástroj",
-      "instrumentHint": "Používá se u „Ztlumit můj nástroj“ v mixpultu; porovnává se s nástrojem stop (např. basa).",
-      "deviceTitle": "Na tomto zařízení"
+      "instrumentHint": "Používá se u „Ztlumit můj nástroj“ v mixpultu. Automaticky se odhadne z vašeho štítku.",
+      "deviceTitle": "Na tomto zařízení",
+      "instrumentTag": "Můj štítek",
+      "instrumentTagHint": "Volitelné, např. sólová: stopy se štítkem se s ním musí shodovat."
     },
     "keyboard": {
       "title": "Klávesnice a pedál",
@@ -697,7 +699,10 @@
     "fields": {
       "name": "Název",
       "instrument": "Nástroj",
-      "instrumentHint": "např. baskytara — používá se u „Ztlumit můj nástroj“ v mixpultu."
+      "instrumentTag": "Štítek",
+      "instrumentTagHint": "Volitelné, např. sólová nebo doprovodná: „Ztlumit můj nástroj“ pak porovná i štítek.",
+      "transpose": "Transponovat",
+      "voiceRange": "Hlasový rozsah"
     },
     "match": {
       "title": "Kam mají soubory patřit?",
@@ -1876,5 +1881,24 @@
     "neverExpires": "bez konce platnosti",
     "expires": "platí do {{when}}",
     "expired": "prošlý"
+  },
+  "instruments": {
+    "drums": "Bicí",
+    "percussion": "Perkuse",
+    "bass": "Baskytara",
+    "guitar": "Kytara",
+    "keys": "Klávesy",
+    "vocals": "Zpěv",
+    "strings": "Smyčce",
+    "winds": "Dechy",
+    "synth": "Syntezátor",
+    "mix": "Mix",
+    "other": "Ostatní",
+    "automaticGuess": "Automaticky ({{guess}})",
+    "automatic": "Automaticky",
+    "on": "Zapnuto",
+    "off": "Vypnuto",
+    "low": "Nízký",
+    "high": "Vysoký"
   }
 }

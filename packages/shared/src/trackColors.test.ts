@@ -41,6 +41,20 @@ describe("autoTrackColor", () => {
     );
   });
 
+  it("uses the stored instrument first; mix and other have no colour", () => {
+    const song = { usedColors: ["red"], trackCount: 1 };
+    expect(autoTrackColor({ name: "Take", instrument: "vocals" }, song)).toBe("violet");
+    expect(autoTrackColor({ name: "Bass", instrument: "keys" }, song)).toBe("cyan");
+    expect(autoTrackColor({ name: "Bass", instrument: "other" }, song)).toBe("orange");
+    expect(autoTrackColor({ name: "Take", instrument: "mix" }, song)).toBe("orange");
+    expect(autoTrackColor({ name: "Rehearsal mix" }, song)).toBe("orange");
+    expect(autoTrackColor({ name: "Take", instrument: "winds" }, song)).toBe("gold");
+    expect(autoTrackColor({ name: "Flute", instrument: "winds" }, song)).toBe("mint");
+    expect(autoTrackColor({ name: "Take", instrumentTag: null, instrument: null }, song)).toBe(
+      "orange",
+    );
+  });
+
   it("otherwise takes the first unused palette colour", () => {
     expect(autoTrackColor({ name: "Take" }, { usedColors: [], trackCount: 0 })).toBe("red");
     expect(autoTrackColor({ name: "Take" }, { usedColors: ["red", "orange"], trackCount: 2 })).toBe(

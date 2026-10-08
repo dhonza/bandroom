@@ -7,7 +7,8 @@ import {
   TrackNameSchema,
   TrackSchema,
 } from "../tracks";
-import { DEFAULT_MIX_FIELDS, VERSION_GAIN_FIELDS } from "../permissions/content";
+import { InstrumentSchema, VoiceRangeSchema } from "../instruments";
+import { TRACK_LOCK_FIELDS, VERSION_GAIN_FIELDS } from "../permissions/content";
 import { OkSchema } from "./auth";
 import { defineContract } from "./contract";
 
@@ -110,12 +111,17 @@ export const updateTrack = defineContract({
       defaultGainDb: z.number().min(-120).max(6),
       defaultPan: z.number().min(-1).max(1),
       defaultMuted: z.boolean(),
+      /** null = back to automatic (SPEC §30.3). */
+      instrument: InstrumentSchema.nullable(),
+      transpose: z.boolean().nullable(),
+      voiceRange: VoiceRangeSchema.nullable(),
     })
     .partial(),
   response: OkSchema,
   errors: ["FORBIDDEN", "SONG_LOCKED"],
-  // The default mix is frozen by a song lock; name and colour stay editable (SPEC §25.12).
-  auth: { capability: "edit.own", scope: "track", lockFields: DEFAULT_MIX_FIELDS },
+  // The default mix and the playback fields are frozen by a song lock; name and colour stay
+  // editable (SPEC §25.12, §30.3).
+  auth: { capability: "edit.own", scope: "track", lockFields: TRACK_LOCK_FIELDS },
 });
 
 export const reorderSongTracks = defineContract({

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AudioQualitySchema, UploadOptionsSchema } from "./audioQuality";
 import { PaletteColorSchema } from "./content";
+import { InstrumentSchema, VoiceRangeSchema } from "./instruments";
 import { VersionArchivedSchema } from "./lossless";
 
 export const DOWNLOAD_FORMATS = ["original", "flac", "wav", "opus"] as const;
@@ -94,6 +95,12 @@ export const TrackSchema = z.object({
   color: PaletteColorSchema,
   sortOrder: z.number(),
   instrumentTag: z.string(),
+  /** Stored instrument (SPEC §30.3); null = guessed from the name and tag. */
+  instrument: InstrumentSchema.nullable(),
+  /** Transpose override; null = the instrument's default. */
+  transpose: z.boolean().nullable(),
+  /** Vocals: the formant base; null = auto. */
+  voiceRange: VoiceRangeSchema.nullable(),
   /** Defaults for everyone's mixer (SPEC §11.3). */
   defaultGainDb: z.number(),
   defaultPan: z.number(),
