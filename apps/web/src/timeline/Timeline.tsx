@@ -378,6 +378,9 @@ export function Timeline({
     }
   };
   const onPointerUp = (e: React.PointerEvent) => {
+    // Only pointers that went down on the view end a gesture: a release that bubbles up from a
+    // control on it (the Recenter button) or a right click's release would otherwise be a tap.
+    if (!pointers.current.has(e.pointerId)) return;
     const v = viewRef.current;
     clearPress();
     const g = gesture.current;
@@ -591,11 +594,20 @@ export function Timeline({
               pos="absolute"
               right={8}
               bottom={8}
+              // The view below must not see this press: its release would be a tap and seek.
               onPointerDown={(e) => {
+                e.stopPropagation();
+              }}
+              onPointerUp={(e) => {
+                e.stopPropagation();
+              }}
+              onPointerCancel={(e) => {
                 e.stopPropagation();
               }}
               onClick={() => {
                 setFollowOn(true);
+                const v = viewRef.current;
+                if (v) setView(follow(v, getPosition()));
               }}
             >
               {t("timeline.recenter")}
