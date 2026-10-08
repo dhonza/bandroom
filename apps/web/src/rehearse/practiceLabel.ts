@@ -9,13 +9,13 @@ export function signed(v: number): string {
 }
 
 /**
- * A practice setting in a few words (SPEC §30.7): "85 %, −2 st, +8 ct", leaving out the parts at
- * their default (speed 100 %, 0 semitones, 0 cents).
+ * A practice setting in a few words (SPEC §30.6, §30.7): "85 %, −2 st, +8 ct", leaving out the
+ * parts at their default (speed 100 %, 0 semitones, 0 cents). The transport joins with " · ".
  */
-export function practiceLabel(p: Practice, t: TFunction): string {
+export function practiceLabel(p: Practice, t: TFunction, separator = ", "): string {
   const parts: string[] = [];
-  if (p.rate !== 1) parts.push(t("bounce.practiceSpeed", { value: Math.round(p.rate * 100) }));
-  if (p.semitones !== 0) parts.push(t("bounce.practiceSemitones", { value: signed(p.semitones) }));
-  if (p.cents !== 0) parts.push(t("bounce.practiceCents", { value: signed(p.cents) }));
-  return parts.join(", ");
+  if (p.rate !== 1) parts.push(t("practice.percent", { value: Math.round(p.rate * 100) }));
+  if (p.semitones !== 0) parts.push(t("practice.semitonesShort", { value: signed(p.semitones) }));
+  if (p.cents !== 0) parts.push(t("practice.centsShort", { value: signed(p.cents) }));
+  return parts.join(separator);
 }

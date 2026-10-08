@@ -789,10 +789,7 @@
     "alwaysCopied": "Podtitul a tónina se zkopírují, komentáře, dokumenty a sdílení ne.",
     "applyPractice": "Použít nastavení cvičení ({{practice}})",
     "defaultPracticeTitle": "{{title}} ({{practice}})",
-    "keepPitch": "Bez transpozice: {{tracks}}",
-    "practiceSpeed": "{{value}} %",
-    "practiceSemitones": "{{value}} pt",
-    "practiceCents": "{{value}} ct"
+    "keepPitch": "Bez transpozice: {{tracks}}"
   },
   "rehearse": {
     "toStart": "Na začátek",

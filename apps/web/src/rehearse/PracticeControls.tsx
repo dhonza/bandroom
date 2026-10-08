@@ -25,6 +25,7 @@ import { create } from "zustand";
 import { useTranslation } from "react-i18next";
 import type { PracticeAction } from "../markers/shortcuts";
 import { pageState, setPractice, usePlayerView } from "./controller";
+import { practiceLabel as label, signed } from "./practiceLabel";
 
 /** Speed limits (SPEC §30.2) and the range where quality holds up. */
 export const PRACTICE_RATE = { min: 0.25, max: 2, goodMin: 0.5, goodMax: 1.5 } as const;
@@ -50,15 +51,7 @@ export function ratePercent(rate: number): number {
 
 /** "85 % · −2 st · +8 ct" (only what differs from the original). */
 export function practiceLabel(t: TFunction, p: Practice): string {
-  const parts: string[] = [];
-  if (p.rate !== 1) parts.push(t("practice.percent", { value: ratePercent(p.rate) }));
-  if (p.semitones !== 0) parts.push(t("practice.semitonesShort", { value: signed(p.semitones) }));
-  if (p.cents !== 0) parts.push(t("practice.centsShort", { value: signed(p.cents) }));
-  return parts.join(" · ");
-}
-
-function signed(n: number): string {
-  return n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "0";
+  return label(p, t, " · ");
 }
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));

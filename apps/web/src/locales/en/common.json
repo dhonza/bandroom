@@ -761,10 +761,7 @@
     "alwaysCopied": "Subtitle and key are copied; comments, documents and sharing are not.",
     "applyPractice": "Apply practice settings ({{practice}})",
     "defaultPracticeTitle": "{{title}} ({{practice}})",
-    "keepPitch": "Not transposed: {{tracks}}",
-    "practiceSpeed": "{{value}} %",
-    "practiceSemitones": "{{value}} st",
-    "practiceCents": "{{value}} ct"
+    "keepPitch": "Not transposed: {{tracks}}"
   },
   "rehearse": {
     "toStart": "Back to start",
