@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# A stand-in for `docker` used by deploy.test.sh: no containers, no network. State lives in
+# $FAKE_DOCKER_STATE: registry/<tag>/version (APP_VERSION), registry/<tag>/deploy/ (/app/deploy
+# of that image, optional), running (image of the running app, empty when stopped), health_rc,
+# and calls.log (every invocation). Commands run in the application directory.
+set -euo pipefail
+S="$FAKE_DOCKER_STATE"
+REPO_IMAGE="ghcr.io/example/bandroom"
+echo "docker $*" >>"$S/calls.log"
+
+tag_of() { printf '%s' "${1##*:}"; }
+compose_tag() {
+  local t="${BANDROOM_TAG:-}"
+  if [ -z "$t" ] && [ -f .env ]; then
+    t="$(sed -n 's/^BANDROOM_TAG=//p' .env | tail -n 1 | tr -d "\"' \r")"
+  fi
+  printf '%s' "${t:-latest}"
+}
+running() { cat "$S/running" 2>/dev/null || true; }
+
+if [ "$1" = compose ]; then
+  shift
+  case "$1" in
+    ps)
+      svc="${*: -1}"
+      if [ -n "$(running)" ]; then echo "cid-$svc"; fi
+      ;;
+    config) echo "$REPO_IMAGE:$(compose_tag)" ;;
+    pull)
+      t="$(compose_tag)"
+      [ -d "$S/registry/$t" ] || {
+        echo "manifest for $REPO_IMAGE:$t not found" >&2
+        exit 1
+      }
+      ;;
+    stop) : >"$S/running" ;;
+    up) echo "$REPO_IMAGE:$(compose_tag)" >"$S/running" ;;
+    logs)
+      printf '%s\n' 'app-1  | {"level":30,"msg":"listening"}' \
+        'app-1  | {"level":40,"msg":"slow request"}' 'worker-1  | {"level":50,"msg":"job failed"}'
+      ;;
+    exec)
+      shift
+      envs=()
+      wd=""
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          -T) shift ;;
+          -w)
+            wd="$2"
+            shift 2
+            ;;
+          -e)
+            envs+=("$2")
+            shift 2
+            ;;
+          *) break ;;
+        esac
+      done
+      shift # service
+      if [ "$1" = node ] && [ "${2:-}" = -e ]; then exit "$(cat "$S/health_rc" 2>/dev/null || echo 0)"; fi
+      [ "$wd" = /app/apps/server ] || exit 99
+      cd "$FAKE_REPO/apps/server"
+      exec env DATA_DIR="$FAKE_DATA_DIR" "${envs[@]}" "$@"
+      ;;
+    *) exit 98 ;;
+  esac
+  exit 0
+fi
+
+case "$1" in
+  pull)
+    t="$(tag_of "$2")"
+    [ -d "$S/registry/$t" ] || {
+      echo "manifest for $2 not found" >&2
+      exit 1
+    }
+    ;;
+  image)
+    # docker image inspect -f <format> <image>
+    t="$(tag_of "$5")"
+    [ -d "$S/registry/$t" ] || exit 1
+    case "$4" in
+      *Config.Env*) echo "APP_VERSION=$(cat "$S/registry/$t/version")" ;;
+      *) echo "sha256:0123456789abcdef" ;;
+    esac
+    ;;
+  inspect)
+    case "$3" in
+      '{{.Image}}') running ;;
+      '{{.Config.Image}}') echo "caddy:2" ;;
+      *Health*) echo healthy ;;
+      *) echo "running since 2026-10-08T00:00:00Z" ;;
+    esac
+    ;;
+  create) echo "tmp:$(tag_of "$2")" ;;
+  cp)
+    t="${2#tmp:}"
+    t="${t%%:*}"
+    [ -d "$S/registry/$t/deploy" ] || exit 1
+    cp -R "$S/registry/$t/deploy/." "$3"
+    ;;
+  rm) ;;
+  *) exit 97 ;;
+esac

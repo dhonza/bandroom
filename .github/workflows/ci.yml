@@ -40,6 +40,10 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
       - run: pnpm typecheck
+      - name: Deploy scripts (shellcheck, tests against a fake docker)
+        run: |
+          shellcheck deploy/deploy.sh deploy/status.sh deploy/test/deploy.test.sh deploy/test/fake-docker
+          bash deploy/test/deploy.test.sh
       - run: pnpm test:coverage
       - run: pnpm i18n:check
       - run: pnpm build
@@ -119,5 +123,6 @@ jobs:
           docker exec br node -e "require('/app/apps/worker/node_modules/sharp')"
           docker exec br pdftoppm -v
           docker exec br pdfinfo -v
+          docker exec br sh -c 'cd /app/deploy && ls -l deploy.sh status.sh compose.yml Caddyfile Caddyfile.subpath'
           for i in $(seq 1 30); do curl -fsS localhost:3000/healthz && exit 0; sleep 1; done
           docker logs br; exit 1
