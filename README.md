@@ -62,6 +62,12 @@ setting up a VPS, and `deploy/compose.local.yml` for trying the containers local
 docker compose -f deploy/compose.yml -f deploy/compose.local.yml up --build
 ```
 
+## API
+
+Scripts and plugins can use the HTTP API with a scoped API key (Settings → API keys); see
+[`docs/api.md`](docs/api.md). `pnpm remote <command>` is a small CLI over it for status, jobs,
+logs, uploads and remote updates.
+
 ## License
 
 [MIT](LICENSE) © 2026 Jan Drchal

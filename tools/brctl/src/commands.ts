@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import {
   adminListApiKeys,
@@ -427,6 +428,8 @@ async function status(client: Client, o: Options, out: Out): Promise<void> {
 
 async function upload(client: Client, rest: string[], o: Options, out: Out): Promise<void> {
   const file = path.resolve(o.cwd, need(rest[0], "file"));
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile())
+    throw new UsageError(`Not a file: ${file}`);
   if (!o.track && !(o.song && o.name))
     throw new UsageError("upload needs --track <id>, or --song <id> with --name <name>");
   let target: UploadTarget;
