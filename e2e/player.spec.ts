@@ -266,7 +266,14 @@ test("a long song title wraps by words next to the header buttons (portrait and 
     await page.setViewportSize(size);
     // On phones the Mixer button is another component (icon + caption): measure after the swap.
     await expect(page.getByTestId("mixer-toggle")).toBeVisible();
-    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+    await page.evaluate(
+      () =>
+        new Promise((r) => {
+          requestAnimationFrame(() => {
+            r(null);
+          });
+        }),
+    );
     await noHorizontalOverflow(page);
     // Every word stays whole: the title is at least as wide as its longest word and takes at
     // most two lines (it broke into one character per line before).
