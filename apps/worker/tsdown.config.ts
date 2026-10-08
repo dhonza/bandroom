@@ -8,6 +8,10 @@ export default defineConfig({
   outDir: "dist",
   fixedExtension: false,
   clean: true,
+  // The practice bounce (SPEC §30.7) loads the stretcher with
+  // `new URL("./stretch.wasm", import.meta.url)`, which the bundle keeps as is: ship the binary
+  // next to dist/main.js.
+  copy: [{ from: "../../packages/stretch/src/stretch.wasm", to: "dist" }],
   deps: {
     // Workspace packages are bundled; everything else stays external and must be a declared
     // dependency of this app. `onlyBundle` makes the build fail if anything else gets inlined
