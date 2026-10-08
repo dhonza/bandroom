@@ -1704,8 +1704,8 @@
     "scope": {
       "read": "Read",
       "write": "Write",
-      "admin:read": "Admin: read",
-      "admin:ops": "Admin: operations"
+      "admin_read": "Admin: read",
+      "admin_ops": "Admin: operations"
     },
     "scopeHint": {
       "read": "See projects, songs, tracks and downloads you can see.",

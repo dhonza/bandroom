@@ -4,6 +4,14 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormatters } from "../../i18n/format";
 
+/** i18n keys per scope (":" would be read as an i18next namespace separator). */
+export const SCOPE_LABEL = {
+  read: "apiKeys.scope.read",
+  write: "apiKeys.scope.write",
+  "admin:read": "apiKeys.scope.admin_read",
+  "admin:ops": "apiKeys.scope.admin_ops",
+} as const satisfies Record<ApiScope, string>;
+
 const SCOPE_COLORS: Record<ApiScope, string> = {
   read: "teal",
   write: "blue",
@@ -17,7 +25,7 @@ export function ScopeBadges({ scopes }: { scopes: readonly ApiScope[] }) {
     <Group gap={4}>
       {scopes.map((s) => (
         <Badge key={s} size="xs" variant="light" color={SCOPE_COLORS[s]}>
-          {t(`apiKeys.scope.${s}`)}
+          {t(SCOPE_LABEL[s])}
         </Badge>
       ))}
     </Group>

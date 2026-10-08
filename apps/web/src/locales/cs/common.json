@@ -1860,8 +1860,8 @@
     "scope": {
       "read": "Čtení",
       "write": "Zápis",
-      "admin:read": "Správa: čtení",
-      "admin:ops": "Správa: provoz"
+      "admin_read": "Správa: čtení",
+      "admin_ops": "Správa: provoz"
     },
     "scopeHint": {
       "read": "Vidí projekty, písně, stopy a stahování, které vidíte vy.",

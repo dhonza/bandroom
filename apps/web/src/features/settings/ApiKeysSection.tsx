@@ -29,7 +29,7 @@ import { api } from "../../api/client";
 import { useApiError } from "../../api/useApiError";
 import { useCurrentUser } from "../../auth/session";
 import { Section } from "../../components/Section";
-import { KeyMeta, ScopeBadges } from "../apiKeys/ApiKeyBits";
+import { KeyMeta, SCOPE_LABEL, ScopeBadges } from "../apiKeys/ApiKeyBits";
 
 export const API_KEYS_QUERY_KEY = ["me", "apiKeys"] as const;
 
@@ -240,7 +240,7 @@ function CreateApiKeyModal({ opened, onClose }: { opened: boolean; onClose: () =
                   <Checkbox
                     key={s}
                     value={s}
-                    label={t(`apiKeys.scope.${s}`)}
+                    label={t(SCOPE_LABEL[s])}
                     description={t(SCOPE_HINT[s])}
                     data-testid={`api-key-scope-${s}`}
                   />
