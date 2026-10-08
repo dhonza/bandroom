@@ -1,6 +1,7 @@
 import { Alert, Stack, Tabs, Text, Title } from "@mantine/core";
 import {
   IconAdjustments,
+  IconCloudDownload,
   IconFileImport,
   IconKey,
   IconLink,
@@ -16,11 +17,12 @@ import { ApiKeysPanel } from "./ApiKeysPanel";
 import { ImportPanel } from "./imports/ImportPanel";
 import { InstanceSettingsPanel } from "./InstanceSettingsPanel";
 import { InvitesPanel } from "./InvitesPanel";
+import { UpdatesPanel } from "./UpdatesPanel";
 import { UsersPanel } from "./UsersPanel";
 import { TrashPanel } from "../../trash/TrashPanel";
 import { useAdminTrash } from "../../trash/queries";
 
-const TABS = ["invites", "links", "settings", "import", "trash", "apiKeys"] as const;
+const TABS = ["invites", "links", "settings", "import", "trash", "apiKeys", "updates"] as const;
 type Tab = "users" | (typeof TABS)[number];
 const isTab = (v: string | null): v is (typeof TABS)[number] =>
   TABS.includes(v as (typeof TABS)[number]);
@@ -94,6 +96,14 @@ export function AdminPage() {
           >
             {t("admin.apiKeys.tab")}
           </Tabs.Tab>
+          <Tabs.Tab
+            value="updates"
+            leftSection={<IconCloudDownload size={16} />}
+            mih={44}
+            data-testid="admin-updates-tab"
+          >
+            {t("admin.updates.tab")}
+          </Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="users" pt="md">
           <UsersPanel />
@@ -120,6 +130,9 @@ export function AdminPage() {
         </Tabs.Panel>
         <Tabs.Panel value="apiKeys" pt="md">
           <ApiKeysPanel />
+        </Tabs.Panel>
+        <Tabs.Panel value="updates" pt="md">
+          <UpdatesPanel />
         </Tabs.Panel>
       </Tabs>
     </Stack>
