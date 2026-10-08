@@ -9,14 +9,12 @@ import {
   Button,
   Group,
   Loader,
-  Modal,
   ScrollArea,
   Stack,
   Table,
   Text,
   TextInput,
 } from "@mantine/core";
-import { useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import { IconAlertTriangle, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -26,10 +24,10 @@ import { useNavigate } from "react-router";
 import { api } from "../api/client";
 import { useApiError } from "../api/useApiError";
 import { formatDuration } from "../lib/media";
-import { PHONE_QUERY } from "../shell/mediaQueries";
 import { useInvalidateBatch } from "../trash/queries";
 import { NEW_PROJECT, targetBody } from "./targets";
 import { TargetPicker } from "./TargetPicker";
+import { AppModal } from "../components/ResponsivePanel";
 
 /** What the multitrack dialog is opened for (SPEC §26.5, §26.6). */
 export interface MultitrackRequest {
@@ -55,7 +53,6 @@ export function MultitrackDialog({
   onDone?: () => void;
 }) {
   const { t } = useTranslation();
-  const isPhone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   const title =
     request?.mode === "copy"
       ? t("transfer.copyTracksTitle")
@@ -63,9 +60,9 @@ export function MultitrackDialog({
         ? t("transfer.multitrackTitle")
         : t("transfer.moveTracksTitle");
   return (
-    <Modal opened={request !== null} onClose={onClose} title={title} fullScreen={isPhone} centered>
+    <AppModal opened={request !== null} onClose={onClose} title={title} centered>
       {request && <Body request={request} onClose={onClose} onDone={onDone} />}
-    </Modal>
+    </AppModal>
   );
 }
 

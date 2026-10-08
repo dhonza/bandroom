@@ -1,12 +1,10 @@
 import { lockedOut, type Song, type SongTempo } from "@bandroom/shared";
-import { Badge, Button, Modal, Tabs, Text } from "@mantine/core";
-import { useMediaQuery } from "@mantine/hooks";
+import { Badge, Button, Tabs, Text } from "@mantine/core";
 import { IconMetronome } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { LockedHint } from "../features/song/songLock";
 import { usePlayerView } from "../rehearse/controller";
-import { PHONE_QUERY } from "../shell/mediaQueries";
 import { ManualTempo } from "./ManualTempo";
 import { MidiImport } from "./MidiImport";
 import { tempoSummaryParams } from "./midi";
@@ -15,6 +13,7 @@ import { useSongTempo } from "./queries";
 import { endTempoPreview } from "./store";
 import { BTN } from "./styles";
 import { TempoHistory } from "./TempoHistory";
+import { AppModal } from "../components/ResponsivePanel";
 
 /** "120 BPM · 4/4" for the song header and the toolbar button. */
 export function useTempoLabel(tempo: SongTempo | null): string | null {
@@ -83,15 +82,13 @@ function TempoDialog({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const phone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   const [tab, setTab] = useState<string | null>("manual");
   return (
-    <Modal
+    <AppModal
       opened
       onClose={onClose}
       title={t("tempo.title")}
       size="lg"
-      fullScreen={phone}
       data-testid="tempo-dialog"
     >
       <Tabs value={tab} onChange={setTab} keepMounted={false}>
@@ -116,7 +113,7 @@ function TempoDialog({
           <TempoHistory song={song} tempo={tempo} />
         </Tabs.Panel>
       </Tabs>
-    </Modal>
+    </AppModal>
   );
 }
 

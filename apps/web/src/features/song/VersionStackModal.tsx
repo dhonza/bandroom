@@ -20,7 +20,6 @@ import {
   Group,
   Loader,
   Menu,
-  Modal,
   Paper,
   Stack,
   Text,
@@ -51,7 +50,6 @@ import { useCurrentUser } from "../../auth/session";
 import { useFormatters } from "../../i18n/format";
 import { storedQuality } from "../../lib/audioFormat";
 import { downloadUrl, formatDuration } from "../../lib/media";
-import { PHONE_QUERY } from "../../shell/mediaQueries";
 import { songKeys } from "../library/queries";
 import { SelectionBar } from "../../selection/SelectionBar";
 import { versionSelection } from "../../selection/store";
@@ -61,6 +59,7 @@ import { useBatchDelete } from "../../trash/queries";
 import { FINE_POINTER_QUERY } from "../project/SongsList";
 import { LossyBadge, useLossyReason } from "../../lossless/LossyBadge";
 import { RemoveLosslessDialog } from "../../lossless/RemoveLosslessDialog";
+import { AppModal } from "../../components/ResponsivePanel";
 
 /** Rehearse-mode actions in the stack: listen to a version for me, or A/B it (SPEC §11.3). */
 export interface VersionStackRehearse {
@@ -87,7 +86,6 @@ export function VersionStackModal({
   rehearse?: VersionStackRehearse;
 }) {
   const { t } = useTranslation();
-  const isPhone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   const qc = useQueryClient();
   const apiError = useApiError();
   const key = songKeys.versions(song.id, track.id);
@@ -156,11 +154,10 @@ export function VersionStackModal({
   };
 
   return (
-    <Modal
+    <AppModal
       opened={opened}
       onClose={onClose}
       title={t("versions.title", { track: track.name })}
-      fullScreen={isPhone}
       size="lg"
     >
       {versions.isPending ? (
@@ -283,7 +280,7 @@ export function VersionStackModal({
           refresh();
         }}
       />
-    </Modal>
+    </AppModal>
   );
 }
 

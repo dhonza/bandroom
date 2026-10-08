@@ -1,5 +1,5 @@
 import { createProject, ProjectNameSchema } from "@bandroom/shared";
-import { Alert, Button, Group, Modal, Stack, Textarea, TextInput } from "@mantine/core";
+import { Alert, Button, Group, Stack, Textarea, TextInput } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -9,6 +9,7 @@ import { useApiError } from "../../api/useApiError";
 import { zodValidator } from "../../api/validate";
 import { ColorSwatchPicker, type PaletteColorName } from "../../components/ColorSwatchPicker";
 import { useInvalidateContent } from "./queries";
+import { AppModal } from "../../components/ResponsivePanel";
 
 export function CreateProjectModal({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const { t } = useTranslation();
@@ -30,7 +31,7 @@ export function CreateProjectModal({ opened, onClose }: { opened: boolean; onClo
   });
 
   return (
-    <Modal opened={opened} onClose={onClose} title={t("projects.create")} centered>
+    <AppModal opened={opened} onClose={onClose} title={t("projects.create")} centered>
       <form
         onSubmit={form.onSubmit((v) => {
           mutation.mutate(v);
@@ -68,6 +69,6 @@ export function CreateProjectModal({ opened, onClose }: { opened: boolean; onClo
           </Group>
         </Stack>
       </form>
-    </Modal>
+    </AppModal>
   );
 }

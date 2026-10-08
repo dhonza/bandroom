@@ -8,7 +8,6 @@ import {
   Center,
   Checkbox,
   Group,
-  Modal,
   Progress,
   SegmentedControl,
   Stack,
@@ -39,6 +38,7 @@ import { InstallHint } from "../../offline/InstallHint";
 import { useDownloadPercent } from "../../offline/OfflineButton";
 import { useOnline } from "../../offline/online";
 import { isPhoneDevice } from "../../rehearse/prefs";
+import { AppModal } from "../../components/ResponsivePanel";
 
 interface StorageInfo {
   usage: number;
@@ -181,7 +181,7 @@ export function OfflinePage() {
 
       <DefaultsCard />
 
-      <Modal
+      <AppModal
         opened={confirmAll}
         onClose={() => {
           setConfirmAll(false);
@@ -214,7 +214,7 @@ export function OfflinePage() {
             </Button>
           </Group>
         </Stack>
-      </Modal>
+      </AppModal>
     </Stack>
   );
 }

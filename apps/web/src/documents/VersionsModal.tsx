@@ -1,5 +1,5 @@
 import type { Document, DocumentVersion } from "@bandroom/shared";
-import { ActionIcon, Alert, Badge, Group, Loader, Modal, Paper, Stack, Text } from "@mantine/core";
+import { ActionIcon, Alert, Badge, Group, Loader, Paper, Stack, Text } from "@mantine/core";
 import { IconDownload, IconEye, IconStar, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useApiError } from "../api/useApiError";
@@ -11,6 +11,7 @@ import {
   useDocumentVersions,
   useSetCurrentDocumentVersion,
 } from "./queries";
+import { AppModal } from "../components/ResponsivePanel";
 
 /** The version stack (SPEC §10: like tracks): view, make current (editor), download, delete. */
 export function VersionsModal({
@@ -31,7 +32,7 @@ export function VersionsModal({
   const makeCurrent = useSetCurrentDocumentVersion(doc.id);
   const list = versions.data?.versions ?? [];
   return (
-    <Modal
+    <AppModal
       opened
       onClose={onClose}
       title={t("documents.versionsTitle", { title: doc.title })}
@@ -141,6 +142,6 @@ export function VersionsModal({
           );
         })}
       </Stack>
-    </Modal>
+    </AppModal>
   );
 }

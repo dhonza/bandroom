@@ -5,9 +5,10 @@ import {
   DEFAULT_AUDIO_QUALITY,
   type UploadOptions,
 } from "@bandroom/shared";
-import { Button, Popover, Select, Stack, Switch, Text } from "@mantine/core";
+import { Button, Select, Stack, Switch, Text } from "@mantine/core";
 import { IconAdjustmentsHorizontal } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { PanelPopover, useSheetMode } from "../components/ResponsivePanel";
 import { useUploadPrefs } from "./prefs";
 
 /** "Keep full quality" or "Lossy on upload · 128 kbps stereo / 80 kbps mono". */
@@ -32,9 +33,14 @@ export function UploadSettings({ testId = "upload-settings" }: { testId?: string
   const options = useUploadPrefs((s) => s.options);
   const set = useUploadPrefs((s) => s.set);
   const summary = useUploadSummary();
+  const sheet = useSheetMode();
   return (
-    <Popover width={300} position="bottom-end" shadow="md" withinPortal trapFocus>
-      <Popover.Target>
+    <PanelPopover
+      width={300}
+      position="bottom-end"
+      title={t("upload.settings.title")}
+      testId={`${testId}-dropdown`}
+      target={
         <Button
           variant="subtle"
           color={options.lossyOnly ? "yellow" : "gray"}
@@ -51,40 +57,42 @@ export function UploadSettings({ testId = "upload-settings" }: { testId?: string
         >
           {summary(options)}
         </Button>
-      </Popover.Target>
-      <Popover.Dropdown data-testid={`${testId}-dropdown`}>
-        <Stack gap="sm">
+      }
+    >
+      <Stack gap="sm">
+        {/* The full-screen panel has it as its title. */}
+        {!sheet && (
           <Text fw={600} size="sm">
             {t("upload.settings.title")}
           </Text>
-          <Switch
-            label={t("upload.settings.lossyOnly")}
-            description={t("upload.settings.lossyOnlyHint")}
-            checked={options.lossyOnly}
-            onChange={(e) => {
-              set({ ...options, lossyOnly: e.currentTarget.checked });
-            }}
-            styles={{ body: { minHeight: 44, alignItems: "center" } }}
-            data-testid="upload-lossy-only"
-          />
-          <Select
-            label={t("upload.settings.quality")}
-            description={t("upload.settings.qualityHint")}
-            data={AUDIO_QUALITIES.map((q) => ({
-              value: q,
-              label: t(`upload.settings.qualities.${q}`, AUDIO_QUALITY_KBPS[q]),
-            }))}
-            value={options.quality}
-            allowDeselect={false}
-            comboboxProps={{ withinPortal: false }}
-            onChange={(v) => {
-              const q = AudioQualitySchema.safeParse(v);
-              if (q.success) set({ ...options, quality: q.data });
-            }}
-            data-testid="upload-quality"
-          />
-        </Stack>
-      </Popover.Dropdown>
-    </Popover>
+        )}
+        <Switch
+          label={t("upload.settings.lossyOnly")}
+          description={t("upload.settings.lossyOnlyHint")}
+          checked={options.lossyOnly}
+          onChange={(e) => {
+            set({ ...options, lossyOnly: e.currentTarget.checked });
+          }}
+          styles={{ body: { minHeight: 44, alignItems: "center" } }}
+          data-testid="upload-lossy-only"
+        />
+        <Select
+          label={t("upload.settings.quality")}
+          description={t("upload.settings.qualityHint")}
+          data={AUDIO_QUALITIES.map((q) => ({
+            value: q,
+            label: t(`upload.settings.qualities.${q}`, AUDIO_QUALITY_KBPS[q]),
+          }))}
+          value={options.quality}
+          allowDeselect={false}
+          comboboxProps={{ withinPortal: false }}
+          onChange={(v) => {
+            const q = AudioQualitySchema.safeParse(v);
+            if (q.success) set({ ...options, quality: q.data });
+          }}
+          data-testid="upload-quality"
+        />
+      </Stack>
+    </PanelPopover>
   );
 }

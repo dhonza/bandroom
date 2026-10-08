@@ -1,5 +1,5 @@
 import { createSong, SongTitleSchema } from "@bandroom/shared";
-import { Alert, Button, Group, Modal, Stack, TextInput } from "@mantine/core";
+import { Alert, Button, Group, Stack, TextInput } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,7 @@ import { api } from "../../api/client";
 import { useApiError } from "../../api/useApiError";
 import { zodValidator } from "../../api/validate";
 import { useInvalidateContent } from "../library/queries";
+import { AppModal } from "../../components/ResponsivePanel";
 
 export function CreateSongModal({
   projectId,
@@ -33,7 +34,7 @@ export function CreateSongModal({
     },
   });
   return (
-    <Modal opened={opened} onClose={onClose} title={t("songs.create")} centered>
+    <AppModal opened={opened} onClose={onClose} title={t("songs.create")} centered>
       <form
         onSubmit={form.onSubmit((v) => {
           mutation.mutate(v);
@@ -63,6 +64,6 @@ export function CreateSongModal({
           </Group>
         </Stack>
       </form>
-    </Modal>
+    </AppModal>
   );
 }

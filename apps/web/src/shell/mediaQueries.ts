@@ -17,6 +17,7 @@ export const COARSE_POINTER_QUERY = "(pointer: coarse)";
 
 /**
  * A short viewport (a phone in landscape): wider than PHONE_QUERY, but too low for popovers and
- * centered modals, so larger panels go full screen there too.
+ * centered modals, so larger panels go full screen there too. Narrower than DESKTOP_QUERY, so a
+ * low desktop window keeps its popovers.
  */
-export const SHORT_QUERY = "(max-height: 40em)";
+export const SHORT_QUERY = "(max-height: 40em) and (max-width: 63.99em)";

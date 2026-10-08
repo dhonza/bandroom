@@ -8,19 +8,7 @@ import {
   type BatchItems,
   type RemoveLosslessPreview,
 } from "@bandroom/shared";
-import {
-  Alert,
-  Button,
-  Group,
-  List,
-  Loader,
-  Modal,
-  Select,
-  Stack,
-  Text,
-  TextInput,
-} from "@mantine/core";
-import { useMediaQuery } from "@mantine/hooks";
+import { Alert, Button, Group, List, Loader, Select, Stack, Text, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { IconAlertTriangle, IconCopy } from "@tabler/icons-react";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
@@ -31,8 +19,8 @@ import { api } from "../api/client";
 import { useApiError } from "../api/useApiError";
 import { opusRate } from "../lib/audioFormat";
 import { formatBytes } from "../lib/media";
-import { PHONE_QUERY } from "../shell/mediaQueries";
 import { useInvalidateBatch } from "../trash/queries";
+import { AppModal } from "../components/ResponsivePanel";
 
 /**
  * "Remove full quality" (SPEC §26.4): shows what the server's preview says would happen (files,
@@ -49,17 +37,10 @@ export function RemoveLosslessDialog({
   onDone?: () => void;
 }) {
   const { t } = useTranslation();
-  const isPhone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   return (
-    <Modal
-      opened={items !== null}
-      onClose={onClose}
-      title={t("lossless.title")}
-      fullScreen={isPhone}
-      centered
-    >
+    <AppModal opened={items !== null} onClose={onClose} title={t("lossless.title")} centered>
       {items && <DialogBody items={items} onClose={onClose} onDone={onDone} />}
-    </Modal>
+    </AppModal>
   );
 }
 

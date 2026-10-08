@@ -1,9 +1,10 @@
 import type { Track } from "@bandroom/shared";
-import { Button, Group, Modal, Select, Stack, Text } from "@mantine/core";
+import { Button, Group, Select, Stack, Text } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { MatchProposal } from "../../lib/media";
 import { UploadSettings } from "../../upload/UploadSettings";
+import { AppModal } from "../../components/ResponsivePanel";
 
 const NEW = "__new";
 
@@ -25,7 +26,7 @@ export function MatchDialog({
   const { t } = useTranslation();
   const [rows, setRows] = useState(proposals);
   return (
-    <Modal opened onClose={onClose} title={t("tracks.match.title")} size="lg" centered>
+    <AppModal opened onClose={onClose} title={t("tracks.match.title")} size="lg" centered>
       <Stack>
         <Text size="sm" c="dimmed">
           {t("tracks.match.explain")}
@@ -74,6 +75,6 @@ export function MatchDialog({
           </Group>
         </Group>
       </Stack>
-    </Modal>
+    </AppModal>
   );
 }

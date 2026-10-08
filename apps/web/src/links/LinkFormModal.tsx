@@ -11,7 +11,6 @@ import {
   Button,
   Checkbox,
   Group,
-  Modal,
   PasswordInput,
   SegmentedControl,
   Stack,
@@ -27,6 +26,7 @@ import { useApiError } from "../api/useApiError";
 import { songKeys, useSongTracks } from "../features/library/queries";
 import { defaultExpiry, endOfDay, toDateInput } from "./model";
 import { useLinkMutations, type LinkOwner } from "./queries";
+import { AppModal } from "../components/ResponsivePanel";
 
 type Props =
   | { mode: "create"; owner: LinkOwner; onClose: () => void; onCreated: (l: PublicLink) => void }
@@ -108,7 +108,7 @@ export function LinkFormModal(props: Props) {
   };
 
   return (
-    <Modal
+    <AppModal
       opened
       onClose={props.onClose}
       title={props.mode === "create" ? t("links.create") : t("links.edit")}
@@ -292,7 +292,7 @@ export function LinkFormModal(props: Props) {
           </Group>
         </Stack>
       </form>
-    </Modal>
+    </AppModal>
   );
 }
 

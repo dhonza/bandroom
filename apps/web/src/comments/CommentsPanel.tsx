@@ -18,6 +18,7 @@ import { IconDownload, IconMessageCircle, IconMessagePlus } from "@tabler/icons-
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useSongTracks } from "../features/library/queries";
+import { AppModal, useSheetMode } from "../components/ResponsivePanel";
 import { DocsButton } from "../documents/DocsPanel";
 import { commentAtPlayhead } from "./actions";
 import { useCommentDeepLink } from "./useCommentDeepLink";
@@ -98,6 +99,7 @@ function CommentsPanel({
 }) {
   const { t } = useTranslation();
   const desktop = useMediaQuery(DESKTOP_QUERY, false, { getInitialValueInEffect: false });
+  const sheet = useSheetMode();
   const open = useCommentsUi((s) => s.panelOpen);
   const filters = useCommentsUi((s) => s.filters);
   const sort = useCommentsUi((s) => s.sort);
@@ -136,6 +138,173 @@ function CommentsPanel({
     download(file.name, file.type, file.text);
   };
 
+  const body = (
+    <Stack gap="sm" pb="md">
+      <Group gap="xs" wrap="wrap" justify="space-between">
+        {mayComment && (
+          <LockedHint locked={locked}>
+            <Button
+              h={44}
+              variant="light"
+              leftSection={<IconMessagePlus size={18} />}
+              disabled={locked}
+              onClick={() => {
+                commentAtPlayhead();
+              }}
+              data-testid="panel-comment-at-playhead"
+            >
+              {t("comments.atPlayhead")}
+            </Button>
+          </LockedHint>
+        )}
+        <Menu position="bottom-end" withinPortal>
+          <Menu.Target>
+            <ActionIcon
+              size={44}
+              variant="subtle"
+              color="gray"
+              aria-label={t("comments.export")}
+              data-testid="comments-export"
+            >
+              <IconDownload size={18} />
+            </ActionIcon>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Label>{t("comments.export")}</Menu.Label>
+            <Menu.Item
+              onClick={() => {
+                exportAs("md");
+              }}
+              data-testid="export-md"
+            >
+              {t("comments.exportMarkdown")}
+            </Menu.Item>
+            <Menu.Item
+              onClick={() => {
+                exportAs("csv");
+              }}
+              data-testid="export-csv"
+            >
+              {t("comments.exportCsv")}
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+      </Group>
+
+      {mayComment && locked && (
+        <Alert color="yellow" variant="light" data-testid="comments-locked">
+          {t("songs.lock.banner")}
+        </Alert>
+      )}
+      {composer && canComment && <Composer song={song} tracks={tracks} />}
+
+      {truncated && (
+        <Alert color="yellow" data-testid="comments-truncated">
+          {t("comments.truncated", { n: comments.length })}
+        </Alert>
+      )}
+
+      <Group gap="xs" wrap="wrap">
+        <SegmentedControl
+          size="sm"
+          value={sort}
+          onChange={(v) => {
+            setSort(v === "date" ? "date" : "time");
+          }}
+          data={[
+            { value: "time", label: t("comments.sortTime") },
+            { value: "date", label: t("comments.sortDate") },
+          ]}
+          aria-label={t("comments.sort")}
+          data-testid="comments-sort"
+        />
+        {!linkMode && (
+          <Chip
+            size="sm"
+            checked={filters.mentionsMe}
+            onChange={(v) => {
+              setFilters({ mentionsMe: v });
+            }}
+            data-testid="filter-mentions"
+          >
+            {t("comments.mentionsMe")}
+          </Chip>
+        )}
+      </Group>
+      <Group gap="xs" wrap="wrap" grow>
+        {authors.length > 1 && (
+          <Select
+            size="sm"
+            placeholder={t("comments.allAuthors")}
+            aria-label={t("comments.author")}
+            clearable
+            value={filters.author}
+            onChange={(v) => {
+              setFilters({ author: v });
+            }}
+            data={authors.map((a) => ({ value: a.key, label: a.name }))}
+            comboboxProps={{ withinPortal: true }}
+            style={{ minWidth: 140 }}
+          />
+        )}
+        {visibleTracks.length > 0 && (
+          <Select
+            size="sm"
+            placeholder={t("comments.allTracks")}
+            aria-label={t("comments.track")}
+            clearable
+            value={filters.track}
+            onChange={(v) => {
+              setFilters({ track: v });
+            }}
+            data={[
+              { value: "song", label: t("comments.wholeSong") },
+              ...visibleTracks.map((x) => ({ value: x.id, label: x.name })),
+            ]}
+            comboboxProps={{ withinPortal: true }}
+            style={{ minWidth: 140 }}
+          />
+        )}
+      </Group>
+      <Switch
+        checked={filters.showResolved}
+        onChange={(e) => {
+          setFilters({ showResolved: e.currentTarget.checked });
+        }}
+        label={t("comments.showResolved", { count: hiddenResolved })}
+        data-testid="filter-resolved"
+      />
+
+      {shown.length === 0 ? (
+        <Text c="dimmed" size="sm" data-testid="comments-empty">
+          {comments.length === 0 ? t("comments.empty") : t("comments.noneMatch")}
+        </Text>
+      ) : (
+        <Stack gap="sm" data-testid="comments-list">
+          {shown.map((c) => (
+            <CommentItem key={c.id} comment={c} song={song} tracks={tracks} usernames={usernames} />
+          ))}
+        </Stack>
+      )}
+    </Stack>
+  );
+  const close = () => {
+    setPanelOpen(false);
+  };
+  // Phones and short screens: full screen; tablets: a bottom sheet; desktop: a side panel.
+  if (sheet) {
+    return (
+      <AppModal
+        opened={open}
+        onClose={close}
+        title={t("comments.title")}
+        closeButtonProps={{ "data-testid": "comments-close" } as object}
+        data-testid="comments-panel"
+      >
+        {body}
+      </AppModal>
+    );
+  }
   return (
     <Drawer
       opened={open}
@@ -154,160 +323,7 @@ function CommentsPanel({
       }
       data-testid="comments-panel"
     >
-      <Stack gap="sm" pb="md">
-        <Group gap="xs" wrap="wrap" justify="space-between">
-          {mayComment && (
-            <LockedHint locked={locked}>
-              <Button
-                h={44}
-                variant="light"
-                leftSection={<IconMessagePlus size={18} />}
-                disabled={locked}
-                onClick={() => {
-                  commentAtPlayhead();
-                }}
-                data-testid="panel-comment-at-playhead"
-              >
-                {t("comments.atPlayhead")}
-              </Button>
-            </LockedHint>
-          )}
-          <Menu position="bottom-end" withinPortal>
-            <Menu.Target>
-              <ActionIcon
-                size={44}
-                variant="subtle"
-                color="gray"
-                aria-label={t("comments.export")}
-                data-testid="comments-export"
-              >
-                <IconDownload size={18} />
-              </ActionIcon>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Label>{t("comments.export")}</Menu.Label>
-              <Menu.Item
-                onClick={() => {
-                  exportAs("md");
-                }}
-                data-testid="export-md"
-              >
-                {t("comments.exportMarkdown")}
-              </Menu.Item>
-              <Menu.Item
-                onClick={() => {
-                  exportAs("csv");
-                }}
-                data-testid="export-csv"
-              >
-                {t("comments.exportCsv")}
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
-        </Group>
-
-        {mayComment && locked && (
-          <Alert color="yellow" variant="light" data-testid="comments-locked">
-            {t("songs.lock.banner")}
-          </Alert>
-        )}
-        {composer && canComment && <Composer song={song} tracks={tracks} />}
-
-        {truncated && (
-          <Alert color="yellow" data-testid="comments-truncated">
-            {t("comments.truncated", { n: comments.length })}
-          </Alert>
-        )}
-
-        <Group gap="xs" wrap="wrap">
-          <SegmentedControl
-            size="sm"
-            value={sort}
-            onChange={(v) => {
-              setSort(v === "date" ? "date" : "time");
-            }}
-            data={[
-              { value: "time", label: t("comments.sortTime") },
-              { value: "date", label: t("comments.sortDate") },
-            ]}
-            aria-label={t("comments.sort")}
-            data-testid="comments-sort"
-          />
-          {!linkMode && (
-            <Chip
-              size="sm"
-              checked={filters.mentionsMe}
-              onChange={(v) => {
-                setFilters({ mentionsMe: v });
-              }}
-              data-testid="filter-mentions"
-            >
-              {t("comments.mentionsMe")}
-            </Chip>
-          )}
-        </Group>
-        <Group gap="xs" wrap="wrap" grow>
-          {authors.length > 1 && (
-            <Select
-              size="sm"
-              placeholder={t("comments.allAuthors")}
-              aria-label={t("comments.author")}
-              clearable
-              value={filters.author}
-              onChange={(v) => {
-                setFilters({ author: v });
-              }}
-              data={authors.map((a) => ({ value: a.key, label: a.name }))}
-              comboboxProps={{ withinPortal: true }}
-              style={{ minWidth: 140 }}
-            />
-          )}
-          {visibleTracks.length > 0 && (
-            <Select
-              size="sm"
-              placeholder={t("comments.allTracks")}
-              aria-label={t("comments.track")}
-              clearable
-              value={filters.track}
-              onChange={(v) => {
-                setFilters({ track: v });
-              }}
-              data={[
-                { value: "song", label: t("comments.wholeSong") },
-                ...visibleTracks.map((x) => ({ value: x.id, label: x.name })),
-              ]}
-              comboboxProps={{ withinPortal: true }}
-              style={{ minWidth: 140 }}
-            />
-          )}
-        </Group>
-        <Switch
-          checked={filters.showResolved}
-          onChange={(e) => {
-            setFilters({ showResolved: e.currentTarget.checked });
-          }}
-          label={t("comments.showResolved", { count: hiddenResolved })}
-          data-testid="filter-resolved"
-        />
-
-        {shown.length === 0 ? (
-          <Text c="dimmed" size="sm" data-testid="comments-empty">
-            {comments.length === 0 ? t("comments.empty") : t("comments.noneMatch")}
-          </Text>
-        ) : (
-          <Stack gap="sm" data-testid="comments-list">
-            {shown.map((c) => (
-              <CommentItem
-                key={c.id}
-                comment={c}
-                song={song}
-                tracks={tracks}
-                usernames={usernames}
-              />
-            ))}
-          </Stack>
-        )}
-      </Stack>
+      {body}
     </Drawer>
   );
 }

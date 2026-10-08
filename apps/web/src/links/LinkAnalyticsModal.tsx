@@ -1,9 +1,10 @@
 import type { PublicLink } from "@bandroom/shared";
-import { Alert, Loader, Modal, Paper, SimpleGrid, Stack, Table, Text, Title } from "@mantine/core";
+import { Alert, Loader, Paper, SimpleGrid, Stack, Table, Text, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { useFormatters } from "../i18n/format";
 import { useLinkAnalytics } from "./queries";
 import { errorMessage } from "../api/errorMessage";
+import { AppModal } from "../components/ResponsivePanel";
 
 const STATS = ["opens", "visitors", "plays", "downloads", "comments", "passwordFailures"] as const;
 
@@ -33,7 +34,7 @@ export function LinkAnalyticsModal({ link, onClose }: { link: PublicLink; onClos
     }
   };
   return (
-    <Modal
+    <AppModal
       opened
       onClose={onClose}
       title={t("links.analytics.title", { label: link.label || t("links.untitled") })}
@@ -115,6 +116,6 @@ export function LinkAnalyticsModal({ link, onClose }: { link: PublicLink; onClos
           </Stack>
         </Stack>
       )}
-    </Modal>
+    </AppModal>
   );
 }

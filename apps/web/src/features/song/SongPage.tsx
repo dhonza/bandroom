@@ -13,7 +13,6 @@ import {
   Center,
   Group,
   Loader,
-  Modal,
   Stack,
   Text,
   Textarea,
@@ -50,6 +49,7 @@ import { errorMessage } from "../../api/errorMessage";
 import { BackLink } from "../../components/BackLink";
 import { dropDeletedFromQueue } from "../../player/dropDeleted";
 import { SongLockBanner, SongLockButton } from "./songLock";
+import { AppModal } from "../../components/ResponsivePanel";
 
 /** Song page (SPEC §11.3): metadata, the Player (Mixer in the header), tracks, notes and access. */
 export function SongPage() {
@@ -154,7 +154,7 @@ function EditSongModal({ song, onClose }: { song: Song; onClose: () => void }) {
     },
   });
   return (
-    <Modal opened onClose={onClose} title={t("songs.edit")} centered size="lg">
+    <AppModal opened onClose={onClose} title={t("songs.edit")} centered size="lg">
       <form
         onSubmit={form.onSubmit((v) => {
           save.mutate(v);
@@ -187,7 +187,7 @@ function EditSongModal({ song, onClose }: { song: Song; onClose: () => void }) {
           </Group>
         </Stack>
       </form>
-    </Modal>
+    </AppModal>
   );
 }
 

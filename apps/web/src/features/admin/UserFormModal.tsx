@@ -11,7 +11,6 @@ import {
   Alert,
   Button,
   Group,
-  Modal,
   NumberInput,
   PasswordInput,
   Select,
@@ -26,6 +25,7 @@ import { fieldErrorsOf, translateValidation, useApiError } from "../../api/useAp
 import { zodValidator } from "../../api/validate";
 import { useInvalidateAdmin } from "./queries";
 import { roleOptions } from "./roleOptions";
+import { AppModal } from "../../components/ResponsivePanel";
 
 /** Create a user (with initial password) or edit an existing one (name, email, role). */
 export function UserFormModal({
@@ -104,7 +104,7 @@ export function UserFormModal({
   });
 
   return (
-    <Modal
+    <AppModal
       opened={opened}
       onClose={onClose}
       title={isEdit ? t("admin.users.edit") : t("admin.users.create")}
@@ -176,6 +176,6 @@ export function UserFormModal({
           </Group>
         </Stack>
       </form>
-    </Modal>
+    </AppModal>
   );
 }
