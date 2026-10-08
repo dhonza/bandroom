@@ -127,7 +127,16 @@ sudo docker compose pull && sudo docker compose up -d
 sudo docker compose exec app bandroom create-admin   # from M1
 ```
 
-Updates: `sudo ./deploy.sh` in `/opt/bandroom`.
+Updates: `sudo ./deploy.sh` in `/opt/bandroom`. It pulls the new image, stops the app and worker,
+copies `data/bandroom.sqlite` to `/opt/bandroom-backup/bandroom-before-<new>-from-<old>-<UTC time>.sqlite`
+(next to the application directory; `BANDROOM_BACKUP_DIR` changes it), verifies the copy, starts the
+new version, waits for the health check and prints the rollback commands. It never overwrites or
+deletes a backup; remove old ones by hand. The backup directory is root-only (`chmod 700`), so list
+or copy its files inside a root shell, e.g. `sudo sh -c 'ls -l /opt/bandroom-backup/'` (a `*` typed
+in your own shell cannot see into it).
+
+To update `deploy.sh` itself, copy the new version from the repository:
+`sudo curl -fsSL https://raw.githubusercontent.com/<owner>/bandroom/main/deploy/deploy.sh -o deploy.sh && sudo chmod 755 deploy.sh`.
 
 ## 6. Other services on the same host
 
@@ -137,4 +146,4 @@ Prefer a subdomain for anything that runs code in the browser (an app, not a sta
 on `example.com` share BandRoom's origin, so a cross-site scripting hole in another app there could
 act with a band member's BandRoom session.
 
-Backups (`backup.sh`, restic) are added in M15.
+Off-site backups (`backup.sh`, restic) are added in M15; `deploy.sh` only keeps a local copy of the database before each update.
