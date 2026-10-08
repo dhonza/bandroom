@@ -34,6 +34,7 @@ import { registerInternalRoutes, registerStreamRoutes } from "./routes/stream";
 import { registerMixerRoutes } from "./routes/mixer";
 import { registerOfflineRoutes } from "./routes/offline";
 import { registerOpsRoutes } from "./routes/ops";
+import { registerUpdateRoutes, type UpdateOptions } from "./routes/updates";
 import { registerMarkerRoutes } from "./routes/markers";
 import { registerCommentRoutes } from "./routes/comments";
 import { registerNotificationRoutes } from "./routes/notifications";
@@ -68,6 +69,8 @@ export interface AppDeps {
   imageFetch?: ImageFetchOptions;
   /** Run the in-process job runner (Samply importer). Off in `inject()` tests. */
   runJobs?: boolean;
+  /** Registry access of the update check (tests inject a fake). */
+  updates?: UpdateOptions;
 }
 
 /** Builds the Fastify app without listening, so tests can use `app.inject()`. */
@@ -83,6 +86,7 @@ export async function buildApp({
   samply,
   imageFetch = {},
   runJobs = false,
+  updates = {},
 }: AppDeps): Promise<FastifyInstance> {
   const options: FastifyServerOptions = { trustProxy: config.trustProxy };
   const app = Fastify(logger ? { ...options, loggerInstance: logger } : options);
@@ -147,6 +151,7 @@ export async function buildApp({
       registerAdminRoutes(api, ctx);
       registerApiKeyRoutes(api, ctx);
       registerOpsRoutes(api, ctx);
+      registerUpdateRoutes(api, ctx, updates);
       registerDirectoryRoutes(api, ctx);
       registerProjectRoutes(api, ctx);
       registerProjectImageRoutes(api, ctx);

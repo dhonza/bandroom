@@ -243,3 +243,85 @@ export const getAdminLogs = defineContract({
   response: z.object({ records: z.array(AdminLogRecordSchema) }),
   auth: admin,
 });
+
+// --- Remote updates (SPEC §29.8) -----------------------------------------------------------
+
+export const RELEASE_TAG_RE = /^v\d+\.\d+\.\d+$/;
+export const ReleaseTagSchema = z.string().regex(RELEASE_TAG_RE);
+
+export const UpdateRequestSchema = z.object({
+  id: z.string(),
+  action: z.enum(["deploy", "rollback"]),
+  tag: ReleaseTagSchema.nullable(),
+  requestedBy: z.string(),
+  ts: z.number(),
+  /** `pending`: waiting for the host watcher; `running`: deploy.sh is running. */
+  state: z.enum(["pending", "running"]),
+});
+export type UpdateRequest = z.infer<typeof UpdateRequestSchema>;
+
+export const UpdateResultSchema = z.object({
+  id: z.string(),
+  action: z.string(),
+  tag: z.string().nullable(),
+  exitCode: z.number(),
+  startedAt: z.number().nullable(),
+  finishedAt: z.number().nullable(),
+  /** Why the watcher refused the request (invalid request), if it did. */
+  error: z.string().nullable(),
+  /** The last lines of deploy.sh's output (capped by the watcher). */
+  outputTail: z.string(),
+});
+export type UpdateResult = z.infer<typeof UpdateResultSchema>;
+
+export const UpdatesStateSchema = z.object({
+  running: z.string(),
+  /** Release tags newest first; null until checked (or the last check failed). */
+  available: z.array(ReleaseTagSchema).nullable(),
+  checkedAt: z.number().nullable(),
+  imageRepo: z.string(),
+  request: UpdateRequestSchema.nullable(),
+  lastResult: UpdateResultSchema.nullable(),
+  /** When the host watcher last wrote its status (null = never: watcher not installed?). */
+  hostStatusAt: z.number().nullable(),
+});
+export type UpdatesState = z.infer<typeof UpdatesStateSchema>;
+
+/**
+ * Update state. `check=true` asks the registry for release tags (cached 1 h); without it nothing
+ * is fetched.
+ */
+export const getAdminUpdates = defineContract({
+  method: "GET",
+  path: "/admin/updates",
+  query: z.object({ check: z.enum(["true", "false"]).default("false") }),
+  response: UpdatesStateSchema,
+  errors: ["UPDATE_CHECK_FAILED"],
+  auth: admin,
+});
+
+export const requestAdminUpdate = defineContract({
+  method: "POST",
+  path: "/admin/updates",
+  body: z.discriminatedUnion("action", [
+    z.object({ action: z.literal("deploy"), tag: ReleaseTagSchema }),
+    z.object({ action: z.literal("rollback"), confirmRunningVersion: z.string().min(1).max(64) }),
+  ]),
+  response: z.object({ request: UpdateRequestSchema }),
+  errors: [
+    "UPDATE_PENDING",
+    "UPDATE_TAG_UNKNOWN",
+    "UPDATE_CONFIRM_MISMATCH",
+    "UPDATE_CHECK_FAILED",
+  ],
+  auth: admin,
+});
+
+/** Withdraws a request the host watcher has not picked up yet. */
+export const cancelAdminUpdate = defineContract({
+  method: "DELETE",
+  path: "/admin/updates",
+  response: z.object({ ok: z.literal(true) }),
+  errors: ["NOT_FOUND", "UPDATE_PENDING"],
+  auth: admin,
+});

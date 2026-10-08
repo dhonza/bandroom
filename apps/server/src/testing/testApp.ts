@@ -35,6 +35,7 @@ import { SlotLimiter } from "../http/slotLimiter";
 import { SESSION_COOKIE } from "../http/session";
 import { MIGRATIONS_DIR } from "../paths";
 import { EventHub } from "../realtime/hub";
+import type { UpdateOptions } from "../routes/updates";
 
 export const FAKE_INDEX_HTML =
   '<!doctype html><html><head><meta charset="UTF-8"><script type="module" src="./assets/index-abc.js"></script></head><body><div id="root"></div></body></html>';
@@ -56,7 +57,7 @@ export interface TestApp {
 /** Builds an app on a temp data dir with a fake SPA build, for `inject()`-based tests. */
 export async function createTestApp(
   env: Record<string, string> = {},
-  deps: { samply?: SamplyOptions; imageFetch?: ImageFetchOptions } = {},
+  deps: { samply?: SamplyOptions; imageFetch?: ImageFetchOptions; updates?: UpdateOptions } = {},
 ): Promise<TestApp> {
   const tmp = makeTempDir();
   const dataDir = path.join(tmp.dir, "data");
@@ -84,6 +85,7 @@ export async function createTestApp(
     throttle,
     samply: deps.samply,
     imageFetch: deps.imageFetch,
+    updates: deps.updates,
     hub,
     ffmpegSlots,
   });
