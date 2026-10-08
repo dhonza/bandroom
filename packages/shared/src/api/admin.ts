@@ -38,6 +38,7 @@ export const adminCreateUser = defineContract({
   response: z.object({ user: AdminUserSchema }),
   errors: ["USERNAME_TAKEN", "EMAIL_TAKEN"],
   auth: admin,
+  apiKey: false,
 });
 
 export const adminUpdateUser = defineContract({
@@ -56,6 +57,7 @@ export const adminUpdateUser = defineContract({
   response: z.object({ user: AdminUserSchema }),
   errors: ["NOT_FOUND", "EMAIL_TAKEN", "LAST_ADMIN"],
   auth: admin,
+  apiKey: false,
 });
 
 /** One-time password reset link (valid 24 h); also resolves a pending reset request. */
@@ -66,6 +68,7 @@ export const adminCreateResetLink = defineContract({
   response: OneTimeLinkSchema,
   errors: ["NOT_FOUND"],
   auth: admin,
+  apiKey: false,
 });
 
 export const adminDismissResetRequest = defineContract({
@@ -74,6 +77,7 @@ export const adminDismissResetRequest = defineContract({
   params: UserIdParams,
   response: OkSchema,
   auth: admin,
+  apiKey: false,
 });
 
 export const adminListInvites = defineContract({
@@ -93,6 +97,7 @@ export const adminCreateInvite = defineContract({
   }),
   response: z.object({ invite: InviteInfoSchema, link: OneTimeLinkSchema }),
   auth: admin,
+  apiKey: false,
 });
 
 export const adminRevokeInvite = defineContract({
@@ -102,4 +107,5 @@ export const adminRevokeInvite = defineContract({
   response: OkSchema,
   errors: ["NOT_FOUND"],
   auth: admin,
+  apiKey: false,
 });

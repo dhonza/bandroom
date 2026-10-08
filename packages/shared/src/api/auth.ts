@@ -16,6 +16,7 @@ export const login = defineContract({
   response: z.object({ user: CurrentUserSchema }),
   errors: ["INVALID_CREDENTIALS", "RATE_LIMITED"],
   auth: { public: true },
+  apiKey: false,
 });
 
 export const logout = defineContract({
@@ -23,6 +24,7 @@ export const logout = defineContract({
   path: "/auth/logout",
   response: OkSchema,
   auth: { public: true },
+  apiKey: false,
 });
 
 /** Current session's user, or `user: null` when not logged in (never 401, so the SPA can boot). */
@@ -31,6 +33,7 @@ export const getSession = defineContract({
   path: "/auth/session",
   response: z.object({ user: CurrentUserSchema.nullable() }),
   auth: { public: true },
+  apiKey: false,
 });
 
 /** "Forgot password?": records a request for admins. Same response whether the account exists. */
@@ -41,6 +44,7 @@ export const requestPasswordReset = defineContract({
   response: OkSchema,
   errors: ["RATE_LIMITED"],
   auth: { public: true },
+  apiKey: false,
 });
 
 export const getInvite = defineContract({
@@ -50,6 +54,7 @@ export const getInvite = defineContract({
   response: z.object({ globalRole: GlobalRoleSchema, expiresAt: z.number() }),
   errors: ["TOKEN_INVALID"],
   auth: { public: true },
+  apiKey: false,
 });
 
 export const acceptInvite = defineContract({
@@ -65,6 +70,7 @@ export const acceptInvite = defineContract({
   response: z.object({ user: CurrentUserSchema }),
   errors: ["TOKEN_INVALID", "USERNAME_TAKEN", "RATE_LIMITED"],
   auth: { public: true },
+  apiKey: false,
 });
 
 export const getPasswordReset = defineContract({
@@ -74,6 +80,7 @@ export const getPasswordReset = defineContract({
   response: z.object({ username: z.string(), expiresAt: z.number() }),
   errors: ["TOKEN_INVALID"],
   auth: { public: true },
+  apiKey: false,
 });
 
 /** Sets a new password, revokes all sessions, and logs the user in on this device. */
@@ -85,4 +92,5 @@ export const completePasswordReset = defineContract({
   response: z.object({ user: CurrentUserSchema }),
   errors: ["TOKEN_INVALID", "RATE_LIMITED"],
   auth: { public: true },
+  apiKey: false,
 });

@@ -38,6 +38,7 @@ export const changePassword = defineContract({
   response: OkSchema,
   errors: ["WRONG_PASSWORD", "RATE_LIMITED"],
   auth: { user: true },
+  apiKey: false,
 });
 
 export const listMySessions = defineContract({
@@ -45,6 +46,7 @@ export const listMySessions = defineContract({
   path: "/me/sessions",
   response: z.object({ sessions: z.array(SessionInfoSchema) }),
   auth: { user: true },
+  apiKey: false,
 });
 
 export const revokeMySession = defineContract({
@@ -54,6 +56,7 @@ export const revokeMySession = defineContract({
   response: OkSchema,
   errors: ["NOT_FOUND"],
   auth: { user: true },
+  apiKey: false,
 });
 
 export const revokeMyOtherSessions = defineContract({
@@ -61,6 +64,7 @@ export const revokeMyOtherSessions = defineContract({
   path: "/me/sessions/revoke-others",
   response: z.object({ revoked: z.number() }),
   auth: { user: true },
+  apiKey: false,
 });
 
 /** Storage used by my uploads and my quota (null = unlimited), SPEC §15.1. */

@@ -38,6 +38,7 @@ export const getMySamplyKey = defineContract({
   path: "/me/secrets/samply",
   response: SavedSecretSchema,
   auth: admin,
+  apiKey: false,
 });
 
 /** Saves (or replaces) the current admin's Samply key, sealed; it is never returned. */
@@ -47,6 +48,7 @@ export const saveMySamplyKey = defineContract({
   body: z.object({ apiKey: SamplyApiKeySchema }),
   response: SavedSecretSchema,
   auth: admin,
+  apiKey: false,
 });
 
 export const deleteMySamplyKey = defineContract({
@@ -54,6 +56,7 @@ export const deleteMySamplyKey = defineContract({
   path: "/me/secrets/samply",
   response: SavedSecretSchema,
   auth: admin,
+  apiKey: false,
 });
 
 export const listImportRuns = defineContract({

@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { ErrorCode } from "../errors";
 import type { Capability } from "../permissions/content";
+import type { ApiScope } from "../permissions/apiScopes";
 import type { GlobalCapability } from "../permissions/global";
 
 export const API_PREFIX = "/api/v1";
@@ -73,6 +74,11 @@ export interface ContractDef {
   readonly response: z.ZodType;
   readonly errors?: readonly ErrorCode[];
   readonly auth?: RouteAuth;
+  /**
+   * API-key access (SPEC §29.2): `false` refuses keys (`API_KEY_SCOPE`), a scope overrides the
+   * default (GET → read, else write; admin routes admin:read / admin:ops).
+   */
+  readonly apiKey?: ApiScope | false;
 }
 
 export function defineContract<const C extends ContractDef>(contract: C): C {
