@@ -277,3 +277,54 @@ test("Tracks: drag-reorder by keyboard while playing; the lanes follow without r
       .toBeLessThanOrEqual(0);
   }
 });
+
+test("Mixer: open or closed is remembered per song on this device", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  await loginAsNewUser(page, request, testInfo, "member");
+  await page.goto("library");
+  await page.getByTestId("new-project").click();
+  await page.getByLabel("Name").fill(`Mixer memory ${uniqueUsername(testInfo)}`);
+  await page.getByTestId("create-project-submit").click();
+  await page.getByTestId("project-settings-tab").waitFor();
+  for (const title of ["Song A", "Song B"]) {
+    await page.getByTestId("new-song").click();
+    await page.getByLabel("Title", { exact: true }).fill(title);
+    await page.getByTestId("create-song-submit").click();
+    await expect(page.getByTestId("song-row").filter({ hasText: title })).toBeVisible({
+      timeout: 30_000,
+    });
+  }
+  const toggle = page.getByTestId("mixer-toggle");
+  const openSong = async (title: string) => {
+    await page.getByTestId("song-row").filter({ hasText: title }).getByRole("link").click();
+    await expect(page.getByTestId("song-title")).toContainText(title, { timeout: 30_000 });
+  };
+  // The Mixer button needs a track; each song gets one.
+  for (const title of ["Song A", "Song B"]) {
+    await openSong(title);
+    await page
+      .getByTestId("track-dropzone")
+      .locator('input[type="file"]')
+      .setInputFiles(TONE_FILE());
+    await expect(page.getByTestId("track-row")).toHaveCount(1, { timeout: 60_000 });
+    await expect(toggle).toBeEnabled({ timeout: 30_000 });
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await page.goBack();
+  }
+
+  await openSong("Song A");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await page.goBack();
+  await openSong("Song B");
+  await expect(toggle).toBeEnabled({ timeout: 30_000 });
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await page.goBack();
+  await openSong("Song A");
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await page.reload();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
+});

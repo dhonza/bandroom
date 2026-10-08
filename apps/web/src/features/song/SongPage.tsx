@@ -58,7 +58,7 @@ export function SongPage() {
   const { songId = "" } = useParams();
   const query = useSong(songId);
   const tracks = useSongTracks(songId);
-  const mixer = useMixerToggle(true);
+  const mixer = useMixerToggle(true, songId);
   const [editOpen, edit] = useDisclosure(false);
 
   if (query.isPending) {
