@@ -9,6 +9,7 @@ test.beforeAll(async () => {
 interface DebugState {
   status: string;
   position: number;
+  length: number;
   errors: Record<string, string>;
   practice: { rate: number; semitones: number; cents: number };
   enginePractice: { rate: number; semitones: number; quality: string } | null;
@@ -37,7 +38,7 @@ test("Practice: slower and transposed, plays and persists (SPEC §30)", async ({
   page,
   request,
 }, testInfo) => {
-  test.setTimeout(240_000);
+  test.setTimeout(600_000);
   const phone = isMobile(testInfo);
   await loginAsNewUser(page, request, testInfo, "member");
 
@@ -95,6 +96,28 @@ test("Practice: slower and transposed, plays and persists (SPEC §30)", async ({
   await expect
     .poll(async () => (await debug(page))?.practice, { timeout: 30_000 })
     .toEqual({ rate: 0.75, semitones: -2, cents: 0 });
+
+  // Bounce a practice version (desktop: the worker stretches with the same WASM, SPEC §30.7).
+  if (!phone) {
+    const length = (await debug(page))?.length ?? 0;
+    expect(length).toBeGreaterThan(0);
+    await page.getByTestId("mixer-bounce").click();
+    await expect(page.getByTestId("bounce-applyPractice")).toBeChecked();
+    await expect(page.getByTestId("bounce-title")).toHaveValue("Slow tune (75 %, −2 st)");
+    await page.getByTestId("bounce-submit").click();
+    await page.getByTestId("bounce-open").click();
+    await expect(page.getByTestId("song-title")).toHaveText("Slow tune (75 %, −2 st)");
+    await expect(page.getByTestId("track-row").filter({ hasText: "kHz" })).toHaveCount(1, {
+      timeout: 420_000,
+    });
+    // A new song plays at the original speed: the bounce is 1 / 0.75 as long.
+    await expect
+      .poll(async () => (await debug(page))?.length ?? 0, { timeout: 60_000 })
+      .toBeGreaterThan(length / 0.75 - 4800);
+    expect((await debug(page))?.length ?? 0).toBeLessThan(length / 0.75 + 4800);
+    await page.goBack();
+    await expect(page.getByTestId("rehearse-panel")).toBeVisible();
+  }
 
   // Back to the original.
   await openPractice(page, phone);
