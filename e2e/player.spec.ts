@@ -423,3 +423,52 @@ test("Mixer: the click is a lane with its own header (M, S, volume), saved like 
   await expect(timeline).toHaveAttribute("data-lanes", "0");
   await expect(page.getByTestId("click-strip")).toHaveCount(0);
 });
+
+test("Recenter follows the playhead without seeking; the overview shows the playhead", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(540_000);
+  await loginAsNewUser(page, request, testInfo, "member");
+  await songWithTrack(page, testInfo);
+  const panel = page.getByTestId("rehearse-panel");
+  const detail = panel.getByTestId("timeline-detail");
+  const seconds = async () => ((await engine(page))?.position ?? 0) / 48_000;
+
+  await page.getByTestId("rehearse-play").click();
+  await expect.poll(async () => (await engine(page))?.status, { timeout: 30_000 }).toBe("playing");
+  // A horizontal scroll turns following off (a dispatched wheel works on touch devices too).
+  await detail.evaluate((el) => {
+    el.dispatchEvent(new WheelEvent("wheel", { deltaX: 40, bubbles: true, cancelable: true }));
+  });
+  const recenter = panel.getByRole("button", { name: "Follow playhead" });
+  await expect(recenter).toBeVisible();
+  const before = await seconds();
+  // The button sits at the right end of the 10 s song: a seek there would jump far ahead.
+  expect(before).toBeLessThan(6);
+  await recenter.click();
+  await expect(recenter).toBeHidden();
+  const after = await seconds();
+  expect(after).toBeGreaterThanOrEqual(before);
+  expect(after - before).toBeLessThan(1.5);
+
+  // The overview (the only waveform with the Mixer closed) shows the playhead: a narrow line.
+  const columns = await panel.getByTestId("timeline-overview-playhead").evaluate((el) => {
+    const c = el as HTMLCanvasElement;
+    const data = c.getContext("2d")?.getImageData(0, 0, c.width, c.height).data;
+    const drawn: number[] = [];
+    if (!data) return drawn;
+    for (let x = 0; x < c.width; x++) {
+      for (let y = 0; y < c.height; y++) {
+        if ((data[(y * c.width + x) * 4 + 3] ?? 0) > 0) {
+          drawn.push(x / c.width);
+          break;
+        }
+      }
+    }
+    return drawn;
+  });
+  expect(columns.length).toBeGreaterThan(0);
+  expect(Math.max(...columns) - Math.min(...columns)).toBeLessThan(0.02);
+  expect(Math.min(...columns)).toBeLessThan(0.7);
+});
