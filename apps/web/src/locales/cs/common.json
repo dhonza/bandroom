@@ -789,7 +789,9 @@
     "alwaysCopied": "Podtitul a tónina se zkopírují, komentáře, dokumenty a sdílení ne.",
     "applyPractice": "Použít nastavení cvičení ({{practice}})",
     "defaultPracticeTitle": "{{title}} ({{practice}})",
-    "keepPitch": "Bez transpozice: {{tracks}}"
+    "keepPitch": "Bez transpozice: {{tracks}}",
+    "formantsOnly": "posun formantů",
+    "formantShifts": "Posun formantů: {{tracks}}"
   },
   "rehearse": {
     "toStart": "Na začátek",
@@ -1942,6 +1944,19 @@
       "auto": "Automaticky (na telefonu úsporně)",
       "high": "Vysoká",
       "economy": "Úsporná (méně výkonu)"
-    }
+    },
+    "bandDefault": "Výchozí pro kapelu",
+    "forMe": "Pro mě",
+    "band": "Kapela",
+    "formants": "Formanty",
+    "formantShift": "Posun formantů",
+    "ownShift": "Vlastní posun",
+    "formantModes": {
+      "band": "Kapela",
+      "auto": "Automaticky",
+      "preserve": "Zachovat",
+      "follow": "S laděním"
+    },
+    "resolved": "Hraje se vám: transpozice {{transpose}}, formanty: {{formants}}, posun {{shift}}"
   }
 }

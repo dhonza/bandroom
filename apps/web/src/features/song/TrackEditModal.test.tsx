@@ -89,6 +89,25 @@ describe("TrackEditModal (SPEC §30.6)", () => {
     expect(screen.getAllByText("Song is locked").length).toBeGreaterThan(0);
   });
 
+  it("sets the band's formant mode (back to automatic = null)", async () => {
+    let sent: unknown = null;
+    mockApi({
+      "PATCH /tracks/t1": (init) => {
+        sent = JSON.parse(init?.body as string);
+        return { body: { ok: true } };
+      },
+    });
+    const onClose = await renderModal({ ...base, formantMode: "follow", formantShift: 2 });
+    expect(await screen.findByTestId("track-formant-shift-value")).toHaveTextContent("+2 st");
+    await userEvent.click(screen.getByText("Keep"));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled();
+    });
+    expect(sent).toMatchObject({ formantMode: "preserve" });
+    expect(sent).not.toHaveProperty("formantShift");
+  });
+
   it("guesses the mix for the only unrecognised track", async () => {
     mockApi({});
     await renderModal({ ...base, name: "Take" }, { singleTrack: true });

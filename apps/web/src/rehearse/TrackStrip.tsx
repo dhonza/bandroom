@@ -34,7 +34,7 @@ import { headerButtonSize, headerTier } from "./headerTier";
 import { Meter, SHOW_METERS } from "./Meter";
 import type { PlayableTrack } from "./model";
 import { TrackColorBar, TrackColorPalette } from "./TrackColor";
-import { PitchLockedBadge, TransposeSwitch } from "./TrackTranspose";
+import { PitchLockedBadge, TrackPracticeSettings } from "./TrackTranspose";
 import { trackTint } from "../timeline/render";
 import { VersionGainBadge, VersionGainField } from "./VersionGain";
 
@@ -354,7 +354,7 @@ export function TrackStrip({
         {pan}
       </div>
       <VersionGainField song={song} track={track} version={version} canEdit={canEditTrack} />
-      {canEditTrack && <TransposeSwitch song={song} track={track} />}
+      <TrackPracticeSettings song={song} track={track} canEdit={canEditTrack} />
       {compact && canEditTrack && <TrackColorPalette track={track} />}
     </Stack>
   );

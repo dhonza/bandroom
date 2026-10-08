@@ -1,9 +1,9 @@
 import {
   bounceSong,
-  effectiveTranspose,
   isNeutralPractice,
   practiceOf,
   SongTitleSchema,
+  trackStretchPolicy,
   type Practice,
   type Song,
 } from "@bandroom/shared";
@@ -21,6 +21,7 @@ import {
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { api } from "../api/client";
@@ -30,7 +31,7 @@ import { useTempoUi } from "../tempo/store";
 import { uploadOptions } from "../upload/prefs";
 import { UploadSettings } from "../upload/UploadSettings";
 import { pageState } from "./controller";
-import { practiceLabel } from "./practiceLabel";
+import { practiceLabel, signed } from "./practiceLabel";
 
 export interface BounceOptions {
   copyTempo: boolean;
@@ -67,20 +68,41 @@ export function bounceRequestBody(
   };
 }
 
-/** The practice setting of the Player's mix when it changes anything, else null. */
+/** Each Player track with its practice policy for this listener (SPEC §30.3). */
+function trackPolicies() {
+  const s = pageState();
+  const singleTrack = s.tracks.length === 1;
+  return s.tracks.map(({ track }) => ({
+    name: track.name,
+    policy: trackStretchPolicy(track, s.mix.tracks[track.id], { singleTrack }),
+  }));
+}
+
+/**
+ * The practice setting of the Player's mix when it changes anything (speed, pitch, or a track's
+ * formant shift), else null.
+ */
 function activePractice(): Practice | null {
   const p = practiceOf(pageState().mix);
-  return isNeutralPractice(p) ? null : p;
+  const shifted = trackPolicies().some((x) => x.policy.formantShift !== 0);
+  return isNeutralPractice(p) && !shifted ? null : p;
 }
 
 /** Names of the Player's tracks that keep their pitch while transposing (SPEC §30.3). */
 function pitchLockedTracks(p: Practice | null): string[] {
   if (!p || p.semitones + p.cents / 100 === 0) return [];
-  const tracks = pageState().tracks;
-  const singleTrack = tracks.length === 1;
-  return tracks
-    .filter(({ track }) => !effectiveTranspose(track, { singleTrack }))
-    .map(({ track }) => track.name);
+  return trackPolicies()
+    .filter((x) => !x.policy.transpose)
+    .map((x) => x.name);
+}
+
+/** "Vocals +3 st" for the tracks with a formant shift. */
+function formantShifts(t: TFunction): string[] {
+  return trackPolicies()
+    .filter((x) => x.policy.formantShift !== 0)
+    .map(
+      (x) => `${x.name} ${t("practice.semitonesShort", { value: signed(x.policy.formantShift) })}`,
+    );
 }
 
 /**
@@ -122,7 +144,8 @@ function BounceForm({ song, onClose }: { song: Pick<Song, "id" | "title">; onClo
   // Read once per opening (the form is mounted per opening).
   const [practice] = useState(activePractice);
   const [locked] = useState(() => pitchLockedTracks(practice));
-  const label = practice && practiceLabel(practice, t);
+  const [shifts] = useState(() => formantShifts(t));
+  const label = practice && (practiceLabel(practice, t) || t("bounce.formantsOnly"));
   // On by default when the setting is not neutral (SPEC §30.7).
   const [applyPractice, setApplyPractice] = useState(practice !== null);
   // The default title follows the switch until the user edits it.
@@ -215,6 +238,11 @@ function BounceForm({ song, onClose }: { song: Pick<Song, "id" | "title">; onClo
             {applyPractice && locked.length > 0 && (
               <Text size="xs" c="dimmed" data-testid="bounce-pitchLocked">
                 {t("bounce.keepPitch", { tracks: locked.join(", ") })}
+              </Text>
+            )}
+            {applyPractice && shifts.length > 0 && (
+              <Text size="xs" c="dimmed" data-testid="bounce-formants">
+                {t("bounce.formantShifts", { tracks: shifts.join(", ") })}
               </Text>
             )}
           </Stack>

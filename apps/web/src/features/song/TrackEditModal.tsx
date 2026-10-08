@@ -26,6 +26,7 @@ import { api } from "../../api/client";
 import { useApiError } from "../../api/useApiError";
 import { zodValidator } from "../../api/validate";
 import { ColorSwatchPicker } from "../../components/ColorSwatchPicker";
+import { FormantFields } from "../../rehearse/FormantFields";
 import { songKeys } from "../library/queries";
 
 /** Select value for "automatic" (null in the API). */
@@ -71,6 +72,8 @@ export function TrackEditModal({
     instrument: track.instrument ?? AUTO,
     transpose: transposeOf(track.transpose),
     voiceRange: voiceOf(track.voiceRange),
+    formantMode: track.formantMode ?? "auto",
+    formantShift: track.formantShift,
   };
   const form = useForm({
     initialValues: initial,
@@ -97,6 +100,12 @@ export function TrackEditModal({
           }),
           ...(values.voiceRange !== initial.voiceRange && {
             voiceRange: voiceFrom(values.voiceRange),
+          }),
+          ...(values.formantMode !== initial.formantMode && {
+            formantMode: values.formantMode === "auto" ? null : values.formantMode,
+          }),
+          ...(values.formantShift !== initial.formantShift && {
+            formantShift: values.formantShift,
           }),
         },
       }),
@@ -184,6 +193,19 @@ export function TrackEditModal({
               {...form.getInputProps("voiceRange")}
             />
           )}
+          <FormantFields
+            mode={v.formantMode}
+            shift={v.formantShift}
+            onMode={(m) => {
+              if (m !== "band") form.setFieldValue("formantMode", m);
+            }}
+            onShift={(x) => {
+              form.setFieldValue("formantShift", x ?? 0);
+            }}
+            disabled={locked}
+            note={lockedNote}
+            testId="track-formant"
+          />
           <Group justify="flex-end">
             <Button variant="default" onClick={onClose}>
               {t("common.cancel")}

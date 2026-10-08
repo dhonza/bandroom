@@ -761,7 +761,9 @@
     "alwaysCopied": "Subtitle and key are copied; comments, documents and sharing are not.",
     "applyPractice": "Apply practice settings ({{practice}})",
     "defaultPracticeTitle": "{{title}} ({{practice}})",
-    "keepPitch": "Not transposed: {{tracks}}"
+    "keepPitch": "Not transposed: {{tracks}}",
+    "formantsOnly": "formant shift",
+    "formantShifts": "Formant shift: {{tracks}}"
   },
   "rehearse": {
     "toStart": "Back to start",
@@ -1784,6 +1786,19 @@
       "auto": "Automatic (Economy on phones)",
       "high": "High",
       "economy": "Economy (less CPU)"
-    }
+    },
+    "bandDefault": "Band default",
+    "forMe": "For me",
+    "band": "Band",
+    "formants": "Formants",
+    "formantShift": "Formant shift",
+    "ownShift": "My own shift",
+    "formantModes": {
+      "band": "Band",
+      "auto": "Automatic",
+      "preserve": "Keep",
+      "follow": "Follow pitch"
+    },
+    "resolved": "Plays for you: transpose {{transpose}}, formants: {{formants}}, shift {{shift}}"
   }
 }
