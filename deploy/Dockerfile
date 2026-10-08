@@ -52,7 +52,8 @@ RUN printf '#!/bin/sh\nexec node /app/apps/server/dist/cli.js "$@"\n' > /usr/loc
 # The server-side deploy files: deploy.sh installs updated copies of them from each new image
 # (host-setup.md §7). Owned by root. (No --chmod: it would also apply to the new directory.)
 COPY deploy/deploy.sh deploy/status.sh deploy/compose.yml deploy/Caddyfile \
-     deploy/Caddyfile.subpath /app/deploy/
+     deploy/Caddyfile.subpath deploy/ops-watcher.sh deploy/bandroom-ops.path \
+     deploy/bandroom-ops.service deploy/bandroom-ops.timer /app/deploy/
 
 ENV NODE_ENV=production \
     DATA_DIR=/data \

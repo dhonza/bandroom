@@ -14,9 +14,9 @@
 # as bandroom-before-<new version>-from-<old version>-<UTC time>.sqlite. An existing file is
 # never overwritten, and the script stops if the copy cannot be verified.
 #
-# Self-update: release images carry deploy.sh, status.sh, compose.yml and the Caddyfile templates
-# in /app/deploy/. After pulling, changed copies of deploy.sh, status.sh and compose.yml are
-# installed here (with a diff and a .bak-<UTC time> copy of the old file), and the script restarts
+# Self-update: release images carry deploy.sh, status.sh, compose.yml, the ops watcher with its
+# systemd units and the Caddyfile templates in /app/deploy/. After pulling, changed copies of
+# deploy.sh, status.sh, compose.yml, ops-watcher.sh and bandroom-ops.* are installed here (with a diff and a .bak-<UTC time> copy of the old file), and the script restarts
 # itself once when deploy.sh or compose.yml changed. The Caddyfile is never replaced; a difference
 # from its template is only shown. Files from an older image than the running one are not installed.
 #
@@ -26,7 +26,7 @@ set -euo pipefail
 
 TAG_RE='^v[0-9]+\.[0-9]+\.[0-9]+$'
 STAMP="$(date -u +%Y%m%d-%H%M%S)"
-SELF_UPDATED_FILES=(deploy.sh status.sh compose.yml)
+SELF_UPDATED_FILES=(deploy.sh status.sh compose.yml ops-watcher.sh bandroom-ops.path bandroom-ops.service bandroom-ops.timer)
 
 say() { printf '==> %s\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
@@ -161,7 +161,7 @@ self_update() {
   fi
   if older_release "$new_version" "$old_version"; then
     info "The image ($new_version) is older than the running version ($old_version):"
-    info "keeping the current deploy.sh, status.sh and compose.yml."
+    info "keeping the current deploy files."
     return 0
   fi
   tmp="$(mktemp -d)"

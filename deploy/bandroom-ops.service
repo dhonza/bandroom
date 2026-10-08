@@ -1,0 +1,12 @@
+# Runs a pending update request (deploy.sh <tag> or --rollback) and writes the host status.
+# Started by bandroom-ops.path and bandroom-ops.timer; runs as root (it calls deploy.sh).
+[Unit]
+Description=BandRoom: run update requests and record the host status
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/bandroom/ops-watcher.sh
+# A deploy pulls images and waits for the health check.
+TimeoutStartSec=30min

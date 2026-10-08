@@ -1,0 +1,11 @@
+# Refreshes data/ops/host-status.json every 15 minutes (and picks up a missed request).
+[Unit]
+Description=BandRoom: host status for the ops API every 15 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+Unit=bandroom-ops.service
+
+[Install]
+WantedBy=timers.target

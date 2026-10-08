@@ -1,0 +1,11 @@
+# Starts bandroom-ops.service when the app writes an update request (SPEC §29.8).
+# Install: deploy/host-setup.md, "Remote updates". Adjust /opt/bandroom if your directory differs.
+[Unit]
+Description=BandRoom: watch for update requests from the app
+
+[Path]
+PathExists=/opt/bandroom/data/ops/request.json
+Unit=bandroom-ops.service
+
+[Install]
+WantedBy=multi-user.target

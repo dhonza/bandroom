@@ -165,8 +165,9 @@ directory is root-only (`chmod 700`), so list or copy its files inside a root sh
 use `sudo ./status.sh`.
 
 **Self-update.** Every image from v0.4.1 on carries `deploy.sh`, `status.sh`, `compose.yml` and the
-Caddyfile templates in `/app/deploy/`. After pulling, `deploy.sh` copies them out of the new image
-and, for each of `deploy.sh`, `status.sh` and `compose.yml` that differs from the installed one,
+Caddyfile templates in `/app/deploy/` (from v0.5.0 also `ops-watcher.sh` and the `bandroom-ops.*`
+systemd units, see below). After pulling, `deploy.sh` copies them out of the new image
+and, for each of these files (except the Caddyfile) that differs from the installed one,
 prints a unified diff, keeps the old file as `<file>.bak-<UTC time>` and installs the new one
 (owned by root; mode 755 for the scripts, 644 for `compose.yml`). When `deploy.sh` or `compose.yml`
 changed, it restarts itself once with the same arguments, so the rest of the update already runs
@@ -235,3 +236,48 @@ matches the full path. Why this does not hand out root:
   (which keeps a copy of the database first), and reading song, track and upload details.
 - The self-update installs files from the release image as root, so whoever can publish images to
   the registry can change these scripts. The diff is printed on every change; review it.
+
+### Remote updates and the ops API (optional, from v0.5.0)
+
+Admins can create **API keys** in Settings → API keys. A key with the `admin:read` scope can read
+the instance status, jobs, logs, activity and storage through the API (`pnpm remote …` in a checkout
+of the code, see `docs/api.md`); a key with `admin:ops` can also retry or cancel jobs and **request
+an update or a rollback**. The app container has no Docker access: it only writes
+`data/ops/request.json`, and a small watcher run by systemd on the host executes `deploy.sh`.
+Without the watcher, requests stay pending (withdraw them with `pnpm remote update cancel`).
+
+Install the watcher once (the units assume `/opt/bandroom`; edit the paths in the three files if
+your directory differs). `deploy.sh` keeps `ops-watcher.sh` and the unit files in `/opt/bandroom`
+up to date; after a change to a unit file, copy it again and run `systemctl daemon-reload`.
+
+```bash
+cd /opt/bandroom
+ls -l ops-watcher.sh bandroom-ops.*        # installed by deploy.sh v0.5.0 or later, owned by root
+sudo cp bandroom-ops.path bandroom-ops.service bandroom-ops.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now bandroom-ops.path bandroom-ops.timer
+sudo systemctl start bandroom-ops.service   # writes data/ops/host-status.json once
+systemctl list-timers bandroom-ops.timer
+journalctl -u bandroom-ops.service -n 50   # what the watcher did
+```
+
+How it works:
+
+- `bandroom-ops.path` starts `bandroom-ops.service` when `data/ops/request.json` appears; the
+  service runs `ops-watcher.sh` as root. `bandroom-ops.timer` runs the same service every 15 minutes
+  to refresh `data/ops/host-status.json` (container states and health, free disk, backups,
+  `BANDROOM_TAG`) and to pick up a request the path unit missed.
+- The watcher renames the request to `running.json`, runs `deploy.sh <tag>` or
+  `deploy.sh --rollback`, and writes `result-<id>.json` (exit code and the last 60 lines of output)
+  and `last.log`. The app shows them in `pnpm remote update status`.
+- `data/ops/` is writable by the app, so the watcher treats the request as **untrusted**: at most
+  4 KB, only JSON punctuation, letters, digits and `._-`, and only `id` (a UUID), `action`
+  (`deploy` or `rollback`) and `tag` (`vX.Y.Z`) are taken from it with strict regular expressions;
+  anything else is refused and recorded as an invalid request. Nothing from the file reaches a
+  shell, and the watcher never follows a symlink in `data/ops/`. A lock prevents two runs at once.
+- What this allows: anyone with an admin API key that has `admin:ops` (or an admin session) can
+  deploy any published release tag or roll back the last update, exactly what
+  `sudo ./deploy.sh vX.Y.Z` / `--rollback` do. Give such keys only to people (or assistants) you
+  would let run those commands, and revoke them in Admin → API keys when no longer needed.
+
+To stop remote updates: `sudo systemctl disable --now bandroom-ops.path bandroom-ops.timer`.

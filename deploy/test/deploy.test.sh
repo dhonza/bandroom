@@ -19,6 +19,21 @@ realpath -m / >/dev/null 2>&1 || {
   exit 1
 }
 
+# macOS has no flock(1): a stand-in with the same flock(2) semantics (the lock stays with the
+# caller's file descriptor).
+if ! command -v flock >/dev/null 2>&1; then
+  cat >"$BIN/flock" <<'PERL'
+#!/usr/bin/env perl
+use Fcntl ':flock';
+my ($nb, $fd) = (0, undef);
+for (@ARGV) { if ($_ eq '-n') { $nb = 1 } elsif (/^\d+$/) { $fd = $_ } }
+open(my $f, '>&=', $fd) or die "flock: fd $fd: $!";
+flock($f, LOCK_EX | ($nb ? LOCK_NB : 0)) or exit 1;
+exit 0;
+PERL
+  chmod +x "$BIN/flock"
+fi
+
 failures=0
 passes=0
 current=""
@@ -47,9 +62,11 @@ new_case() {
     echo v0.4.1 >"$FAKE_DOCKER_STATE/registry/$t/version"
     mkdir -p "$FAKE_DOCKER_STATE/registry/$t/deploy"
     cp "$REPO"/deploy/{deploy.sh,status.sh,compose.yml,Caddyfile,Caddyfile.subpath} \
+      "$REPO"/deploy/{ops-watcher.sh,bandroom-ops.path,bandroom-ops.service,bandroom-ops.timer} \
       "$FAKE_DOCKER_STATE/registry/$t/deploy/"
   done
-  cp "$REPO"/deploy/{deploy.sh,status.sh,compose.yml} "$APP/"
+  cp "$REPO"/deploy/{deploy.sh,status.sh,compose.yml} \
+    "$REPO"/deploy/{ops-watcher.sh,bandroom-ops.path,bandroom-ops.service,bandroom-ops.timer} "$APP/"
   cp "$REPO/deploy/Caddyfile.subpath" "$APP/Caddyfile"
   printf 'APP_URL=https://example.com/x\nBASE_PATH=/x\nBANDROOM_TAG=v0.4.0\n' >"$APP/.env"
   chmod 600 "$APP/.env"
@@ -370,6 +387,188 @@ check '[ $RC != 0 ]' "unknown command rejected"
 check '[ "$(sum "$APP/data/bandroom.sqlite")" = "$db_sum" ]' "database unchanged"
 check '! grep -qE "compose (stop|up|pull)|docker (pull|create|cp|rm)" "$FAKE_DOCKER_STATE/calls.log"' \
   "status made no changing docker calls"
+
+# --- ops-watcher.sh (SPEC §29.8) -------------------------------------------------------------
+export BANDROOM_OPS_ALLOW_NONROOT=1
+UUID1=0192a7e4-1111-7000-8000-000000000001
+OPS=""
+watcher_case() {
+  new_case "$1"
+  OPS="$APP/data/ops"
+  mkdir -p "$OPS"
+  export BANDROOM_OPS_LOCK="$C/ops.lock"
+}
+request() { printf '%s' "$1" >"$OPS/request.json"; }
+valid_json() { node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$1"; }
+result_of() { cat "$OPS/result-$1.json"; }
+only_result() { find "$OPS" -maxdepth 1 -name 'result-*.json' | head -n 1; }
+nothing_deployed() { ! grep -qE "compose (stop|up|pull)|docker pull" "$FAKE_DOCKER_STATE/calls.log"; }
+
+watcher_case watcher-deploy
+request "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"tag\":\"v0.4.1\",\"requestedBy\":\"boss\",\"ts\":1}"
+run "$APP/ops-watcher.sh"
+check '[ $RC = 0 ]' "exit 0 (got $RC)"
+contains "running deploy v0.4.1 (request $UUID1)"
+contains "deploy.sh exited with 0"
+check '[ "$(running_tag)" = v0.4.1 ]' "v0.4.1 running"
+check '[ ! -e "$OPS/request.json" ] && [ ! -e "$OPS/running.json" ]' "request consumed"
+check 'valid_json "$OPS/result-$UUID1.json"' "result is JSON"
+check 'grep -q "\"exitCode\":0" "$OPS/result-$UUID1.json"' "exit code 0 recorded"
+check 'grep -q "is healthy" "$OPS/result-$UUID1.json"' "output tail recorded"
+check 'grep -q "is healthy" "$OPS/last.log"' "last.log written"
+check '[ "$(stat -c %a "$OPS/result-$UUID1.json")" = 644 ]' "result readable by the app"
+check 'valid_json "$OPS/host-status.json"' "host status is JSON"
+check 'grep -q "\"tag\":\"v0.4.1\"" "$OPS/host-status.json"' "host status has the new tag"
+check 'grep -q "\"service\":\"app\",\"state\":\"running\",\"health\":\"healthy\"" "$OPS/host-status.json"' \
+  "container states"
+check 'grep -q "\"backups\":{\"count\":1" "$OPS/host-status.json"' "backup count"
+check '[ -z "$(find "$OPS" -name ".ops-watcher.*")" ]' "no temp files left"
+
+watcher_case watcher-rollback
+run "$APP/deploy.sh" v0.4.1
+request "{\"id\":\"$UUID1\",\"action\":\"rollback\",\"tag\":null,\"requestedBy\":\"boss\",\"ts\":1}"
+run "$APP/ops-watcher.sh"
+check '[ $RC = 0 ]' "exit 0 (got $RC)"
+contains "running rollback"
+check '[ "$(running_tag)" = v0.4.0 ]' "rolled back to v0.4.0"
+check 'grep -q "\"action\":\"rollback\",\"tag\":null,\"exitCode\":0" "$OPS/result-$UUID1.json"' \
+  "rollback result"
+
+watcher_case watcher-deploy-fails
+request "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"tag\":\"v9.9.9\",\"requestedBy\":\"boss\",\"ts\":1}"
+run "$APP/ops-watcher.sh"
+check '[ $RC = 0 ]' "the watcher itself succeeds"
+check 'grep -q "\"exitCode\":1" "$OPS/result-$UUID1.json"' "deploy.sh failure recorded"
+check 'grep -q "does not exist" "$OPS/result-$UUID1.json"' "with its message"
+check '[ "$(running_tag)" = v0.4.0 ]' "still v0.4.0"
+
+i=0
+for bad in \
+  "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"tag\":\"v0.4\"}" \
+  "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"tag\":\"latest\"}" \
+  "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"tag\":\"v0.4.1;id\"}" \
+  "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"tag\":\"\$(touch pwned)\"}" \
+  "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"tag\":\"\`touch pwned\`\"}" \
+  "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"tag\":\"v0.4.1\",\"tag\":\"v0.4.0\"}" \
+  "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"action\":\"rollback\",\"tag\":\"v0.4.1\"}" \
+  "{\"id\":\"$UUID1\",\"action\":\"deploy\"}" \
+  "{\"id\":\"$UUID1\",\"action\":\"shell\",\"tag\":\"v0.4.1\"}" \
+  "{\"id\":\"../../etc/x\",\"action\":\"deploy\",\"tag\":\"v0.4.1\"}" \
+  "{\"action\":\"deploy\",\"tag\":\"v0.4.1\"}" \
+  "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"tag\":\"v0.4.1\",\"x\":\"a\\\\nb\"}" \
+  "$(printf '{"id":"%s",\n"action":"deploy","tag":"v0.4.1"}\n{"tag":"v0.4.0"}' "$UUID1")" \
+  "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"tag\":\"v0.4.1\",\"pad\":\"$(head -c 5000 /dev/zero | tr '\0' a)\"}" \
+  "{\"id\":\"$UUID1\",\"action\":\"déploy\",\"tag\":\"v0.4.1\"}" \
+  ""; do
+  i=$((i + 1))
+  watcher_case "watcher-reject-$i"
+  request "$bad"
+  cd "$C"
+  run "$APP/ops-watcher.sh"
+  cd "$REPO"
+  check '[ $RC = 0 ]' "watcher exit 0 for bad request $i"
+  contains "rejected an invalid request"
+  r="$(only_result)"
+  check '[ -n "$r" ] && valid_json "$r"' "result written for bad request $i"
+  check 'grep -q "\"exitCode\":2" "$r" && grep -q "invalid request" "$r"' "rejection recorded ($i)"
+  check '[ -f "$OPS/rejected.json" ] && [ ! -e "$OPS/running.json" ]' "moved aside ($i)"
+  check 'nothing_deployed' "nothing deployed for bad request $i"
+  check '[ -z "$(find "$C" -name "pwned*")" ]' "no command ran ($i)"
+done
+
+watcher_case watcher-symlink-request
+echo "secret" >"$C/secret"
+ln -s "$C/secret" "$OPS/request.json"
+run "$APP/ops-watcher.sh"
+check '[ $RC = 0 ]'
+contains "rejected an invalid request: not a regular file"
+check '[ "$(cat "$C/secret")" = secret ] && nothing_deployed' "symlinked request refused"
+
+watcher_case watcher-symlink-result
+echo "keep" >"$C/target"
+ln -s "$C/target" "$OPS/result-$UUID1.json"
+ln -s "$C/target" "$OPS/host-status.json"
+ln -s "$C/target" "$OPS/last.log"
+request "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"tag\":\"v0.4.1\",\"requestedBy\":\"boss\",\"ts\":1}"
+run "$APP/ops-watcher.sh"
+check '[ $RC = 0 ]'
+check '[ "$(cat "$C/target")" = keep ]' "planted symlinks are not followed"
+check '[ ! -L "$OPS/result-$UUID1.json" ] && [ ! -L "$OPS/host-status.json" ] && [ ! -L "$OPS/last.log" ]' \
+  "symlinks replaced by files"
+
+watcher_case watcher-symlink-dir
+rmdir "$OPS"
+mkdir -p "$C/elsewhere"
+ln -s "$C/elsewhere" "$OPS"
+run "$APP/ops-watcher.sh"
+check '[ $RC != 0 ]' "symlinked ops dir refused"
+contains "is not a plain directory"
+check '[ -z "$(ls -A "$C/elsewhere")" ]' "nothing written through the symlink"
+
+watcher_case watcher-creates-dir
+rmdir "$OPS"
+run "$APP/ops-watcher.sh" --status-only
+check '[ $RC = 0 ] && [ -d "$OPS" ] && valid_json "$OPS/host-status.json"' "ops dir created"
+
+watcher_case watcher-interrupted
+printf '{"id":"%s","action":"deploy","tag":"v0.4.1"}' "$UUID1" >"$OPS/running.json"
+run "$APP/ops-watcher.sh"
+check '[ $RC = 0 ]'
+contains "found an interrupted request ($UUID1)"
+check 'grep -q "\"exitCode\":3" "$OPS/result-$UUID1.json" && grep -q interrupted "$OPS/result-$UUID1.json"' \
+  "interrupted run recorded"
+check '[ ! -e "$OPS/running.json" ] && nothing_deployed' "cleaned up, nothing deployed"
+
+watcher_case watcher-concurrent
+request "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"tag\":\"v0.4.1\",\"requestedBy\":\"boss\",\"ts\":1}"
+perl -MFcntl=:flock -e 'open(my $f, ">", $ARGV[0]) or die; flock($f, LOCK_EX) or die;
+  open(my $r, ">", $ARGV[1]); close $r; sleep 5' "$BANDROOM_OPS_LOCK" "$C/locked" &
+holder=$!
+for _ in $(seq 1 50); do [ -e "$C/locked" ] && break; sleep 0.1; done
+run "$APP/ops-watcher.sh"
+kill "$holder" 2>/dev/null || true
+wait "$holder" 2>/dev/null || true
+check '[ $RC = 0 ]'
+contains "another run is in progress"
+check '[ -f "$OPS/request.json" ] && nothing_deployed' "request left for the running watcher"
+run "$APP/ops-watcher.sh"
+check '[ "$(running_tag)" = v0.4.1 ]' "handled once the lock is free"
+
+watcher_case watcher-status-only
+request "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"tag\":\"v0.4.1\",\"requestedBy\":\"boss\",\"ts\":1}"
+mkdir -p "$BK" && echo db >"$BK/bandroom-before-v0.4.0-from-v0.3.0-20261001-000000.sqlite"
+printf 'BANDROOM_TAG="$(id)"\n' >>"$APP/.env"
+run "$APP/ops-watcher.sh" --status-only
+check '[ $RC = 0 ]'
+check 'valid_json "$OPS/host-status.json"' "host status is JSON"
+check 'grep -q "\"tag\":\"invalid\"" "$OPS/host-status.json"' "odd .env tag not copied"
+check 'grep -q "\"latest\":\"bandroom-before-v0.4.0-from-v0.3.0-20261001-000000.sqlite\"" "$OPS/host-status.json"' \
+  "newest backup"
+check '[ -f "$OPS/request.json" ] && nothing_deployed' "status-only leaves requests alone"
+
+watcher_case watcher-args
+run "$APP/ops-watcher.sh" --nope
+check '[ $RC != 0 ]'
+contains "Invalid argument"
+run "$APP/ops-watcher.sh" a b
+check '[ $RC != 0 ]'
+run "$APP/ops-watcher.sh" --help
+check '[ $RC = 0 ]'
+contains "--status-only"
+unset BANDROOM_OPS_ALLOW_NONROOT
+run "$APP/ops-watcher.sh"
+if [ "$(id -u)" != 0 ]; then check '[ $RC != 0 ]' "needs root"; fi
+
+watcher_case watcher-prune
+for n in $(seq 1 25); do
+  id="$(printf '0192a7e4-1111-7000-8000-%012d' "$n")"
+  echo '{}' >"$OPS/result-$id.json"
+  touch -d "@$((1700000000 + n))" "$OPS/result-$id.json"
+done
+request "{\"id\":\"$UUID1\",\"action\":\"deploy\",\"tag\":\"v0.4.1\",\"requestedBy\":\"boss\",\"ts\":1}"
+BANDROOM_OPS_ALLOW_NONROOT=1 run "$APP/ops-watcher.sh"
+check '[ "$(find "$OPS" -name "result-*.json" | wc -l)" = 20 ] && [ -f "$OPS/result-$UUID1.json" ]' \
+  "keeps the newest 20 results"
 
 echo "deploy.test.sh: $passes passed, $failures failed"
 [ "$failures" = 0 ]
