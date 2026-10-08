@@ -119,12 +119,50 @@ Poll the track's versions every few seconds:
 curl -fsS -H "$H" "$API/tracks/$TRACK/versions"   # versions[].id == trackVersionId, .status
 ```
 
+## Create a song and upload stems
+
+The whole flow with curl: create a project (or use an existing one), create a song, then one
+`newTrack` upload per stem. `options` in the target is optional: `quality` is the Opus preset
+(`veryHigh`, `high`, `standard`, `low`) and `lossyOnly: true` keeps only Opus.
+
+```bash
+JSON="Content-Type: application/json"
+PROJECT=$(curl -fsS -H "$H" -H "$JSON" -d '{"name":"Demos"}' "$API/projects" |
+  grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+SONG=$(curl -fsS -H "$H" -H "$JSON" -d '{"title":"New song"}' "$API/projects/$PROJECT/songs" |
+  grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+for FILE in stems/*.wav; do
+  NAME=$(basename "$FILE" .wav)
+  SIZE=$(wc -c <"$FILE" | tr -d ' ')
+  TARGET="{\"type\":\"newTrack\",\"songId\":\"$SONG\",\"name\":\"$NAME\",\"options\":{\"quality\":\"high\",\"lossyOnly\":false}}"
+  LOCATION=$(curl -fsS -o /dev/null -D - -X POST "$API/uploads" -H "$H" \
+    -H "Tus-Resumable: 1.0.0" -H "Upload-Length: $SIZE" \
+    -H "Upload-Metadata: filename $(b64 "$(basename "$FILE")"),target $(b64 "$TARGET")" |
+    tr -d '\r' | sed -n 's/^[Ll]ocation: //p')
+  case "$LOCATION" in /*) LOCATION="$(printf '%s' "$APP" | sed -E 's#^(https?://[^/]+).*#\1#')$LOCATION" ;; esac
+  curl -fsS -X PATCH "$LOCATION" -H "$H" -H "Tus-Resumable: 1.0.0" \
+    -H "Upload-Offset: 0" -H "Content-Type: application/offset+octet-stream" \
+    --data-binary @"$FILE"
+  echo
+done
+```
+
+Upload one file at a time: the server processes them in order anyway. `pnpm remote upload-song`
+does the same, and names the tracks like the web folder upload (the files' common prefix removed).
+
 ## brctl
 
 `pnpm remote <command>` (in a checkout of this repository) wraps the API: `whoami`, `status`,
 `projects`, `songs`, `tracks`, `find-song`, `upload <file> --song <id> (--track <id> | --name <n>)`,
-the admin commands (`jobs`, `events`, `logs`, `storage`, `uploads`, `users`, `keys`) and
+`create-project <name>`, `create-song <projectId> <title>`,
+`upload-song <folder> --project <id> [--title T]` (a new song, one track per audio file in the
+folder), `upload-project <folder> [--project <id> | --name N]` (each subfolder with audio a song,
+loose files one more song named after the folder), the admin commands (`jobs`, `events`, `logs`, `storage`, `uploads`, `users`, `keys`) and
 `update check | status | request | rollback | cancel`. It reads `BANDROOM_URL` (the instance URL,
 with its sub-path) and `BANDROOM_API_KEY` from the environment or from a gitignored `.env.remote`
-in the repository root. Add `--json` for machine-readable output; `pnpm remote help` lists every
-option.
+in the repository root. Uploads take `--quality veryHigh|high|standard|low`, `--lossy-only` and
+`--wait`; the folder uploads also take `--dry-run` (print the plan, write nothing). They skip
+non-audio files and zips (unzip them first), refuse a song title the project already has, continue
+after a failed file and exit non-zero with the list of failures. Add `--json` for machine-readable
+output; `pnpm remote help` lists every option.
