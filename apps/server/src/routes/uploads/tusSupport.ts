@@ -4,11 +4,13 @@ import type { Upload } from "@tus/server";
 import {
   activeAdminNames,
   getDocumentRow,
+  resolveApiKey,
   resolveSession,
   type UserRow,
 } from "@bandroom/server-core";
 import {
   hasGlobalCapability,
+  hasScope,
   UploadTargetSchema,
   type ApiErrorBody,
   type ErrorCode,
@@ -17,7 +19,7 @@ import {
 import type { AppContext } from "../../context";
 import { AppError } from "../../http/errors";
 import { checkScope, type ScopeAccess } from "../../http/scope";
-import { SESSION_COOKIE } from "../../http/session";
+import { bearerToken, SESSION_COOKIE } from "../../http/session";
 
 export const UPLOAD_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
@@ -63,14 +65,38 @@ function cookieValue(header: string | null, name: string): string | null {
  */
 export const clientIps = new WeakMap<IncomingMessage, string>();
 
+/** The API key behind a raw request (bearer uploads, SPEC §29.3), for events. */
+export const clientApiKeys = new WeakMap<IncomingMessage, string>();
+
+function nodeOf(req: Request): IncomingMessage | undefined {
+  return (req as { runtime?: { node?: { req?: IncomingMessage } } }).runtime?.node?.req;
+}
+
 /** The client's address for events, or null when unknown. */
 export function ipOf(req: Request): string | null {
-  const node = (req as { runtime?: { node?: { req?: IncomingMessage } } }).runtime?.node?.req;
+  const node = nodeOf(req);
   return (node && clientIps.get(node)) ?? null;
 }
 
-/** Resolves the session from the web Request (tus hooks do not see the Fastify request). */
+/** The API key id of a bearer upload request, or null for a cookie session. */
+export function apiKeyIdOf(req: Request): string | null {
+  const node = nodeOf(req);
+  return (node && clientApiKeys.get(node)) ?? null;
+}
+
+/**
+ * Resolves the user from the web Request (tus hooks do not see the Fastify request): a bearer API
+ * key with the `write` scope, else the session cookie.
+ */
 export function userOf(ctx: AppContext, req: Request): UserRow {
+  const bearer = bearerToken(req.headers.get("authorization"));
+  if (bearer !== null) {
+    const key = resolveApiKey(ctx.db, bearer, { ip: ipOf(req) });
+    if (!key) throw tusError("API_KEY_INVALID", 401, "Invalid API key");
+    if (!hasScope(key.scopes, "write"))
+      throw tusError("API_KEY_SCOPE", 403, "The API key may not upload");
+    return key.user;
+  }
   const token = cookieValue(req.headers.get("cookie"), SESSION_COOKIE);
   const resolved = token ? resolveSession(ctx.db, token) : null;
   if (!resolved) throw tusError("UNAUTHENTICATED", 401, "Login required");

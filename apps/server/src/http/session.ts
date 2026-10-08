@@ -1,6 +1,8 @@
 import type { Config, Db, SessionRow, UserRow } from "@bandroom/server-core";
-import { resolveSession, SESSION_TTL_MS } from "@bandroom/server-core";
+import { resolveApiKey, resolveSession, SESSION_TTL_MS } from "@bandroom/server-core";
+import type { ApiScope } from "@bandroom/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { AppError } from "./errors";
 
 export const SESSION_COOKIE = "bandroom_session";
 
@@ -9,7 +11,19 @@ declare module "fastify" {
     /** Authenticated, enabled user for this request (null = anonymous). */
     user: UserRow | null;
     session: SessionRow | null;
+    /** The API key of a bearer request (SPEC §29.3); null for cookie sessions. */
+    apiKey: { id: string; scopes: ApiScope[] } | null;
   }
+}
+
+/**
+ * The token of an `Authorization: Bearer …` header, or null without one. Other schemes are
+ * ignored (the request then falls back to the session cookie).
+ */
+export function bearerToken(header: string | null | undefined): string | null {
+  if (!header) return null;
+  const match = /^Bearer[ ]+(\S+)[ ]*$/i.exec(header);
+  return match?.[1] ?? null;
 }
 
 export interface CookieSettings {
@@ -44,7 +58,10 @@ export function clearSessionCookie(reply: FastifyReply, c: CookieSettings): void
   });
 }
 
-/** Resolves the session cookie on API requests into `request.user` / `request.session`. */
+/**
+ * Resolves API requests into `request.user`: a bearer API key (cookies are then ignored, and a
+ * key that does not resolve is refused, SPEC §29.3), else the session cookie.
+ */
 export function installSessionResolution(
   app: FastifyInstance,
   db: Db,
@@ -53,8 +70,21 @@ export function installSessionResolution(
 ): void {
   app.decorateRequest("user", null);
   app.decorateRequest("session", null);
+  app.decorateRequest("apiKey", null);
   app.addHook("onRequest", (request: FastifyRequest, reply, done) => {
     if (!request.url.startsWith(`${apiPrefix}/`)) {
+      done();
+      return;
+    }
+    const bearer = bearerToken(request.headers.authorization);
+    if (bearer !== null) {
+      const key = resolveApiKey(db, bearer, { ip: request.ip });
+      if (!key) {
+        done(new AppError("API_KEY_INVALID", "Invalid API key"));
+        return;
+      }
+      request.user = key.user;
+      request.apiKey = { id: key.key.id, scopes: key.scopes };
       done();
       return;
     }

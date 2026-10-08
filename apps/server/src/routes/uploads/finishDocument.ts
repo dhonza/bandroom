@@ -17,7 +17,7 @@ import type { AppContext } from "../../context";
 import { publishDocumentChanged } from "../../documents";
 import type { ScopeAccess } from "../../http/scope";
 import { notifyDocument, notifyQuotaFor } from "../../notify";
-import { ipOf } from "./tusSupport";
+import { apiKeyIdOf, ipOf } from "./tusSupport";
 
 /** Upload of a new document or a new document version (SPEC §10): ingest detects the kind. */
 export async function finishDocumentUpload(
@@ -86,6 +86,7 @@ export async function finishDocumentUpload(
         actorUserId: user.id,
         projectId: created.document.projectId,
         ip: ipOf(req),
+        apiKeyId: apiKeyIdOf(req),
         userAgent: req.headers.get("user-agent"),
         action: target.type === "newDocument" ? "document.created" : "document.version_added",
         targetType: "document",

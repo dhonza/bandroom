@@ -27,6 +27,7 @@ import { effectiveQuota, QUOTA_OVERHEAD } from "../../quota";
 import { finishDocumentUpload } from "./finishDocument";
 import {
   adminNames,
+  apiKeyIdOf,
   authorizeTarget,
   ipOf,
   parseStoredTarget,
@@ -220,6 +221,7 @@ function recordUploadEvent(
     projectId: r.projectId,
     songId: r.songId,
     ip: ipOf(req),
+    apiKeyId: apiKeyIdOf(req),
     userAgent: req.headers.get("user-agent"),
   };
   if (target.type === "projectImage") {
@@ -284,6 +286,7 @@ function finishLogoUpload(
       recordEvent(db, {
         actorUserId: user.id,
         ip: ipOf(req),
+        apiKeyId: apiKeyIdOf(req),
         userAgent: req.headers.get("user-agent"),
         action: "settings.changed",
         targetType: "settings",

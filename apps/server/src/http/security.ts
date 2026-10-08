@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { COLOR_SCHEME_SCRIPT } from "@bandroom/shared";
 import type { FastifyInstance } from "fastify";
 import { AppError } from "./errors";
+import { bearerToken } from "./session";
 
 /** CSP source allowing exactly one inline script. */
 export function scriptHashSource(script: string): string {
@@ -38,7 +39,8 @@ export const ROBOTS_TAG = "noindex, nofollow, noarchive";
 export const ROBOTS_TXT = "User-agent: *\nDisallow: /\n";
 
 /**
- * Security headers on every response and the CSRF header check for API mutations.
+ * Security headers on every response and the CSRF header check for API mutations (not needed
+ * with a bearer API key).
  * HSTS is added by Caddy (HTTPS termination).
  */
 export function installSecurity(app: FastifyInstance, apiPrefix: string): void {
@@ -53,7 +55,11 @@ export function installSecurity(app: FastifyInstance, apiPrefix: string): void {
 
     const isMutation = !SAFE_METHODS.has(request.method);
     const isApi = request.url.startsWith(`${apiPrefix}/`);
-    if (isMutation && isApi && request.headers[CSRF_HEADER] !== CSRF_HEADER_VALUE) {
+    // Browsers cannot attach an Authorization header cross-site without a CORS preflight (which
+    // is never answered), so bearer requests need no CSRF header (SPEC §29.3). An invalid key is
+    // refused by the session hook and never falls back to the cookie.
+    const bearer = bearerToken(request.headers.authorization) !== null;
+    if (isMutation && isApi && !bearer && request.headers[CSRF_HEADER] !== CSRF_HEADER_VALUE) {
       done(new AppError("CSRF_HEADER_MISSING", "Missing X-Requested-With header"));
       return;
     }

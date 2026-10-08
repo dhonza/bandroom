@@ -18,6 +18,7 @@ import { finishUpload } from "./uploads/finishMedia";
 import {
   adminNames,
   authorizeTarget,
+  clientApiKeys,
   clientIps,
   parseTarget,
   toTusError,
@@ -145,6 +146,7 @@ export function registerUploadRoutes(
   const handle = async (request: FastifyRequest, reply: FastifyReply) => {
     const server = await getTus();
     clientIps.set(request.raw, request.ip);
+    if (request.apiKey) clientApiKeys.set(request.raw, request.apiKey.id);
     reply.hijack();
     await server.handle(request.raw, reply.raw);
   };

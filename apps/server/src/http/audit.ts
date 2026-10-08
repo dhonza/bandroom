@@ -7,6 +7,7 @@ export function audit(db: Db, request: FastifyRequest, e: EventInput): void {
   recordEvent(db, {
     actorUserId: request.user?.id ?? null,
     sessionId: request.session?.id ?? null,
+    apiKeyId: request.apiKey?.id ?? null,
     ip: request.ip,
     userAgent: request.headers["user-agent"] ?? null,
     ...e,

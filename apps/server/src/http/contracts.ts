@@ -2,8 +2,11 @@ import type { Db, UserRow } from "@bandroom/server-core";
 import {
   API_PREFIX,
   hasGlobalCapability,
+  keyMayCall,
+  type ApiScope,
   type ContractDef,
   type ContractResponse,
+  type HttpMethod,
   type RouteAuth,
 } from "@bandroom/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -79,6 +82,7 @@ export interface RouteOptions {
  * client IP for anonymous requests. Session resolution runs before route-level hooks.
  */
 export function userOrIpKey(request: FastifyRequest): string {
+  if (request.apiKey) return `k:${request.apiKey.id}`;
   return request.user ? `u:${request.user.id}` : `ip:${request.ip}`;
 }
 
@@ -90,7 +94,16 @@ export function authorize(
   auth: RouteAuth | undefined,
   request: FastifyRequest,
   db: Db,
+  apiKey?: ApiScope | false,
 ): ScopeAccess | null {
+  // An API key narrows its user's rights to its scopes first (SPEC §29.2); the normal checks
+  // below still apply.
+  if (request.apiKey) {
+    const route = { method: request.method as HttpMethod, auth, apiKey };
+    if (!keyMayCall(request.apiKey.scopes, route)) {
+      throw new AppError("API_KEY_SCOPE", "The API key may not call this route");
+    }
+  }
   if (auth !== undefined && "public" in auth) return null;
   const user = request.user;
   if (user === null) throw new AppError("UNAUTHENTICATED", "Login required");
@@ -130,7 +143,7 @@ export function registerContract<C extends ContractDef>(
     },
     onRequest: (request, _reply, done) => {
       try {
-        request.access = authorize(contract.auth, request, app.authDb);
+        request.access = authorize(contract.auth, request, app.authDb, contract.apiKey);
         done();
       } catch (err) {
         done(err as Error);
@@ -184,6 +197,8 @@ export function registerAuthorizedRoute(
     method: "GET" | "HEAD" | "POST" | "PATCH" | "DELETE" | "OPTIONS" | ("GET" | "HEAD")[];
     url: string;
     auth: RouteAuth;
+    /** API-key access as on contracts (SPEC §29.2). */
+    apiKey?: ApiScope | false;
   },
   handler: (request: FastifyRequest, reply: FastifyReply) => unknown,
   options: Pick<RouteOptions, "rateLimit"> = {},
@@ -194,7 +209,7 @@ export function registerAuthorizedRoute(
     ...(options.rateLimit && { config: { rateLimit: options.rateLimit } }),
     onRequest: (request, _reply, done) => {
       try {
-        request.access = authorize(route.auth, request, app.authDb);
+        request.access = authorize(route.auth, request, app.authDb, route.apiKey);
         checkSongLock(route.auth, songOfAccess(request.access), request.method, undefined);
         done();
       } catch (err) {

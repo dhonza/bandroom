@@ -83,7 +83,8 @@ export function makeFilter(ctx: Pick<AppContext, "db">, user: UserRow) {
 export function registerStreamRoutes(api: FastifyInstance, ctx: AppContext): void {
   registerAuthorizedRoute(
     api,
-    { method: "GET", url: "/stream", auth: { user: true } },
+    // Keys are refused: the stream's liveness check is tied to the session (SPEC §29.2).
+    { method: "GET", url: "/stream", auth: { user: true }, apiKey: false },
     (request, reply) => {
       const user = request.user;
       if (!user) throw new AppError("UNAUTHENTICATED", "Login required");

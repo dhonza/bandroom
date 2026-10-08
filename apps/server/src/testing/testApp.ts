@@ -6,6 +6,7 @@ import {
   audioIngestHandler,
   claimJob,
   blobGcHandler,
+  createApiKey,
   executeJob,
   handlerRegistry,
   LocalStorage,
@@ -19,7 +20,13 @@ import {
   type Db,
 } from "@bandroom/server-core";
 import { documentIngestHandler, imageIngestHandler } from "@bandroom/server-core/image";
-import { API_PREFIX, buildPath, login as loginContract, type ContractDef } from "@bandroom/shared";
+import {
+  API_PREFIX,
+  buildPath,
+  login as loginContract,
+  type ApiScope,
+  type ContractDef,
+} from "@bandroom/shared";
 import type { FastifyInstance, LightMyRequestResponse } from "fastify";
 import { buildApp } from "../app";
 import type { ImageFetchOptions, SamplyOptions } from "../context";
@@ -139,6 +146,33 @@ export function call(
     headers: { "x-requested-with": "bandroom", ...(cookie && { cookie }) },
     ...(input.body !== undefined && { payload: input.body as Record<string, unknown> }),
   });
+}
+
+/** Calls a contract with a bearer API key and no CSRF header (SPEC §29.3). */
+export function callWithKey(
+  t: TestApp,
+  contract: ContractDef,
+  input: Input = {},
+  token: string,
+): Promise<LightMyRequestResponse> {
+  const url = `${t.basePath}${API_PREFIX}${buildPath(contract.path, input.params)}`;
+  return t.app.inject({
+    method: contract.method,
+    url,
+    query: input.query,
+    headers: { authorization: `Bearer ${token}` },
+    ...(input.body !== undefined && { payload: input.body as Record<string, unknown> }),
+  });
+}
+
+/** Creates an API key for a user directly in the DB and returns its token. */
+export function keyFor(
+  t: TestApp,
+  userId: string,
+  scopes: ApiScope[],
+  expiresInDays: number | null = null,
+): string {
+  return createApiKey(t.db, { userId, name: "test key", scopes, expiresInDays }).token;
 }
 
 export async function loginAs(
