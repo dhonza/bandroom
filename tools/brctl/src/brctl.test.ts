@@ -413,6 +413,55 @@ describe("folder uploads", () => {
     expect(lines[0]).toContain("Bass <- Song_Bass.wav (4 B)");
   });
 
+  it("deletes to Trash, or for good with --purge and a repeated id", async () => {
+    const s = fakeServer({
+      "DELETE /sub/api/v1/songs/s1": () => Response.json({ ok: true }),
+      "POST /sub/api/v1/batch/purge": () =>
+        Response.json({ ok: true, batchId: "b", count: 1, bytesFreed: 2048 }),
+    });
+    const c = new Client(config, s.doFetch);
+    const lines: string[] = [];
+    await run(c, ["delete", "song", "s1"], opts(), (l) => lines.push(l));
+    expect(lines).toEqual(["song s1 moved to Trash"]);
+    expect(s.calls.map((r) => r.method)).toEqual(["DELETE"]);
+
+    await expect(run(c, ["delete", "song", "s1"], opts({ purge: true }), () => {})).rejects.toThrow(
+      UsageError,
+    );
+    await expect(run(c, ["delete", "album", "s1"], opts(), () => {})).rejects.toThrow(UsageError);
+    await run(
+      c,
+      ["delete", "song", "s1"],
+      opts({ dryRun: true, purge: true, confirm: "s1" }),
+      (l) => lines.push(l),
+    );
+    expect(s.calls).toHaveLength(1);
+
+    await run(c, ["delete", "song", "s1"], opts({ purge: true, confirm: "s1" }), (l) =>
+      lines.push(l),
+    );
+    const purge = s.calls.at(-1);
+    expect(purge?.method).toBe("POST");
+    expect(await purge?.json()).toEqual({ songs: ["s1"] });
+    expect(lines.at(-1)).toContain("deleted for good (2.0 KB freed");
+  });
+
+  it("purges an item that is already in Trash", async () => {
+    const s = fakeServer({
+      "POST /sub/api/v1/batch/purge": () =>
+        Response.json({ ok: true, batchId: "b", count: 1, bytesFreed: 0 }),
+    });
+    const c = new Client(config, s.doFetch);
+    await run(
+      c,
+      ["delete", "project", "p9"],
+      opts({ purge: true, confirm: "p9", json: true }),
+      () => {},
+    );
+    expect(s.calls.map((r) => r.method)).toEqual(["DELETE", "POST"]);
+    await expect(run(c, ["delete", "track", "t9"], opts(), () => {})).rejects.toThrow(RemoteError);
+  });
+
   it("continues after a failed file and exits non-zero with the failures", async () => {
     write("Demo/a.wav");
     write("Demo/b.wav");

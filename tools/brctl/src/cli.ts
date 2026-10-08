@@ -34,6 +34,7 @@ async function main(): Promise<number> {
       quality: { type: "string" },
       "lossy-only": { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
+      purge: { type: "boolean", default: false },
     },
   });
   const out = (s: string) => {

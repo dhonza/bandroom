@@ -3,10 +3,16 @@ import path from "node:path";
 import {
   AUDIO_QUALITIES,
   adminListApiKeys,
+  batchPurge,
   adminListUsers,
   cancelAdminJob,
   cancelAdminUpdate,
   DEFAULT_AUDIO_QUALITY,
+  deleteDocument,
+  deleteProject,
+  deleteSong,
+  deleteTrack,
+  deleteTrackVersion,
   getAdminEvents,
   getAdminJobs,
   getAdminLogs,
@@ -65,6 +71,7 @@ export interface Options {
   quality?: string;
   lossyOnly?: boolean;
   dryRun?: boolean;
+  purge?: boolean;
   wait: boolean;
   /** Where relative file paths are resolved (the shell's cwd). */
   cwd: string;
@@ -123,6 +130,10 @@ Add --json to any command for machine-readable output.
                                  a new project (named after the folder) unless --project; each
                                  subfolder with audio is a song, loose audio files one more song
                                  named after the folder
+  delete project|song|track|version|document <id> [--dry-run]
+                                 moves the item to Trash (restore it in the app)
+  delete <type> <id> --purge --confirm <id>
+                                 deletes it for good (Trash, then purge); --confirm repeats the id
   update check | status | request <vX.Y.Z> | rollback --confirm <running> | cancel
 
 Upload options: --quality veryHigh|high|standard|low (Opus preset), --lossy-only (keep only
@@ -434,6 +445,8 @@ export async function run(client: Client, args: string[], o: Options, out: Out):
     case "update":
       return update(client, rest, o, out);
     case undefined:
+    case "delete":
+      return remove(client, rest, o, out);
     case "help":
       out(USAGE);
       return;
@@ -660,6 +673,53 @@ async function uploadFolder(
         ].join("\n"),
   );
   if (failures.length > 0) throw new PartialFailureError(failures);
+}
+
+const DELETABLE = {
+  project: { contract: deleteProject, purgeKey: "projects" },
+  song: { contract: deleteSong, purgeKey: "songs" },
+  track: { contract: deleteTrack, purgeKey: "tracks" },
+  version: { contract: deleteTrackVersion, purgeKey: "versions" },
+  document: { contract: deleteDocument, purgeKey: "documents" },
+} as const;
+type Deletable = keyof typeof DELETABLE;
+
+/**
+ * `delete <type> <id>`: the same Delete as in the app (to Trash). With `--purge` the item is then
+ * purged like Trash → Delete forever; that cannot be undone, so `--confirm` must repeat the id.
+ */
+async function remove(client: Client, rest: string[], o: Options, out: Out): Promise<void> {
+  const type = oneOf(rest[0], Object.keys(DELETABLE) as Deletable[], "type");
+  if (!type) throw new UsageError("Missing type (project|song|track|version|document)");
+  const id = need(rest[1], "id");
+  if (o.purge && o.confirm !== id)
+    throw new UsageError(`--purge deletes for good; repeat the id: --confirm ${id}`);
+  const { contract, purgeKey } = DELETABLE[type];
+  const action = o.purge ? "purge" : "trash";
+  if (o.dryRun) {
+    out(
+      o.json
+        ? JSON.stringify({ dryRun: true, type, id, action }, null, 2)
+        : `would ${o.purge ? "delete for good" : "move to Trash"}: ${type} ${id}`,
+    );
+    return;
+  }
+  try {
+    await client.call(contract, { params: { id } });
+  } catch (e) {
+    // Already in Trash: the item is hidden from the normal routes, but it can still be purged.
+    if (!(o.purge && e instanceof RemoteError && e.status === 404)) throw e;
+  }
+  if (!o.purge) {
+    out(o.json ? JSON.stringify({ type, id, action }, null, 2) : `${type} ${id} moved to Trash`);
+    return;
+  }
+  const r = await client.call(batchPurge, { body: { [purgeKey]: [id] } });
+  out(
+    o.json
+      ? JSON.stringify({ type, id, action, bytesFreed: r.bytesFreed }, null, 2)
+      : `${type} ${id} deleted for good (${formatBytes(r.bytesFreed)} freed; files go within minutes)`,
+  );
 }
 
 async function update(client: Client, rest: string[], o: Options, out: Out): Promise<void> {
