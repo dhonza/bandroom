@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import type { Readable } from "node:stream";
-import type { Practice } from "@bandroom/shared";
+import { FormantShiftSchema, type Practice } from "@bandroom/shared";
 import { createStretch, type StretchModule } from "@bandroom/stretch";
 import { loadStretch } from "@bandroom/stretch/node";
 import { z } from "zod";
@@ -24,6 +24,10 @@ export const BounceStretchSchema = z.object({
   transpose: z.boolean(),
   /** Formant base for vocals (0 = pitch tracking). */
   voiceBaseHz: z.number().min(0).max(2000),
+  /** Formants kept in place (v0.6.1; absent in older payloads = the profile's default). */
+  formant: z.boolean().optional(),
+  /** Formant shift in semitones (v0.6.1; absent = 0). */
+  formantShift: FormantShiftSchema.optional(),
 });
 export type BounceStretch = z.infer<typeof BounceStretchSchema>;
 
@@ -39,15 +43,18 @@ export function stretchSemitones(
 }
 
 /**
- * Whether an input goes through stage 1: the speed changes, or it is transposed by a non-zero
- * amount. A track kept at pitch at rate 1 is mixed straight from its source (bit-exact).
+ * Whether an input goes through stage 1: the speed changes, it is transposed by a non-zero
+ * amount, or its formants are shifted. A track kept at pitch at rate 1 is mixed straight from its source (bit-exact).
  */
 export function needsStretch(
   practice: Practice | undefined,
   stretch: BounceStretch | undefined,
 ): practice is Practice {
   return (
-    practice !== undefined && (practice.rate !== 1 || stretchSemitones(practice, stretch) !== 0)
+    practice !== undefined &&
+    (practice.rate !== 1 ||
+      stretchSemitones(practice, stretch) !== 0 ||
+      (stretch?.formantShift ?? 0) !== 0)
   );
 }
 
@@ -74,6 +81,9 @@ export interface StretchInputOptions {
   semitones: number;
   profile: BounceStretch["profile"];
   voiceBaseHz: number;
+  /** Formant compensation (default: the profile's) and shift in semitones. */
+  formant?: boolean | undefined;
+  formantSemitones?: number | undefined;
 }
 
 /** Input frames de-interleaved and pushed per stretcher call. */
@@ -98,6 +108,8 @@ export async function stretchInputToWav(
     profile: opts.profile,
     quality: "high",
     voiceBaseHz: opts.voiceBaseHz,
+    ...(opts.formant !== undefined && { formant: opts.formant }),
+    formantSemitones: opts.formantSemitones ?? 0,
     maxIn: BLOCK,
   });
   const planar = Array.from({ length: ch }, () => new Float32Array(BLOCK));

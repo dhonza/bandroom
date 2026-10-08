@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FormantModeSchema, FormantShiftSchema } from "./instruments";
 
 /** One track in a user's personal mix (SPEC §4.4, §11.3). */
 export const MixerTrackStateSchema = z.object({
@@ -8,6 +9,10 @@ export const MixerTrackStateSchema = z.object({
   solo: z.boolean(),
   /** Personal listened version (does not change the song's current version). */
   listenedVersionId: z.string().max(64).nullable().optional(),
+  /** Personal practice overrides (SPEC §30.3); null or missing = the band default. */
+  transpose: z.boolean().nullable().optional(),
+  formantMode: FormantModeSchema.nullable().optional(),
+  formantShift: FormantShiftSchema.nullable().optional(),
 });
 export type MixerTrackState = z.infer<typeof MixerTrackStateSchema>;
 

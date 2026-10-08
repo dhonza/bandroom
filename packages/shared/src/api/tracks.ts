@@ -7,7 +7,12 @@ import {
   TrackNameSchema,
   TrackSchema,
 } from "../tracks";
-import { InstrumentSchema, VoiceRangeSchema } from "../instruments";
+import {
+  FormantModeSchema,
+  FormantShiftSchema,
+  InstrumentSchema,
+  VoiceRangeSchema,
+} from "../instruments";
 import { TRACK_LOCK_FIELDS, VERSION_GAIN_FIELDS } from "../permissions/content";
 import { OkSchema } from "./auth";
 import { defineContract } from "./contract";
@@ -115,6 +120,8 @@ export const updateTrack = defineContract({
       instrument: InstrumentSchema.nullable(),
       transpose: z.boolean().nullable(),
       voiceRange: VoiceRangeSchema.nullable(),
+      formantMode: FormantModeSchema.nullable(),
+      formantShift: FormantShiftSchema,
     })
     .partial(),
   response: OkSchema,

@@ -211,7 +211,13 @@ describe("bounce with practice settings (SPEC §30.7)", () => {
       expect(payload.inputs).toEqual([
         expect.objectContaining({
           trackId: keys.trackId,
-          stretch: { profile: "tonal", transpose: true, voiceBaseHz: 0 },
+          stretch: {
+            profile: "tonal",
+            transpose: true,
+            voiceBaseHz: 0,
+            formant: false,
+            formantShift: 0,
+          },
         }),
       ]);
       expect(eventDetails("song.bounced", song.id)[0]).toMatchObject({
@@ -304,6 +310,8 @@ describe("bounce with practice settings (SPEC §30.7)", () => {
         profile: "percussive",
         transpose: false,
         voiceBaseHz: 0,
+        formant: false,
+        formantShift: 0,
       });
       expect(eventDetails("song.bounced", song.id)[0]).toMatchObject({
         transposed: { [drums.trackId]: false },
@@ -311,6 +319,38 @@ describe("bounce with practice settings (SPEC §30.7)", () => {
       const pcm = await renderedPcm(song.id);
       expect(eventDetails("version.rendered", song.id)[0]).toMatchObject({ stretched: 0 });
       expect(pcm).toEqual(plainPcm);
+    },
+  );
+
+  it(
+    "applies a personal formant shift alone, keeping time and key (v0.6.1)",
+    { timeout: 180_000 },
+    async () => {
+      const song = created(
+        await bounce({
+          title: "Brighter keys",
+          mix: mix({
+            tracks: {
+              [keys.trackId]: s({ formantMode: "preserve", formantShift: 3 }),
+              [drums.trackId]: s({ mute: true }),
+            },
+          }),
+          applyPractice: true,
+          copyTempo: false,
+        }),
+      );
+      expect(song.key).toBe("Am");
+      expect(lastBouncePayload().inputs[0]?.stretch).toMatchObject({
+        formant: true,
+        formantShift: 3,
+      });
+      expect(eventDetails("song.bounced", song.id)[0]).toMatchObject({
+        formants: { [keys.trackId]: { preserve: true, shift: 3 } },
+      });
+      const pcm = await renderedPcm(song.id);
+      expect(eventDetails("version.rendered", song.id)[0]).toMatchObject({ stretched: 1 });
+      expect(pcm.length).toBe(LENGTH);
+      expect(Math.abs(peakAt(pcm, 3 * SR - 2000, 3 * SR + 2000) - 3 * SR)).toBeLessThan(400);
     },
   );
 

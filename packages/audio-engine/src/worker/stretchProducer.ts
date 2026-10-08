@@ -105,6 +105,8 @@ export class StretchProducer extends TrackProducer {
         profile: this.spec.profile,
         quality: this.spec.quality,
         voiceBaseHz: this.spec.voiceBaseHz,
+        formant: this.spec.formant,
+        formantSemitones: this.spec.formantShift,
       });
     }
     const t0 = Math.round(this.frame * this.spec.rate);

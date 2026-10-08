@@ -1,4 +1,4 @@
-import { INSTRUMENTS, VOICE_RANGES } from "@bandroom/shared";
+import { FORMANT_MODES, INSTRUMENTS, VOICE_RANGES } from "@bandroom/shared";
 import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { songs } from "./content";
 import { users } from "./identity";
@@ -28,6 +28,10 @@ export const tracks = sqliteTable(
     transpose: integer("transpose", { mode: "boolean" }),
     /** Vocals only: the formant base (SPEC §30.3); null = auto. */
     voiceRange: text("voice_range", { enum: VOICE_RANGES }),
+    /** Formants under practice (SPEC §30.3); null = automatic (kept for vocals). */
+    formantMode: text("formant_mode", { enum: FORMANT_MODES }),
+    /** Formant shift in semitones under practice. */
+    formantShift: integer("formant_shift").notNull().default(0),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: integer("created_at").notNull(),
     deletedAt: integer("deleted_at"),

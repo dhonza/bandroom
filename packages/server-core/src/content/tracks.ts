@@ -1,4 +1,10 @@
-import { autoTrackColor, uuidv7, type Instrument, type VoiceRange } from "@bandroom/shared";
+import {
+  autoTrackColor,
+  uuidv7,
+  type FormantMode,
+  type Instrument,
+  type VoiceRange,
+} from "@bandroom/shared";
 import { and, asc, desc, eq, inArray, isNull, max, sql } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { MEDIA_JOB_TYPES } from "./processing";
@@ -384,6 +390,8 @@ export interface TrackPatch {
   instrument?: Instrument | null;
   transpose?: boolean | null;
   voiceRange?: VoiceRange | null;
+  formantMode?: FormantMode | null;
+  formantShift?: number;
 }
 
 export function updateTrack(

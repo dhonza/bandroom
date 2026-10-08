@@ -1,16 +1,13 @@
 import {
   bounceTracks,
   clickSettingsOf,
-  effectiveInstrument,
-  effectiveTranspose,
   isNeutralPractice,
   practiceKeyShift,
   practiceOf,
-  profileFor,
   scaleTempoMap,
+  trackStretchPolicy,
   transposeKeyName,
   uuidv7,
-  voiceBaseHz,
   type BounceRequest,
   type Practice,
 } from "@bandroom/shared";
@@ -96,9 +93,6 @@ export function planBounce(
       return { ok: false, reason: "invalid" };
     chosen.set(trackId, { version, asset });
   }
-  const requested = practiceOf(req.mix);
-  const practice = req.applyPractice && !isNeutralPractice(requested) ? requested : null;
-  const rate = practice?.rate ?? 1;
   const singleTrack = songTracks.size === 1;
   const settings = clickSettingsOf(req.mix);
   const tempo = req.includeClick ? songTempo(db, songId) : null;
@@ -112,6 +106,21 @@ export function planBounce(
     },
     tempo !== null && settings.solo,
   );
+  // How each track follows practice: the listener's override, else the band default (SPEC §30.3).
+  const policies = new Map(
+    audible.flatMap((b) => {
+      const t = songTracks.get(b.trackId);
+      return t
+        ? [[b.trackId, trackStretchPolicy(t, req.mix.tracks[b.trackId], { singleTrack })]]
+        : [];
+    }),
+  );
+  const requested = practiceOf(req.mix);
+  // A formant shift alone (at 100 %, 0 st) is a practice setting too.
+  const shifted = [...policies.values()].some((p) => p.formantShift !== 0);
+  const practice =
+    req.applyPractice && (!isNeutralPractice(requested) || shifted) ? requested : null;
+  const rate = practice?.rate ?? 1;
   let click: BounceClick | null = null;
   if (tempo) {
     // The song's length in the Player: every loaded version, audible or not.
@@ -152,12 +161,14 @@ export function planBounce(
       pan: b.pan,
       offsetSamples: c.version.offsetSamples,
     };
-    if (!practice) return input;
-    const instrument = effectiveInstrument(track, { singleTrack });
+    const policy = policies.get(b.trackId);
+    if (!practice || !policy) return input;
     input.stretch = {
-      profile: profileFor(instrument),
-      transpose: effectiveTranspose(track, { singleTrack }),
-      voiceBaseHz: instrument === "vocals" ? voiceBaseHz(track.voiceRange) : 0,
+      profile: policy.profile,
+      transpose: policy.transpose,
+      voiceBaseHz: policy.voiceBaseHz,
+      formant: policy.formant,
+      formantShift: policy.formantShift,
     };
     // At most the stored channels (a dual-mono flac has one, its kept original two).
     if (needsStretch(practice, input.stretch))
@@ -305,6 +316,12 @@ export function createBounce(
           practice,
           transposed: Object.fromEntries(
             input.inputs.map((i) => [i.trackId, i.stretch?.transpose ?? true]),
+          ),
+          formants: Object.fromEntries(
+            input.inputs.map((i) => [
+              i.trackId,
+              { preserve: i.stretch?.formant ?? false, shift: i.stretch?.formantShift ?? 0 },
+            ]),
           ),
         }),
       },

@@ -516,7 +516,7 @@ async function loadIntoEngine(args: OpenArgs, carry: Carry | null = null): Promi
     loopSec = carry?.loop ?? null;
   }
   const { mix, quality, playable } = songView(args, sameSong ? s : (carry?.state ?? null));
-  const key = loadKeyOf(songId, playable);
+  const key = loadKeyOf(songId, playable, mix);
   const trims = sameSong ? changedTrims(s.tracks, playable) : [];
   const entry: QueueEntry = { songId, title: info.title, subtitle: info.subtitle, ready: true };
   useRehearse.setState({
@@ -1051,8 +1051,20 @@ function applyMix(mix: MixerState) {
     for (const [id, s] of Object.entries(mix.tracks)) {
       engine?.setTrackState(id, { gainDb: s.gainDb, pan: s.pan, mute: s.mute, solo: s.solo });
     }
+    syncPolicy();
   }
   scheduleSave(store);
+}
+
+/**
+ * Personal practice overrides (transpose, formants) changed how a track is processed: reload the
+ * engine's song in place (SPEC §30.3; position and play state are kept).
+ */
+function syncPolicy() {
+  const s = useRehearse.getState();
+  const args = lastOpen;
+  if (!s.songId || args?.[0] !== s.songId) return;
+  if (loadKeyOf(s.songId, s.tracks, s.mix) !== loadKey) void loadIntoEngine(args);
 }
 
 /** A personal mixer change on the page's song (saved for that song, also on a preview). */
@@ -1069,6 +1081,7 @@ export function setTrack(trackId: string, patch: Partial<MixerTrackState>): void
     mute: next.mute,
     solo: next.solo,
   });
+  if (store === useRehearse) syncPolicy();
   scheduleSave(store);
 }
 
@@ -1167,7 +1180,7 @@ export function listenToVersion(
   scheduleSave(store);
   if (store !== useRehearse) return;
   // Switched in place: the engine now holds this, so openSong need not reload it.
-  if (s.songId) loadKey = loadKeyOf(s.songId, tracks);
+  if (s.songId) loadKey = loadKeyOf(s.songId, tracks, s.mix);
   engine?.switchSource(
     trackId,
     [clipFor(version, chosen)],
@@ -1266,7 +1279,7 @@ function applyQuality() {
     }
     return { ...p, chosen };
   });
-  if (s.songId) loadKey = loadKeyOf(s.songId, tracks);
+  if (s.songId) loadKey = loadKeyOf(s.songId, tracks, s.mix);
   useRehearse.setState({ quality, tracks });
 }
 

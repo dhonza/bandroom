@@ -574,13 +574,37 @@ describe("decoder worker + mixer with practice speed and pitch (SPEC §30.5)", (
     const practice = new Rig();
     const a = await fx.variant(mono48, "opus");
     plain.load([[clip(a)]]);
-    const drums: TrackStretchPolicy = { transpose: false, profile: "percussive", voiceBaseHz: 0 };
+    const drums: TrackStretchPolicy = {
+      transpose: false,
+      profile: "percussive",
+      voiceBaseHz: 0,
+      formant: false,
+      formantShift: 0,
+    };
     practice.load([[clip(a)]], { rate: 1, semitones: 2, quality: "high" }, { policies: [drums] });
     await plain.play(3 * 48_000);
     await practice.play(3 * 48_000);
     expect(practice.heard.get(0)?.l).toEqual(plain.heard.get(0)?.l);
     plain.dispose();
     practice.dispose();
+  });
+
+  it("plays a formant shift alone at 100 % with the impulses in place", async () => {
+    const rig = new Rig();
+    const a = await fx.variant(mono48, "opus");
+    const voice: TrackStretchPolicy = {
+      transpose: true,
+      profile: "voice",
+      voiceBaseHz: 0,
+      formant: true,
+      formantShift: 4,
+    };
+    rig.load([[clip(a)]], { rate: 1, semitones: 0, quality: "high" }, { policies: [voice] });
+    expect(rig.sched.ahead()).toHaveLength(1);
+    await rig.play(6 * 48_000);
+    for (const t of T) expect(Math.abs(rig.peak(0, "l", t, 1500) - t)).toBeLessThan(400);
+    expect(rig.underruns).toEqual([]);
+    rig.dispose();
   });
 
   it("seeks at 75 % to the stretched position", { timeout: 180_000 }, async () => {

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AudioQualitySchema, UploadOptionsSchema } from "./audioQuality";
 import { PaletteColorSchema } from "./content";
-import { InstrumentSchema, VoiceRangeSchema } from "./instruments";
+import { FormantModeSchema, InstrumentSchema, VoiceRangeSchema } from "./instruments";
 import { VersionArchivedSchema } from "./lossless";
 
 export const DOWNLOAD_FORMATS = ["original", "flac", "wav", "opus"] as const;
@@ -101,6 +101,10 @@ export const TrackSchema = z.object({
   transpose: z.boolean().nullable(),
   /** Vocals: the formant base; null = auto. */
   voiceRange: VoiceRangeSchema.nullable(),
+  /** Formants under practice; null = automatic (SPEC §30.3). */
+  formantMode: FormantModeSchema.nullable(),
+  /** Formant shift in semitones (band default). */
+  formantShift: z.number().int(),
   /** Defaults for everyone's mixer (SPEC §11.3). */
   defaultGainDb: z.number(),
   defaultPan: z.number(),

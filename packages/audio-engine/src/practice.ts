@@ -16,6 +16,8 @@ export const DEFAULT_STRETCH_POLICY: TrackStretchPolicy = {
   transpose: true,
   profile: "tonal",
   voiceBaseHz: 0,
+  formant: false,
+  formantShift: 0,
 };
 
 /** Speed 100 % and no transposition: tracks play as they are. */
@@ -43,8 +45,9 @@ export function toTimeline(p: number, rate: number): number {
 }
 
 /**
- * How the worker plays a track: null = as is (neutral practice, or a track kept at its pitch at
- * 100 %, bit-identical to the source); else stretched, or silent when muted.
+ * How the worker plays a track: null = as is (neutral practice without a formant shift, or a
+ * track kept at its pitch at 100 %, bit-identical to the source); else stretched, or silent when
+ * muted. A formant shift alone is processed at 100 % / 0 st too (SPEC §30.3).
  */
 export function workerStretch(
   practice: EnginePractice,
@@ -53,16 +56,19 @@ export function workerStretch(
   clips: EngineClip[],
   timelineFrames: number,
 ): WorkerStretch | null {
-  if (isNeutralPractice(practice)) return null;
   const p = policy ?? DEFAULT_STRETCH_POLICY;
+  const shift = p.formantShift;
+  if (isNeutralPractice(practice) && shift === 0) return null;
   const semitones = p.transpose ? practice.semitones : 0;
-  if (!muted && practice.rate === 1 && semitones === 0) return null;
+  if (!muted && practice.rate === 1 && semitones === 0 && shift === 0) return null;
   return {
     rate: practice.rate,
     semitones,
     profile: p.profile,
     quality: practice.quality,
     voiceBaseHz: p.voiceBaseHz,
+    formant: p.formant,
+    formantShift: shift,
     channels: clips[0]?.variant.channels ?? 2,
     silent: muted,
     timelineFrames,

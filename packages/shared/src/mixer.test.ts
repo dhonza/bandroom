@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PRACTICE,
   MixerStateSchema,
+  MixerTrackStateSchema,
   clickAudible,
   clickSettingsOf,
   dimmedTrackIds,
@@ -90,5 +91,29 @@ describe("the practice setting (SPEC §30.2)", () => {
     expect(isNeutralPractice({ ...DEFAULT_PRACTICE, rate: 0.5 })).toBe(false);
     expect(isNeutralPractice({ ...DEFAULT_PRACTICE, semitones: 1 })).toBe(false);
     expect(isNeutralPractice({ ...DEFAULT_PRACTICE, cents: -32 })).toBe(false);
+  });
+});
+
+describe("personal practice overrides (SPEC §30.3)", () => {
+  it("are optional per track and nullable", () => {
+    const base = { gainDb: 0, pan: 0, mute: false, solo: false };
+    expect(MixerTrackStateSchema.safeParse(base).success).toBe(true);
+    expect(
+      MixerTrackStateSchema.safeParse({
+        ...base,
+        transpose: false,
+        formantMode: "preserve",
+        formantShift: -2,
+      }).success,
+    ).toBe(true);
+    expect(
+      MixerTrackStateSchema.safeParse({
+        ...base,
+        transpose: null,
+        formantMode: null,
+        formantShift: null,
+      }).success,
+    ).toBe(true);
+    expect(MixerTrackStateSchema.safeParse({ ...base, formantShift: 30 }).success).toBe(false);
   });
 });

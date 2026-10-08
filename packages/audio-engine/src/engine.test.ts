@@ -372,7 +372,13 @@ describe("Engine practice speed and pitch (SPEC §30.5)", () => {
     sampleRate: 48_000,
   };
   const clips = [{ startFrame: 0, sourceOffsetFrame: 0, lengthFrames: 480_000, variant }];
-  const drums = { transpose: false, profile: "percussive" as const, voiceBaseHz: 0 };
+  const drums = {
+    transpose: false,
+    profile: "percussive" as const,
+    voiceBaseHz: 0,
+    formant: false,
+    formantShift: 0,
+  };
   const twoTracks: SongTimeline = {
     lengthFrames: 480_000,
     tracks: [

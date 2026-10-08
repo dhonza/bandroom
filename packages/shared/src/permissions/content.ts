@@ -300,7 +300,13 @@ export const LOCK_FROZEN_CAPABILITIES: ReadonlySet<Capability> = new Set<Capabil
 /** Track fields that make up the default mix (SPEC §5.5): frozen while the song is locked. */
 export const DEFAULT_MIX_FIELDS = ["defaultGainDb", "defaultPan", "defaultMuted"] as const;
 /** Track fields that shape practice playback (SPEC §30.3): frozen like the default mix. */
-export const TRACK_PLAYBACK_FIELDS = ["instrument", "transpose", "voiceRange"] as const;
+export const TRACK_PLAYBACK_FIELDS = [
+  "instrument",
+  "transpose",
+  "voiceRange",
+  "formantMode",
+  "formantShift",
+] as const;
 /** Every track field frozen while the song is locked. */
 export const TRACK_LOCK_FIELDS = [...DEFAULT_MIX_FIELDS, ...TRACK_PLAYBACK_FIELDS] as const;
 /** Version fields frozen while the song is locked: the version gain (SPEC §25.6). */

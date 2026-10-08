@@ -164,6 +164,65 @@ export function voiceBaseHz(range: VoiceRange | null | undefined): number {
   return 0;
 }
 
+/**
+ * Formants under practice (SPEC §30.3): `auto` = kept in place for vocals, moving with the pitch
+ * for everything else; `preserve` = always kept in place; `follow` = always move with the pitch.
+ */
+export const FORMANT_MODES = ["auto", "preserve", "follow"] as const;
+export type FormantMode = (typeof FORMANT_MODES)[number];
+export const FormantModeSchema = z.enum(FORMANT_MODES);
+/** Formant shift limit in semitones. */
+export const FORMANT_SHIFT = 12;
+export const FormantShiftSchema = z.number().int().min(-FORMANT_SHIFT).max(FORMANT_SHIFT);
+
+/** A track's band-wide practice settings (null = automatic). */
+export interface PracticeTrack extends InstrumentTrack {
+  transpose?: boolean | null | undefined;
+  voiceRange?: VoiceRange | null | undefined;
+  formantMode?: FormantMode | null | undefined;
+  formantShift?: number | null | undefined;
+}
+
+/** A listener's personal overrides of them (null or missing = the band default). */
+export interface PracticeOverride {
+  transpose?: boolean | null | undefined;
+  formantMode?: FormantMode | null | undefined;
+  formantShift?: number | null | undefined;
+}
+
+/** How a track is processed under practice (Player and bounce alike, SPEC §30.3–§30.5). */
+export interface TrackStretchPolicy {
+  /** Follows the transposition. */
+  transpose: boolean;
+  profile: StretchProfile;
+  /** Rough fundamental for formant compensation of vocals (0 = estimate). */
+  voiceBaseHz: number;
+  /** Formants kept in place while the pitch moves. */
+  formant: boolean;
+  /** Formant shift in semitones (0 = none). */
+  formantShift: number;
+}
+
+/**
+ * The resolved policy: the personal override, else the track's setting, else the default for its
+ * instrument. Every field is a primitive, so policies compare and serialize cheaply.
+ */
+export function trackStretchPolicy(
+  track: PracticeTrack,
+  personal: PracticeOverride | null | undefined,
+  opts: InstrumentOptions = {},
+): TrackStretchPolicy {
+  const instrument = effectiveInstrument(track, opts);
+  const mode = personal?.formantMode ?? track.formantMode ?? "auto";
+  return {
+    transpose: personal?.transpose ?? track.transpose ?? defaultTranspose(instrument),
+    profile: profileFor(instrument),
+    voiceBaseHz: instrument === "vocals" ? voiceBaseHz(track.voiceRange) : 0,
+    formant: mode === "auto" ? instrument === "vocals" : mode === "preserve",
+    formantShift: personal?.formantShift ?? track.formantShift ?? 0,
+  };
+}
+
 const NOTE_PITCH: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 const FLAT_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"] as const;

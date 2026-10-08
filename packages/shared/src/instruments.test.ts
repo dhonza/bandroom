@@ -8,6 +8,9 @@ import {
   effectiveTranspose,
   guessInstrument,
   profileFor,
+  FormantModeSchema,
+  FormantShiftSchema,
+  trackStretchPolicy,
   transposeKeyName,
   voiceBaseHz,
 } from "./instruments";
@@ -128,5 +131,52 @@ describe("transposeKeyName (SPEC §30.7)", () => {
     expect(transposeKeyName("", 2)).toBeNull();
     expect(transposeKeyName("H moll", 2)).toBeNull();
     expect(transposeKeyName("?", 1)).toBeNull();
+  });
+});
+
+describe("trackStretchPolicy (SPEC §30.3)", () => {
+  it("defaults from the instrument: formants kept for vocals only", () => {
+    expect(trackStretchPolicy({ name: "Lead vox", voiceRange: "high" }, null)).toEqual({
+      transpose: true,
+      profile: "voice",
+      voiceBaseHz: 400,
+      formant: true,
+      formantShift: 0,
+    });
+    expect(trackStretchPolicy({ name: "Kick", voiceRange: "low" }, undefined)).toEqual({
+      transpose: false,
+      profile: "percussive",
+      voiceBaseHz: 0,
+      formant: false,
+      formantShift: 0,
+    });
+  });
+
+  it("takes the band default, then the personal override", () => {
+    const gtr = {
+      name: "Gtr",
+      formantMode: "preserve" as const,
+      formantShift: 2,
+      transpose: false,
+    };
+    expect(trackStretchPolicy(gtr, {})).toMatchObject({
+      transpose: false,
+      formant: true,
+      formantShift: 2,
+    });
+    expect(
+      trackStretchPolicy(gtr, { transpose: true, formantMode: "follow", formantShift: -4 }),
+    ).toMatchObject({ transpose: true, formant: false, formantShift: -4 });
+    expect(
+      trackStretchPolicy({ name: "x", formantMode: "auto" }, null, { singleTrack: true }),
+    ).toMatchObject({ profile: "mix", formant: false });
+  });
+
+  it("validates modes and shifts", () => {
+    expect(FormantModeSchema.safeParse("follow").success).toBe(true);
+    expect(FormantModeSchema.safeParse("x").success).toBe(false);
+    expect(FormantShiftSchema.safeParse(12).success).toBe(true);
+    expect(FormantShiftSchema.safeParse(13).success).toBe(false);
+    expect(FormantShiftSchema.safeParse(1.5).success).toBe(false);
   });
 });

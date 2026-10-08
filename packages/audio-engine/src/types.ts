@@ -53,6 +53,10 @@ export interface TrackStretchPolicy {
   profile: StretchProfile;
   /** Rough fundamental for vocal formant compensation (0 = estimate). */
   voiceBaseHz: number;
+  /** Formants kept in place while the pitch moves. */
+  formant: boolean;
+  /** Formant shift in semitones; a non-zero shift is processed even at 100 % / 0 st. */
+  formantShift: number;
 }
 
 /** The listener's practice setting for the song (SPEC §30.2). */
@@ -72,6 +76,8 @@ export interface WorkerStretch {
   profile: StretchProfile;
   quality: StretchQuality;
   voiceBaseHz: number;
+  formant: boolean;
+  formantShift: number;
   channels: number;
   /** Muted: produce silence instead of stretching (SPEC §30.5). */
   silent: boolean;

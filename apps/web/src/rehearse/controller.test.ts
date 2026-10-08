@@ -177,6 +177,8 @@ function track(id: string, current = version(`${id}-v1`, `${id}1`)): Track {
     instrument: null,
     transpose: null,
     voiceRange: null,
+    formantMode: null,
+    formantShift: 0,
     defaultGainDb: 0,
     defaultPan: 0,
     defaultMuted: false,

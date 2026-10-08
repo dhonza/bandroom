@@ -8,10 +8,8 @@ import type {
 } from "@bandroom/audio-engine";
 import {
   effectiveInstrument,
-  effectiveTranspose,
   guessInstrument,
-  profileFor,
-  voiceBaseHz,
+  trackStretchPolicy,
   type Instrument,
   type MixerState,
   type Practice,
@@ -145,7 +143,7 @@ export function buildTimeline(tracks: readonly PlayableTrack[], mix: MixerState)
       mute: s.mute,
       solo: s.solo,
       trimDb: p.version.gainDb,
-      stretch: stretchPolicyOf(p.track, tracks.length === 1),
+      stretch: stretchPolicyOf(p.track, tracks.length === 1, mix.tracks[p.track.id]),
     };
   });
   const lengthFrames = Math.max(
@@ -155,14 +153,16 @@ export function buildTimeline(tracks: readonly PlayableTrack[], mix: MixerState)
   return { tracks: engineTracks, lengthFrames };
 }
 
-/** How a track follows the practice setting, from its instrument (SPEC §30.3, §30.4). */
-export function stretchPolicyOf(track: Track, singleTrack: boolean): TrackStretchPolicy {
-  const opts = { singleTrack };
-  return {
-    transpose: effectiveTranspose(track, opts),
-    profile: profileFor(effectiveInstrument(track, opts)),
-    voiceBaseHz: voiceBaseHz(track.voiceRange),
-  };
+/**
+ * How a track follows the practice setting (SPEC §30.3, §30.4): the listener's override in the
+ * mix, else the band default on the track, else the default for its instrument.
+ */
+export function stretchPolicyOf(
+  track: Track,
+  singleTrack: boolean,
+  personal?: MixerTrackState,
+): TrackStretchPolicy {
+  return trackStretchPolicy(track, personal, { singleTrack });
 }
 
 /** The engine's practice setting: cents join the semitones (SPEC §30.2). */
@@ -285,7 +285,11 @@ export function changedTrims(
  * What the engine holds: the song and each track's version, file and offset. Independent of the
  * track order: the engine addresses tracks by id, so a reorder only moves the lanes (SPEC §28.5).
  */
-export function loadKeyOf(songId: string, playable: readonly PlayableTrack[]): string {
+export function loadKeyOf(
+  songId: string,
+  playable: readonly PlayableTrack[],
+  mix?: MixerState,
+): string {
   return JSON.stringify([
     songId,
     playable
@@ -294,8 +298,8 @@ export function loadKeyOf(songId: string, playable: readonly PlayableTrack[]): s
         p.version.id,
         p.chosen.variant.hash,
         p.version.offsetSamples,
-        // A changed practice policy (instrument, transpose) reloads the song.
-        JSON.stringify(stretchPolicyOf(p.track, playable.length === 1)),
+        // A changed practice policy (instrument, transpose, formants) reloads the song.
+        JSON.stringify(stretchPolicyOf(p.track, playable.length === 1, mix?.tracks[p.track.id])),
       ])
       .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
   ]);

@@ -140,6 +140,8 @@ export function toTrack(item: TrackListItem, allowDownload: boolean, bytes?: num
     instrument: item.track.instrument,
     transpose: item.track.transpose,
     voiceRange: item.track.voiceRange,
+    formantMode: item.track.formantMode,
+    formantShift: item.track.formantShift,
     defaultGainDb: item.track.defaultGainDb,
     defaultPan: item.track.defaultPan,
     defaultMuted: item.track.defaultMuted,

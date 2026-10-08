@@ -75,6 +75,8 @@ function track(id: string, over: Partial<Track> = {}): Track {
     instrument: null,
     transpose: null,
     voiceRange: null,
+    formantMode: null,
+    formantShift: 0,
     defaultGainDb: 0,
     defaultPan: 0,
     defaultMuted: false,
@@ -377,6 +379,8 @@ describe("practice (SPEC §30.3)", () => {
       transpose: true,
       profile: "voice",
       voiceBaseHz: 0,
+      formant: true,
+      formantShift: 0,
     });
     expect(stretchPolicyOf(track("Kick"), false)).toMatchObject({
       transpose: false,
@@ -387,6 +391,34 @@ describe("practice (SPEC §30.3)", () => {
       stretchPolicyOf(track("x", { voiceRange: "high", instrument: "vocals" }), false),
     ).toMatchObject({ voiceBaseHz: 400 });
     expect(stretchPolicyOf(track("Rehearsal 3"), true).profile).toBe("mix");
+  });
+
+  it("lets the listener override the band default", () => {
+    const vox = track("Lead vox", { formantMode: "follow", formantShift: 2 });
+    expect(stretchPolicyOf(vox, false)).toMatchObject({ formant: false, formantShift: 2 });
+    const mine = {
+      gainDb: 0,
+      pan: 0,
+      mute: false,
+      solo: false,
+      transpose: false,
+      formantMode: "preserve" as const,
+      formantShift: -3,
+    };
+    expect(stretchPolicyOf(vox, false, mine)).toMatchObject({
+      transpose: false,
+      formant: true,
+      formantShift: -3,
+    });
+    // null = back to the band default.
+    expect(
+      stretchPolicyOf(vox, false, {
+        ...mine,
+        transpose: null,
+        formantMode: null,
+        formantShift: null,
+      }),
+    ).toMatchObject({ transpose: true, formant: false, formantShift: 2 });
   });
 
   it("joins cents to the semitones for the engine", () => {

@@ -192,6 +192,8 @@ export const audioBounceHandler: JobHandler<BouncePayload, BounceResult> = {
           semitones: stretchSemitones(practice, stretch),
           profile: stretch?.profile ?? "tonal",
           voiceBaseHz: stretch?.voiceBaseHz ?? 0,
+          formant: stretch?.formant,
+          formantSemitones: stretch?.formantShift ?? 0,
         },
         file,
       );
