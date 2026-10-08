@@ -33,6 +33,7 @@ import { registerMediaRoutes } from "./routes/media";
 import { registerInternalRoutes, registerStreamRoutes } from "./routes/stream";
 import { registerMixerRoutes } from "./routes/mixer";
 import { registerOfflineRoutes } from "./routes/offline";
+import { registerOpsRoutes } from "./routes/ops";
 import { registerMarkerRoutes } from "./routes/markers";
 import { registerCommentRoutes } from "./routes/comments";
 import { registerNotificationRoutes } from "./routes/notifications";
@@ -145,6 +146,7 @@ export async function buildApp({
       registerMeRoutes(api, ctx);
       registerAdminRoutes(api, ctx);
       registerApiKeyRoutes(api, ctx);
+      registerOpsRoutes(api, ctx);
       registerDirectoryRoutes(api, ctx);
       registerProjectRoutes(api, ctx);
       registerProjectImageRoutes(api, ctx);

@@ -19,3 +19,4 @@ export * from "./documents";
 export * from "./links";
 export * from "./offline";
 export * from "./processing";
+export * from "./ops";

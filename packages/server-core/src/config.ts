@@ -36,6 +36,11 @@ const EnvSchema = z.object({
   SAMPLY_API_URL: z.url().optional(),
   /** Seconds before the files of "Delete permanently" / "Empty Trash" are deleted (SPEC §26.3). */
   PURGE_GC_GRACE_SECONDS: z.coerce.number().int().min(0).max(86_400).default(600),
+  /** GHCR repository whose release tags the update check lists (SPEC §29.8). */
+  UPDATE_IMAGE_REPO: z
+    .string()
+    .regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)+$/)
+    .default("dhonza/bandroom"),
 });
 
 export type Env = z.input<typeof EnvSchema>;
@@ -67,6 +72,8 @@ export interface Config {
   samplyApiUrl: string | undefined;
   /** Grace before an explicit purge's files are deleted by `blob.gc` (default 10 min). */
   purgeGcGraceMs: number;
+  /** `owner/name` on ghcr.io for the update check. */
+  updateImageRepo: string;
   /** Human-readable warnings produced while loading (e.g. dev defaults in use). */
   warnings: string[];
 }
@@ -136,6 +143,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     webDistDir: e.WEB_DIST_DIR === undefined ? undefined : path.resolve(e.WEB_DIST_DIR),
     samplyApiUrl: e.SAMPLY_API_URL,
     purgeGcGraceMs: e.PURGE_GC_GRACE_SECONDS * 1000,
+    updateImageRepo: e.UPDATE_IMAGE_REPO,
     warnings,
   };
 }
