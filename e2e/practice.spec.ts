@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { generateFixtures, TONE_FILE } from "@bandroom/fixtures";
-import { isMobile, loginAsNewUser, openMixer, uniqueUsername } from "./helpers";
+import { isMobile, loginAsNewUser, openMixer, TAP_NAME, uniqueUsername } from "./helpers";
 
 test.beforeAll(async () => {
   await generateFixtures();
@@ -12,6 +12,7 @@ interface DebugState {
   length: number;
   errors: Record<string, string>;
   practice: { rate: number; semitones: number; cents: number };
+  mix: { tracks: Record<string, { formantMode?: string | null; formantShift?: number | null }> };
   enginePractice: { rate: number; semitones: number; quality: string } | null;
 }
 
@@ -77,6 +78,20 @@ test("Practice: slower and transposed, plays and persists (SPEC §30)", async ({
   await page.keyboard.press("Escape");
   if (phone) await expect(page.getByTestId("practice-phone-button")).toHaveText("75 % · −2");
   else await expect(page.getByTestId("practice-button")).toHaveText("75 % · −2 st");
+
+  // Personal formants in the lane settings ("For me", SPEC §30.3; full screen on phones).
+  await page.getByTestId("track-settings").first().click(TAP_NAME);
+  const personal = page.getByTestId("track-personal");
+  await expect(personal).toBeVisible();
+  // The track's uploader edits the band default too.
+  await expect(page.getByTestId("track-band-defaults")).toBeVisible();
+  await personal.getByTestId("track-my-formants").getByText("Follow pitch").click();
+  await expect
+    .poll(async () => Object.values((await debug(page))?.mix.tracks ?? {})[0]?.formantMode)
+    .toBe("follow");
+  await expect(page.getByTestId("track-practice-summary")).toContainText("Follow pitch");
+  await page.keyboard.press("Escape");
+  await expect(personal).toBeHidden();
 
   // Plays through the stretcher: the position moves on, without errors.
   const saved = page.waitForResponse(
