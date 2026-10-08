@@ -23,6 +23,8 @@
     "test:e2e:install": "PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:-$PWD/.cache/ms-playwright} playwright install chromium webkit",
     "db:generate": "pnpm --filter server db:generate",
     "fixtures": "pnpm --filter @bandroom/fixtures generate",
+    "stretch:build": "pnpm --filter @bandroom/stretch build:wasm",
+    "stretch:check": "pnpm --filter @bandroom/stretch check:wasm",
     "remote": "pnpm --silent --filter @bandroom/brctl brctl"
   },
   "devDependencies": {

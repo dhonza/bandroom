@@ -42,7 +42,7 @@ jobs:
       - run: pnpm typecheck
       - name: Deploy scripts (shellcheck, tests against a fake docker)
         run: |
-          shellcheck deploy/deploy.sh deploy/status.sh deploy/ops-watcher.sh deploy/test/deploy.test.sh deploy/test/fake-docker
+          shellcheck deploy/deploy.sh deploy/status.sh deploy/ops-watcher.sh deploy/test/deploy.test.sh deploy/test/fake-docker packages/stretch/scripts/build-wasm.sh
           bash deploy/test/deploy.test.sh
       - run: pnpm test:coverage
       - run: pnpm i18n:check
@@ -50,6 +50,16 @@ jobs:
       - name: Dependency audit (warning only)
         run: pnpm audit --prod
         continue-on-error: true
+
+  stretch-wasm:
+    # The committed packages/stretch/src/stretch.wasm must be exactly what the pinned emscripten
+    # image builds from packages/stretch/native (SPEC §30.1). ~1 GB image pull, seconds to build.
+    name: Stretch WASM reproducible
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: packages/stretch/scripts/build-wasm.sh --check
 
   e2e:
     # One job per Playwright project, in parallel: the whole suite in one job took ~45–60 min and
