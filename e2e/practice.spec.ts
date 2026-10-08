@@ -23,11 +23,16 @@ const debug = (page: Page) =>
       ).__bandroomRehearse?.state() ?? null,
   );
 
-/** Opens the Practice form: the transport button (desktop) or the sheet from "⋯" (phones). */
-async function openPractice(page: Page, phone: boolean) {
-  if (phone) {
+/**
+ * Opens the Practice form: the transport button (desktop); on phones the full-screen panel from
+ * the readout's Practice button or from "⋯".
+ */
+async function openPractice(page: Page, phone: boolean, via: "button" | "menu" = "button") {
+  if (phone && via === "menu") {
     await page.getByRole("button", { name: "Playback options" }).last().click();
     await page.getByTestId("menu-practice").click();
+  } else if (phone) {
+    await page.getByTestId("practice-phone-button").click();
   } else {
     await page.getByTestId("practice-button").click();
   }
@@ -70,7 +75,7 @@ test("Practice: slower and transposed, plays and persists (SPEC §30)", async ({
       semitones: -2,
     });
   await page.keyboard.press("Escape");
-  if (phone) await expect(page.getByTestId("practice-badge")).toHaveText("75 % · −2 st");
+  if (phone) await expect(page.getByTestId("practice-phone-button")).toHaveText("75 % · −2");
   else await expect(page.getByTestId("practice-button")).toHaveText("75 % · −2 st");
 
   // Plays through the stretcher: the position moves on, without errors.
@@ -119,9 +124,11 @@ test("Practice: slower and transposed, plays and persists (SPEC §30)", async ({
     await expect(page.getByTestId("rehearse-panel")).toBeVisible();
   }
 
-  // Back to the original.
-  await openPractice(page, phone);
-  await page.getByTestId("practice-reset").click();
+  // Back to the original (phones: from "⋯"; the button is at the end of the scrolling panel).
+  await openPractice(page, phone, "menu");
+  const reset = page.getByTestId("practice-reset");
+  await reset.scrollIntoViewIfNeeded();
+  await reset.click();
   await expect
     .poll(async () => (await debug(page))?.enginePractice)
     .toMatchObject({
