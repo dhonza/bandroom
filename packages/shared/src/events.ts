@@ -14,6 +14,9 @@ export const EVENT_ACTIONS = [
   "auth.sessions_revoked",
   /** An admin dismissed a user's "forgot password" request without sending a link. */
   "auth.reset_request_dismissed",
+  /** API keys (SPEC §29.4; details: name, scopes, expiresAt / name, byAdmin). */
+  "auth.api_key_created",
+  "auth.api_key_revoked",
   // users & invites
   "user.invited",
   "user.created",
@@ -156,6 +159,11 @@ export const EVENT_ACTIONS = [
   "secret.deleted",
   // instance
   "settings.changed",
+  // operations (SPEC §29.6, §29.8)
+  "job.retried",
+  "job.cancelled",
+  "ops.update_requested",
+  "ops.update_cancelled",
 ] as const;
 
 export type EventAction = (typeof EVENT_ACTIONS)[number];

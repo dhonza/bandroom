@@ -9,6 +9,8 @@ export interface EventInput {
   actorType?: ActorType;
   actorUserId?: string | null;
   sessionId?: string | null;
+  /** The API key of a bearer request (SPEC §29.1). */
+  apiKeyId?: string | null;
   linkId?: string | null;
   linkSessionId?: string | null;
   projectId?: string | null;
@@ -31,6 +33,7 @@ export function recordEvent(db: Db, e: EventInput): void {
       actorType: e.actorType ?? (e.actorUserId ? "user" : "system"),
       actorUserId: e.actorUserId ?? null,
       sessionId: e.sessionId ?? null,
+      apiKeyId: e.apiKeyId ?? null,
       linkId: e.linkId ?? null,
       linkSessionId: e.linkSessionId ?? null,
       action: e.action,

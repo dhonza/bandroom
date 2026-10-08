@@ -98,7 +98,16 @@
     "TRASH_PARENT_DELETED": "Restore the song first: it is still in the Trash.",
     "LOSSLESS_REMOVED": "The full-quality files of this version were removed; only the compressed audio is left.",
     "BOUNCE_INVALID": "A track or version of the mix is no longer in the song or not ready yet. Reload the page and try again.",
-    "BOUNCE_SILENT": "Every track is muted or silent, so there is nothing to bounce."
+    "BOUNCE_SILENT": "Every track is muted or silent, so there is nothing to bounce.",
+    "API_KEY_INVALID": "The API key is not valid (unknown, revoked or expired).",
+    "API_KEY_SCOPE": "This API key is not allowed to do that.",
+    "API_KEY_LIMIT": "You already have the maximum number of API keys. Revoke one first.",
+    "DUPLICATE_VERSION": "This file is the same as the current version.",
+    "UPDATE_PENDING": "An update is already waiting or running.",
+    "UPDATE_CHECK_FAILED": "Could not check for updates.",
+    "UPDATE_TAG_UNKNOWN": "This version is not available.",
+    "UPDATE_CONFIRM_MISMATCH": "The confirmed version is not the one running.",
+    "JOB_STATE": "The job cannot do that in its current state."
   },
   "footer": {
     "version": "Version {{version}}"

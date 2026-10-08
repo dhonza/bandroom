@@ -46,6 +46,15 @@ export const ERROR_CODES = [
   "LOSSLESS_REMOVED",
   "BOUNCE_INVALID",
   "BOUNCE_SILENT",
+  "API_KEY_INVALID",
+  "API_KEY_SCOPE",
+  "API_KEY_LIMIT",
+  "DUPLICATE_VERSION",
+  "UPDATE_PENDING",
+  "UPDATE_CHECK_FAILED",
+  "UPDATE_TAG_UNKNOWN",
+  "UPDATE_CONFIRM_MISMATCH",
+  "JOB_STATE",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -121,6 +130,24 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
   BOUNCE_INVALID: 400,
   /** Every track of the bounce is muted, silenced by a solo or at the fader bottom (SPEC §5.5). */
   BOUNCE_SILENT: 400,
+  /** The bearer API key is unknown, revoked or expired, or its user is disabled (SPEC §29.3). */
+  API_KEY_INVALID: 401,
+  /** The API key's scopes do not cover this route, or keys may not use it (SPEC §29.2). */
+  API_KEY_SCOPE: 403,
+  /** The user already has the maximum number of active API keys. */
+  API_KEY_LIMIT: 409,
+  /** The upload equals the track's current version (`sha256` in the target, SPEC §29.5). */
+  DUPLICATE_VERSION: 409,
+  /** An update request is already pending or running (SPEC §29.8). */
+  UPDATE_PENDING: 409,
+  /** The image registry could not be reached or answered unexpectedly. */
+  UPDATE_CHECK_FAILED: 502,
+  /** The requested tag is not among the available release tags. */
+  UPDATE_TAG_UNKNOWN: 400,
+  /** A rollback named another version than the running one. */
+  UPDATE_CONFIRM_MISMATCH: 409,
+  /** The job is not in a state that allows this action (retry/cancel). */
+  JOB_STATE: 409,
 };
 
 export const FieldErrorSchema = z.object({

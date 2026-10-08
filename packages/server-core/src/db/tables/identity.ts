@@ -107,3 +107,29 @@ export const userSecrets = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.kind] })],
 );
+
+/**
+ * API keys (SPEC §29.1): bearer tokens a user creates for scripts and plugins. Only the SHA-256
+ * of the token is stored; `prefix` (its first characters) identifies it in lists.
+ */
+export const apiKeys = sqliteTable(
+  "api_keys",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    prefix: text("prefix").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    /** JSON array of scopes, validated with Zod on read. */
+    scopes: text("scopes").notNull(),
+    createdAt: integer("created_at").notNull(),
+    lastUsedAt: integer("last_used_at"),
+    lastUsedIp: text("last_used_ip"),
+    /** null = never expires. */
+    expiresAt: integer("expires_at"),
+    revokedAt: integer("revoked_at"),
+  },
+  (t) => [index("api_keys_user_idx").on(t.userId)],
+);

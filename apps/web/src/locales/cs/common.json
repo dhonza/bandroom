@@ -100,7 +100,16 @@
     "TRASH_PARENT_DELETED": "Nejdřív obnovte píseň: je stále v koši.",
     "LOSSLESS_REMOVED": "Soubory této verze v plné kvalitě byly odstraněny; zbyl jen komprimovaný zvuk.",
     "BOUNCE_INVALID": "Některá stopa nebo verze mixu už v písni není nebo ještě není připravená. Načtěte stránku znovu a zkuste to znovu.",
-    "BOUNCE_SILENT": "Všechny stopy jsou ztlumené nebo potichu, takže není co uložit."
+    "BOUNCE_SILENT": "Všechny stopy jsou ztlumené nebo potichu, takže není co uložit.",
+    "API_KEY_INVALID": "API klíč není platný (neznámý, zrušený nebo prošlý).",
+    "API_KEY_SCOPE": "Tento API klíč to nesmí.",
+    "API_KEY_LIMIT": "Už máte nejvyšší povolený počet API klíčů. Nejdřív některý zrušte.",
+    "DUPLICATE_VERSION": "Soubor je stejný jako aktuální verze.",
+    "UPDATE_PENDING": "Aktualizace už čeká nebo probíhá.",
+    "UPDATE_CHECK_FAILED": "Aktualizace se nepodařilo zkontrolovat.",
+    "UPDATE_TAG_UNKNOWN": "Tato verze není k dispozici.",
+    "UPDATE_CONFIRM_MISMATCH": "Potvrzená verze není ta, která běží.",
+    "JOB_STATE": "Úloha to ve svém současném stavu neumí."
   },
   "footer": {
     "version": "Verze {{version}}"

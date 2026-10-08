@@ -25,6 +25,8 @@ export const events = sqliteTable(
     linkId: text("link_id"),
     linkSessionId: text("link_session_id"),
     sessionId: text("session_id"),
+    /** The API key behind a bearer request (SPEC §29.1); the actor stays the key's user. */
+    apiKeyId: text("api_key_id"),
     action: text("action").notNull(),
     projectId: text("project_id"),
     songId: text("song_id"),

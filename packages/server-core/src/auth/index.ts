@@ -6,3 +6,4 @@ export * from "./tokens";
 export * from "./users";
 export * from "./secretBox";
 export * from "./userSecrets";
+export * from "./apiKeys";
