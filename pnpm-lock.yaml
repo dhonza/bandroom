@@ -464,6 +464,9 @@ importers:
       '@bandroom/shared':
         specifier: workspace:*
         version: link:../shared
+      '@bandroom/stretch':
+        specifier: workspace:*
+        version: link:../stretch
       '@node-rs/argon2':
         specifier: 2.2.1
         version: 2.2.1
