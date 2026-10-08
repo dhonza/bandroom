@@ -242,6 +242,14 @@ describe("mix state", () => {
     expect(clickSettingsOf(defaultMix(tracks)).enabled).toBe(false);
   });
 
+  it("keeps the practice setting across merge and reset (SPEC §30.2)", () => {
+    const tracks = [track("a")];
+    const merged = mergeMix(tracks, { tracks: {}, practice: { rate: 0.85, semitones: -2 } });
+    expect(merged.practice).toEqual({ rate: 0.85, semitones: -2 });
+    expect(resetMix(tracks, merged).practice).toEqual({ rate: 0.85, semitones: -2 });
+    expect(defaultMix(tracks).practice).toBeUndefined();
+  });
+
   it("mutes and unmutes my instrument", () => {
     const tracks = [
       track("a", { instrumentTag: "Bass " }),

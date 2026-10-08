@@ -166,6 +166,7 @@ export function mergeMix(tracks: readonly Track[], saved: MixerState | null): Mi
     if (s) base.tracks[t.id] = { ...s };
   }
   if (saved.click) base.click = { ...saved.click };
+  if (saved.practice) base.practice = { ...saved.practice };
   return base;
 }
 
@@ -181,6 +182,7 @@ export function resetMix(tracks: readonly Track[], mix: MixerState): MixerState 
     if (cur && b) b.listenedVersionId = cur.listenedVersionId ?? null;
   }
   if (mix.click) base.click = mix.click; // the click is not part of "Reset mix"
+  if (mix.practice) base.practice = mix.practice; // nor the practice setting (SPEC §30.2)
   return base;
 }
 

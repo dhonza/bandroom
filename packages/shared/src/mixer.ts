@@ -45,12 +45,27 @@ export const DEFAULT_CLICK_SETTINGS: ClickSettings = {
   countInEveryRepeat: false,
 };
 
+/**
+ * Personal practice setting per song (SPEC §30.2): playback speed (rate, 1 = original), pitch in
+ * semitones and fine tune in cents.
+ */
+export const PracticeSchema = z.object({
+  rate: z.number().min(0.25).max(2),
+  semitones: z.number().int().min(-24).max(24),
+  cents: z.number().int().min(-100).max(100),
+});
+export type Practice = z.infer<typeof PracticeSchema>;
+
+export const DEFAULT_PRACTICE: Practice = { rate: 1, semitones: 0, cents: 0 };
+
 export const MixerStateSchema = z.object({
   tracks: z
     .record(z.string().max(64), MixerTrackStateSchema)
     .refine((r) => Object.keys(r).length <= 500, { message: "Too many tracks" }),
   /** Missing keys fall back to {@link DEFAULT_CLICK_SETTINGS}. */
   click: ClickSettingsSchema.partial().optional(),
+  /** Missing keys fall back to {@link DEFAULT_PRACTICE}. */
+  practice: PracticeSchema.partial().optional(),
 });
 export type MixerState = z.infer<typeof MixerStateSchema>;
 
@@ -82,6 +97,16 @@ export function dimmedTrackIds(mix: Pick<MixerState, "tracks" | "click">): strin
 /** The full click settings of a mix: missing keys from {@link DEFAULT_CLICK_SETTINGS}. */
 export function clickSettingsOf(mix: Pick<MixerState, "click">): ClickSettings {
   return { ...DEFAULT_CLICK_SETTINGS, ...mix.click };
+}
+
+/** The full practice setting of a mix: missing keys from {@link DEFAULT_PRACTICE}. */
+export function practiceOf(mix: Pick<MixerState, "practice">): Practice {
+  return { ...DEFAULT_PRACTICE, ...mix.practice };
+}
+
+/** Whether a practice setting changes nothing (original speed and pitch). */
+export function isNeutralPractice(p: Practice): boolean {
+  return p.rate === 1 && p.semitones === 0 && p.cents === 0;
 }
 
 /**
