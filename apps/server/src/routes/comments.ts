@@ -11,6 +11,7 @@ import {
   setCommentMentions,
   setCommentReactionRow,
   setCommentResolved,
+  setCommentTimes,
   songUploaderIds,
   storeClientResponse,
   storedClientResponse,
@@ -163,17 +164,35 @@ export function registerCommentRoutes(app: FastifyInstance, ctx: AppContext): vo
   registerContract(app, updateComment, ({ access, params, body, user }, request) => {
     const row = owned(params.id, access.role, user.id);
     if (row.deletedAt !== null) throw new AppError("NOT_FOUND", "Comment not found");
-    if (row.body !== body.body) {
-      updateCommentBody(db, row.id, body.body);
-      const added = setCommentMentions(db, row.id, mentionIds(access.song.id, body.body));
+    // Moving: the new range from the patch and the stored times; replies have no times.
+    const moving = body.startSec !== undefined || body.endSec !== undefined;
+    const startSec = body.startSec !== undefined ? body.startSec : row.startSec;
+    const endSec = startSec === null ? null : body.endSec !== undefined ? body.endSec : row.endSec;
+    if (moving) {
+      if (row.parentId !== null && (startSec !== null || endSec !== null))
+        throw new AppError("BAD_REQUEST", "Replies have no time");
+      if (startSec !== null && endSec !== null && endSec <= startSec)
+        throw new AppError("BAD_REQUEST", "A range ends after it starts");
+    }
+    if (body.body !== undefined && row.body !== body.body) {
+      const text = body.body;
+      updateCommentBody(db, row.id, text);
+      const added = setCommentMentions(db, row.id, mentionIds(access.song.id, text));
       changed(request, access, "comment.edited", row);
       const top = row.parentId ? getCommentRow(db, row.parentId) : row;
       notifyEditMentions(ctx, {
         actor: user,
         project: access.project,
         song: access.song,
-        comment: { id: row.id, body: body.body, startSec: top?.startSec ?? null },
+        comment: { id: row.id, body: text, startSec: top?.startSec ?? null },
         mentioned: added,
+      });
+    }
+    if (moving && (startSec !== row.startSec || endSec !== row.endSec)) {
+      setCommentTimes(db, row.id, startSec, endSec);
+      changed(request, access, "comment.moved", row, {
+        from: { startSec: row.startSec, endSec: row.endSec },
+        to: { startSec, endSec },
       });
     }
     return { comment: dto(row.id, user.id) };

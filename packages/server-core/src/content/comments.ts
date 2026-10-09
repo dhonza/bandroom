@@ -306,6 +306,16 @@ export function updateCommentBody(db: Db, id: string, body: string, now = Date.n
   db.update(comments).set({ body, editedAt: now }).where(eq(comments.id, id)).run();
 }
 
+/** Moves a comment (null start = general comment); not an edit of its text (no `editedAt`). */
+export function setCommentTimes(
+  db: Db,
+  id: string,
+  startSec: number | null,
+  endSec: number | null,
+): void {
+  db.update(comments).set({ startSec, endSec }).where(eq(comments.id, id)).run();
+}
+
 export function setCommentDeleted(db: Db, id: string, deleted: boolean, now = Date.now()): void {
   db.update(comments)
     .set({ deletedAt: deleted ? now : null })

@@ -8,6 +8,7 @@ import {
 import {
   ApiErrorSchema,
   createComment,
+  convertMarkers,
   createMarker,
   createMixerSnapshot,
   createProject,
@@ -119,6 +120,11 @@ const FROZEN: [string, ContractDef, () => Record<string, unknown>][] = [
   ["update marker", updateMarker, () => ({ params: { id: markerId }, body: { name: "A2" } })],
   ["delete marker", deleteMarker, () => ({ params: { id: markerId } })],
   ["restore marker", restoreMarker, () => ({ params: { id: markerId } })],
+  [
+    "convert markers",
+    convertMarkers,
+    () => ({ params: { id: songId }, body: { ids: [markerId], to: "section" } }),
+  ],
   ["create comment", createComment, () => ({ params: { id: songId }, body: { body: "Yo" } })],
   ["edit comment", updateComment, () => ({ params: { id: commentId }, body: { body: "Hey" } })],
   ["delete comment", deleteComment, () => ({ params: { id: commentId } })],

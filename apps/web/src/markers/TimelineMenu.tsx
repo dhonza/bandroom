@@ -1,6 +1,12 @@
 import type { Song } from "@bandroom/shared";
 import { Menu } from "@mantine/core";
-import { IconEdit, IconFlag, IconMessagePlus, IconPlus } from "@tabler/icons-react";
+import {
+  IconEdit,
+  IconFlag,
+  IconListDetails,
+  IconMessagePlus,
+  IconPlus,
+} from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { commentAtPlayhead } from "../comments/actions";
 import { formatClock } from "../player/format";
@@ -9,7 +15,7 @@ import { MenuAnchor } from "./MenuAnchor";
 import { sectionRangeFrom } from "./model";
 import { useCommentPermissions } from "../comments/queries";
 import { useMarkerPermissions } from "./queries";
-import { openEditor, seekTo, setSelection, useTimelineUi } from "./store";
+import { openEditor, seekTo, setItemsOpen, setSelection, useTimelineUi } from "./store";
 import type { TimelineMenuState } from "./useTimelineMarkers";
 
 /**
@@ -99,6 +105,16 @@ export function TimelineMenu({
             {t("comments.addHere")}
           </Menu.Item>
         )}
+        <Menu.Divider />
+        <Menu.Item
+          leftSection={<IconListDetails size={14} />}
+          onClick={() => {
+            setItemsOpen(true);
+          }}
+          data-testid="menu-timeline-items"
+        >
+          {t("timelineItems.open")}
+        </Menu.Item>
       </Menu.Dropdown>
     </Menu>
   );

@@ -66,6 +66,7 @@ import { useTempoUi } from "../tempo/store";
 import type { Lane } from "../timeline/render";
 import { openPracticeSheet, PracticePhoneButton, practiceShortcut } from "./PracticeControls";
 import { Transport, TransportState } from "./Transport";
+import { TimelineItemsDialog } from "../markers/TimelineItemsDialog";
 
 const HEADER_W = 320;
 /** Phones: name above M/S (DECISIONS 2026-10-07). */
@@ -325,6 +326,7 @@ export function RehearsePanel({
             durationSec={lengthSec}
           />
           <MarkerEditor song={song} />
+          <TimelineItemsDialog song={song} />
           <ShortcutHelp />
           {onBounce && (
             <BounceModal

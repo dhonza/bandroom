@@ -241,6 +241,58 @@ describe("comments (SPEC §8)", () => {
     expect(listEvents(t.db, { action: "comment.edited" })).toHaveLength(2);
   });
 
+  it("moves comments (own, editors any) without marking them edited", async () => {
+    const c = await created({ body: "Move me", startSec: 5 }, commenter);
+    const move = (id: string, body: Record<string, unknown>, cookie = commenter) =>
+      call(t, updateComment, { params: { id }, body }, cookie);
+    const res = await move(c.id, { startSec: 7, endSec: 9.5 });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ comment: Comment }>().comment).toMatchObject({
+      body: "Move me",
+      startSec: 7,
+      endSec: 9.5,
+      editedAt: null,
+    });
+    // Only the end: a point comment again; then a general one (its end goes too).
+    expect((await move(c.id, { endSec: null })).json<{ comment: Comment }>().comment).toMatchObject(
+      { startSec: 7, endSec: null },
+    );
+    await move(c.id, { endSec: 8 });
+    expect(
+      (await move(c.id, { startSec: null })).json<{ comment: Comment }>().comment,
+    ).toMatchObject({ startSec: null, endSec: null });
+    // A general comment can get a time; both body and time in one patch write both events.
+    const both = await move(c.id, { startSec: 1, body: "Moved and edited" }, admin);
+    expect(both.json<{ comment: Comment }>().comment).toMatchObject({
+      startSec: 1,
+      body: "Moved and edited",
+      editedAt: expect.any(Number) as number,
+    });
+    const events = listEvents(t.db, { action: "comment.moved" }).filter((e) => e.targetId === c.id);
+    expect(events).toHaveLength(5);
+    expect(events.map((e) => JSON.parse(e.details ?? "{}") as unknown)).toContainEqual({
+      parentId: null,
+      from: { startSec: 5, endSec: null },
+      to: { startSec: 7, endSec: 9.5 },
+    });
+    // Same times: nothing written.
+    await move(c.id, { startSec: 1 });
+    expect(
+      listEvents(t.db, { action: "comment.moved" }).filter((e) => e.targetId === c.id),
+    ).toHaveLength(5);
+    // Validation: end after start (also against the stored start), nothing to change.
+    expect((await move(c.id, { startSec: 4, endSec: 4 })).statusCode).toBe(400);
+    expect((await move(c.id, { endSec: 0.5 })).statusCode).toBe(400);
+    expect((await move(c.id, {})).statusCode).toBe(400);
+    expect((await move(c.id, { startSec: -1 })).statusCode).toBe(400);
+    // Others' comments: forbidden for commenters and contributors.
+    expect((await move(c.id, { startSec: 2 }, member)).statusCode).toBe(403);
+    // Replies have no time.
+    const reply = await created({ body: "Re", parentId: c.id }, member);
+    expect((await move(reply.id, { startSec: 3 }, member)).statusCode).toBe(400);
+    expect((await move(reply.id, { startSec: null }, member)).statusCode).toBe(200);
+  });
+
   it("resolves own comments, editors any; replies cannot be resolved", async () => {
     const mine = await created({ body: "Tune the snare", startSec: 3 }, commenter);
     const r1 = await call(

@@ -1,10 +1,12 @@
 import {
+  convertMarkers as convertMarkerRows,
   createMarkerRow,
   getMarkerRow,
   listMarkers,
   markerById,
   recordSongVisitRow,
   setMarkerDeleted,
+  songDurationSec,
   songTimelineRev,
   songTempoGrid,
   songWhatsNew,
@@ -15,6 +17,7 @@ import {
 } from "@bandroom/server-core";
 import {
   canActOn,
+  convertMarkers,
   createMarker,
   deleteMarker,
   getSongWhatsNew,
@@ -22,6 +25,7 @@ import {
   recordSongVisit,
   restoreMarker,
   updateMarker,
+  type ContractResponse,
   type EffectiveRole,
   type Marker,
 } from "@bandroom/shared";
@@ -30,6 +34,8 @@ import type { AppContext } from "../context";
 import { audit } from "../http/audit";
 import { registerContract } from "../http/contracts";
 import { AppError } from "../http/errors";
+
+type ConvertResponse = ContractResponse<typeof convertMarkers>;
 
 /**
  * Markers and sections (SPEC §7.4) and the song visit / "What's new" banner (SPEC §11.3).
@@ -119,6 +125,50 @@ export function registerMarkerRoutes(app: FastifyInstance, ctx: AppContext): voi
     const marker = markerById(db, row.id);
     if (!marker) throw new AppError("NOT_FOUND", "Marker not found");
     return { marker };
+  });
+
+  registerContract(app, convertMarkers, ({ access, body, user }, request) => {
+    const route = "convertMarkers";
+    if (body.requestId) {
+      const stored = storedClientResponse(db, user.id, body.requestId, route);
+      if (stored !== undefined) return stored as ConvertResponse;
+    }
+    const songId = access.song.id;
+    const result = convertMarkerRows(db, songId, body.ids, body.to, {
+      songEndSec: songDurationSec(db, songId),
+      grid: songTempoGrid(db, songId),
+      canConvert: (row) => canActOn(access.role, "annotate", row.createdBy === user.id),
+    });
+    if (result === "forbidden") throw new AppError("FORBIDDEN", "Not your marker");
+    if (result.pairs.length > 0) {
+      audit(db, request, {
+        action: "markers.converted",
+        projectId: access.project.id,
+        songId,
+        targetType: "song",
+        targetId: songId,
+        details: {
+          to: body.to,
+          count: result.pairs.length,
+          sourceIds: result.deletedIds,
+          newIds: result.markers.map((m) => m.id),
+        },
+      });
+      ctx.hub.publish({
+        type: "marker.changed",
+        projectId: access.project.id,
+        songId,
+        data: { markerId: null, timelineRev: songTimelineRev(db, songId) },
+      });
+    }
+    const response: ConvertResponse = {
+      markers: result.markers,
+      deletedIds: result.deletedIds,
+      skippedIds: result.skippedIds,
+      timelineRev: songTimelineRev(db, songId),
+    };
+    if (body.requestId) storeClientResponse(db, user.id, body.requestId, route, response);
+    return response;
   });
 
   registerContract(app, getSongWhatsNew, ({ access, user }) =>

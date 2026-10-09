@@ -8,7 +8,7 @@ import { putVariant } from "../media/variants";
 import { createTestDb } from "../testing/testDb";
 import { createProjectRow } from "./projects";
 import { createSongRow } from "./songs";
-import { songStatsBySong } from "./songStats";
+import { songDurationSec, songStatsBySong } from "./songStats";
 import { addTrackVersion, createTrackWithVersion } from "./tracks";
 
 let db: Db;
@@ -119,5 +119,18 @@ describe("songStatsBySong (SPEC §11.2)", () => {
     expect(stats.has(empty)).toBe(false);
     expect(stats.has(pending)).toBe(false);
     expect(stats.has(trashed)).toBe(false);
+  });
+
+  it("gives one song's length, or null without ready audio", () => {
+    const project = createProjectRow(db, { name: "P", createdBy: user }).id;
+    const song = createSongRow(db, { projectId: project, title: "S", createdBy: user }).id;
+    expect(songDurationSec(db, song)).toBeNull();
+    createTrackWithVersion(db, {
+      songId: song,
+      name: "A",
+      assetId: audio(42, 2),
+      uploadedBy: user,
+    });
+    expect(songDurationSec(db, song)).toBe(42);
   });
 });
