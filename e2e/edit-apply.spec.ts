@@ -143,7 +143,8 @@ test("Apply: a cut on all tracks replaces the audio, moves the marker, old versi
   await page.getByTestId("edit-apply").click();
   const dialog = page.getByTestId("edit-apply-dialog");
   await expect(dialog.getByTestId("edit-review-track")).toHaveCount(3, { timeout: 30_000 });
-  await expect(dialog.getByTestId("edit-review-track").first()).toContainText("0:10 → 0:09");
+  // The mouse selection can land a few ms wider than 4–5 s (WebKit), so 0:08.9… shows as 0:08.
+  await expect(dialog.getByTestId("edit-review-track").first()).toContainText(/0:10 → 0:0[89]/);
   await expect(dialog.getByTestId("edit-review-timeline")).toContainText("1 marker moved");
   await expect(dialog.getByTestId("edit-review-size")).toBeVisible();
   await expect(dialog).toContainText("Trash");
