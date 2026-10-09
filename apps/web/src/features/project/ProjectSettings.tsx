@@ -29,6 +29,7 @@ import { UploadRow, useUploadErrorText, useUploadErrorToast } from "../../upload
 import { useUploads } from "../../upload/uploadStore";
 import { GrantsEditor } from "../../components/GrantsEditor";
 import { Section } from "../../components/Section";
+import { useArchiveProject } from "../library/projectMutations";
 import { projectKeys, useInvalidateContent } from "../library/queries";
 import { dropDeletedFromQueue } from "../../player/dropDeleted";
 import {
@@ -88,15 +89,7 @@ function GeneralSection({ project }: { project: Project }) {
     onError: (err) => notifications.show({ color: "red", message: apiError(err) }),
   });
   // Archiving is its own change: it leaves unsaved edits in the form alone.
-  const archive = useMutation({
-    mutationFn: (archived: boolean) =>
-      api(updateProject, { params: { id: project.id }, body: { archived } }),
-    onSuccess: () => {
-      invalidate();
-      notifications.show({ color: "teal", message: t("settings.saved") });
-    },
-    onError: (err) => notifications.show({ color: "red", message: apiError(err) }),
-  });
+  const archive = useArchiveProject(project.id);
 
   return (
     <Section title={t("projects.settings.general")} testId="project-general">

@@ -533,11 +533,40 @@
   "library": {
     "search": "Search projects",
     "sort": "Sort",
-    "sortRecent": "Recently changed",
-    "sortName": "Name",
     "archived": "Archived",
     "noMatches": "No project matches your search.",
-    "noArchived": "No archived projects."
+    "noArchived": "No archived projects.",
+    "filter": "Show",
+    "filters": {
+      "all": "All",
+      "mine": "Mine",
+      "shared": "Shared with me"
+    },
+    "sortBy": "Sort by",
+    "sortKeys": {
+      "name": "Name",
+      "created": "Time created",
+      "modified": "Last modified",
+      "accessed": "Last accessed"
+    },
+    "order": "Order",
+    "orders": {
+      "asc": "Ascending",
+      "desc": "Descending"
+    },
+    "view": "View",
+    "views": {
+      "grid": "Grid",
+      "list": "List"
+    },
+    "star": "Star {{name}}",
+    "unstar": "Remove star from {{name}}",
+    "actions": "More actions for {{name}}",
+    "open": "Open",
+    "edit": "Edit",
+    "unknownCreator": "Unknown",
+    "noneInFilter": "No projects here yet.",
+    "neverAccessed": "Not opened yet"
   },
   "projects": {
     "export": {

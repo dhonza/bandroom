@@ -1,57 +1,89 @@
-import { hasGlobalCapability, type ProjectSummary } from "@bandroom/shared";
+import { hasGlobalCapability } from "@bandroom/shared";
 import {
+  ActionIcon,
   Alert,
-  AspectRatio,
-  Badge,
   Button,
-  Card,
   Center,
   Chip,
   Group,
   Loader,
-  Select,
+  Menu,
+  SegmentedControl,
   SimpleGrid,
   Stack,
   Text,
   TextInput,
   ThemeIcon,
   Title,
+  Tooltip,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconBooks, IconCloudCheck, IconPlus, IconSearch } from "@tabler/icons-react";
-import { useMemo, useState } from "react";
+import {
+  IconArrowsSort,
+  IconBooks,
+  IconCheck,
+  IconLayoutGrid,
+  IconList,
+  IconPlus,
+  IconSearch,
+} from "@tabler/icons-react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router";
 import { useCurrentUser } from "../../auth/session";
-import { useFormatters } from "../../i18n/format";
-import { ProjectImage } from "../../components/ProjectImage";
-import { CreateProjectModal } from "./CreateProjectModal";
-import { useProjects } from "./queries";
-import { useOffline } from "../../offline/controller";
 import { errorMessage } from "../../api/errorMessage";
+import { CreateProjectModal } from "./CreateProjectModal";
+import {
+  LIBRARY_VIEWS,
+  loadLibraryPrefs,
+  saveLibraryPrefs,
+  type LibraryPrefs,
+} from "./libraryPrefs";
+import { ProjectCard, ProjectRow } from "./ProjectTiles";
+import { useProjects } from "./queries";
+import {
+  filterProjects,
+  LIBRARY_FILTERS,
+  SORT_KEYS,
+  SORT_ORDERS,
+  sortProjects,
+} from "./sortProjects";
 
-type Sort = "recent" | "name";
-
-/** Library (SPEC §11.2): project cards with search, sort and an archived filter. */
+/**
+ * Library (SPEC §11.2): projects as a grid or list with filter tabs, a sort menu, search and an
+ * archived filter; starred projects first. View, sort and filter are remembered on this device.
+ */
 export function LibraryPage() {
   const { t } = useTranslation();
   const user = useCurrentUser();
   const [archived, setArchived] = useState(false);
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<Sort>("recent");
+  const [prefs, setPrefs] = useState<LibraryPrefs>(loadLibraryPrefs);
   const [createOpen, create] = useDisclosure(false);
   const projects = useProjects(archived);
   const canCreate = hasGlobalCapability({ ...user, disabledAt: null }, "project.create");
 
+  useEffect(() => {
+    saveLibraryPrefs(prefs);
+  }, [prefs]);
+  const set = (patch: Partial<LibraryPrefs>) => {
+    setPrefs((p) => ({ ...p, ...patch }));
+  };
+
   const shown = useMemo(() => {
     const q = query.trim().toLocaleLowerCase();
-    const list = (projects.data?.projects ?? []).filter((p) =>
+    const list = filterProjects(projects.data?.projects ?? [], prefs.filter, user.id).filter((p) =>
       p.name.toLocaleLowerCase().includes(q),
     );
-    return list.sort((a, b) =>
-      sort === "name" ? a.name.localeCompare(b.name) : b.updatedAt - a.updatedAt,
-    );
-  }, [projects.data, query, sort]);
+    return sortProjects(list, prefs.sort, prefs.order);
+  }, [projects.data, query, prefs.filter, prefs.sort, prefs.order, user.id]);
+
+  const empty = query
+    ? t("library.noMatches")
+    : archived
+      ? t("library.noArchived")
+      : prefs.filter !== "all"
+        ? t("library.noneInFilter")
+        : t("pages.library.empty");
 
   return (
     <Stack gap="lg">
@@ -68,34 +100,101 @@ export function LibraryPage() {
         )}
       </Group>
 
-      <Group gap="sm" wrap="wrap">
-        <TextInput
-          placeholder={t("library.search")}
-          aria-label={t("library.search")}
-          leftSection={<IconSearch size={16} />}
-          value={query}
-          onChange={(e) => {
-            setQuery(e.currentTarget.value);
-          }}
-          style={{ flex: "1 1 200px" }}
-        />
-        <Select
-          aria-label={t("library.sort")}
-          value={sort}
-          allowDeselect={false}
+      <Stack gap="sm">
+        <SegmentedControl
+          aria-label={t("library.filter")}
+          value={prefs.filter}
           onChange={(v) => {
-            if (v) setSort(v);
+            set({ filter: v });
           }}
-          data={[
-            { value: "recent", label: t("library.sortRecent") },
-            { value: "name", label: t("library.sortName") },
-          ]}
-          w={170}
+          data={LIBRARY_FILTERS.map((f) => ({ value: f, label: t(`library.filters.${f}`) }))}
+          style={{ alignSelf: "flex-start" }}
+          data-testid="library-filter"
         />
-        <Chip checked={archived} onChange={setArchived} data-testid="show-archived">
-          {t("library.archived")}
-        </Chip>
-      </Group>
+        <Group gap="sm" wrap="wrap">
+          <TextInput
+            placeholder={t("library.search")}
+            aria-label={t("library.search")}
+            leftSection={<IconSearch size={16} />}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.currentTarget.value);
+            }}
+            style={{ flex: "1 1 200px" }}
+          />
+          <Group gap="xs" wrap="nowrap">
+            <Chip checked={archived} onChange={setArchived} data-testid="show-archived">
+              {t("library.archived")}
+            </Chip>
+            <Menu position="bottom-end" withinPortal closeOnItemClick={false}>
+              <Menu.Target>
+                <Tooltip label={t("library.sort")}>
+                  <ActionIcon
+                    size={44}
+                    variant="default"
+                    aria-label={t("library.sort")}
+                    data-testid="library-sort"
+                  >
+                    <IconArrowsSort size={20} />
+                  </ActionIcon>
+                </Tooltip>
+              </Menu.Target>
+              <Menu.Dropdown data-testid="library-sort-menu">
+                <Menu.Label>{t("library.sortBy")}</Menu.Label>
+                {SORT_KEYS.map((key) => (
+                  <Menu.Item
+                    key={key}
+                    role="menuitemradio"
+                    aria-checked={prefs.sort === key}
+                    leftSection={<Check on={prefs.sort === key} />}
+                    onClick={() => {
+                      set({ sort: key });
+                    }}
+                    data-testid={`sort-${key}`}
+                  >
+                    {t(`library.sortKeys.${key}`)}
+                  </Menu.Item>
+                ))}
+                <Menu.Divider />
+                <Menu.Label>{t("library.order")}</Menu.Label>
+                {SORT_ORDERS.map((order) => (
+                  <Menu.Item
+                    key={order}
+                    role="menuitemradio"
+                    aria-checked={prefs.order === order}
+                    leftSection={<Check on={prefs.order === order} />}
+                    onClick={() => {
+                      set({ order });
+                    }}
+                    data-testid={`order-${order}`}
+                  >
+                    {t(`library.orders.${order}`)}
+                  </Menu.Item>
+                ))}
+              </Menu.Dropdown>
+            </Menu>
+            <Group gap={0} wrap="nowrap" role="group" aria-label={t("library.view")}>
+              {LIBRARY_VIEWS.map((view) => (
+                <Tooltip key={view} label={t(`library.views.${view}`)}>
+                  <ActionIcon
+                    size={44}
+                    variant={prefs.view === view ? "light" : "subtle"}
+                    color={prefs.view === view ? undefined : "gray"}
+                    aria-label={t(`library.views.${view}`)}
+                    aria-pressed={prefs.view === view}
+                    onClick={() => {
+                      set({ view });
+                    }}
+                    data-testid={`library-view-${view}`}
+                  >
+                    {view === "grid" ? <IconLayoutGrid size={20} /> : <IconList size={20} />}
+                  </ActionIcon>
+                </Tooltip>
+              ))}
+            </Group>
+          </Group>
+        </Group>
+      </Stack>
 
       {projects.isPending ? (
         <Center mih={200}>
@@ -110,21 +209,23 @@ export function LibraryPage() {
               <IconBooks size={34} aria-hidden />
             </ThemeIcon>
             <Text ta="center" c="dimmed">
-              {query
-                ? t("library.noMatches")
-                : archived
-                  ? t("library.noArchived")
-                  : t("pages.library.empty")}
+              {empty}
             </Text>
-            {canCreate && !query && !archived && (
+            {canCreate && !query && !archived && prefs.filter !== "shared" && (
               <Button leftSection={<IconPlus size={18} />} onClick={create.open}>
                 {t("projects.create")}
               </Button>
             )}
           </Stack>
         </Center>
+      ) : prefs.view === "list" ? (
+        <Stack gap="xs" data-testid="project-list">
+          {shown.map((p) => (
+            <ProjectRow key={p.id} project={p} sort={prefs.sort} />
+          ))}
+        </Stack>
       ) : (
-        <SimpleGrid cols={{ base: 1, xs: 2, md: 3, xl: 4 }} spacing="md">
+        <SimpleGrid cols={{ base: 2, sm: 3, md: 4, xl: 5 }} spacing="md" data-testid="project-grid">
           {shown.map((p) => (
             <ProjectCard key={p.id} project={p} />
           ))}
@@ -136,66 +237,7 @@ export function LibraryPage() {
   );
 }
 
-function ProjectCard({ project }: { project: ProjectSummary }) {
-  const { t } = useTranslation();
-  // Offline badge: the project or one of its songs is on this device (SPEC §11.2).
-  const offline = useOffline((s) => s.items.some((i) => i.projectId === project.id));
-  const fmt = useFormatters();
-  return (
-    <Card
-      component={Link}
-      to={`/projects/${project.id}`}
-      withBorder
-      radius="md"
-      padding={0}
-      data-testid="project-card"
-      aria-label={project.name}
-    >
-      <AspectRatio ratio={16 / 9}>
-        <ProjectImage
-          name={project.name}
-          color={project.color}
-          imageHash={project.imageHash}
-          size="100%"
-          radius="0"
-        />
-      </AspectRatio>
-      <Stack gap={4} p="md">
-        <Text fw={600} lineClamp={1}>
-          {project.name}
-        </Text>
-        <Text size="sm" c="dimmed">
-          {t("counts.songs", { count: project.songCount })} · {fmt.relative(project.updatedAt)}
-          {project.bytes != null && (
-            <span data-testid="project-bytes"> · {fmt.bytes(project.bytes)}</span>
-          )}
-        </Text>
-        {(project.visibility === "reduced" || project.archivedAt !== null || offline) && (
-          <Group gap={6}>
-            {offline && (
-              <Badge
-                size="xs"
-                variant="light"
-                color="green"
-                leftSection={<IconCloudCheck size={12} />}
-                data-testid="project-offline-badge"
-              >
-                {t("offline.badge")}
-              </Badge>
-            )}
-            {project.visibility === "reduced" && (
-              <Badge size="xs" variant="light" color="gray">
-                {t("projects.reduced")}
-              </Badge>
-            )}
-            {project.archivedAt !== null && (
-              <Badge size="xs" variant="light" color="gray">
-                {t("projects.archivedBadge")}
-              </Badge>
-            )}
-          </Group>
-        )}
-      </Stack>
-    </Card>
-  );
+/** Checkmark column of the sort menu (kept as wide when empty, so labels line up). */
+function Check({ on }: { on: boolean }) {
+  return on ? <IconCheck size={14} /> : <span style={{ display: "inline-block", width: 14 }} />;
 }

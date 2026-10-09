@@ -47,7 +47,7 @@ import { isIos, isStandalone } from "./pwa";
 const GREEN = "green";
 const GRAY = "gray";
 
-interface Target {
+export interface OfflineTarget {
   kind: OfflineItem["kind"];
   id: string;
   title: string;
@@ -66,7 +66,7 @@ export function useDownloadPercent(key: string): number | null {
  * downloaded, a menu to update or remove it. The label is short ("Offline") so the song header
  * stays compact; icon and colour show the state, which the tooltip and accessible name spell out.
  */
-export function OfflineButton(target: Target) {
+export function OfflineButton(target: OfflineTarget) {
   const { t, i18n } = useTranslation();
   const online = useOnline();
   const isPhone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
@@ -211,7 +211,7 @@ export function OfflineButton(target: Target) {
 }
 
 /** Size estimate and options before the download (SPEC §13). */
-function OfflineModal({ target, onClose }: { target: Target; onClose: () => void }) {
+export function OfflineModal({ target, onClose }: { target: OfflineTarget; onClose: () => void }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const [prefs, setPrefs] = useState(deviceOfflinePrefs);

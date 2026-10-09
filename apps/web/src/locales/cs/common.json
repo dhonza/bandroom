@@ -547,11 +547,40 @@
   "library": {
     "search": "Hledat projekty",
     "sort": "Řazení",
-    "sortRecent": "Naposledy změněné",
-    "sortName": "Název",
     "archived": "Archiv",
     "noMatches": "Hledání neodpovídá žádný projekt.",
-    "noArchived": "Žádné archivované projekty."
+    "noArchived": "Žádné archivované projekty.",
+    "filter": "Zobrazit",
+    "filters": {
+      "all": "Vše",
+      "mine": "Moje",
+      "shared": "Sdílené se mnou"
+    },
+    "sortBy": "Řadit podle",
+    "sortKeys": {
+      "name": "Název",
+      "created": "Datum vytvoření",
+      "modified": "Naposledy upraveno",
+      "accessed": "Naposledy otevřeno"
+    },
+    "order": "Pořadí",
+    "orders": {
+      "asc": "Vzestupně",
+      "desc": "Sestupně"
+    },
+    "view": "Zobrazení",
+    "views": {
+      "grid": "Mřížka",
+      "list": "Seznam"
+    },
+    "star": "Označit hvězdičkou: {{name}}",
+    "unstar": "Odebrat hvězdičku: {{name}}",
+    "actions": "Další akce: {{name}}",
+    "open": "Otevřít",
+    "edit": "Upravit",
+    "unknownCreator": "Neznámý",
+    "noneInFilter": "Zatím tu nejsou žádné projekty.",
+    "neverAccessed": "Zatím neotevřeno"
   },
   "projects": {
     "export": {

@@ -1,0 +1,33 @@
+/* A whole card or row opens the project; its buttons sit above the link. */
+.tile {
+  position: relative;
+}
+
+.link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: -2px;
+}
+
+.actions {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.row:hover {
+  background-color: var(--mantine-color-default-hover);
+}
+
+/* The grid card's "..." menu sits on the cover's corner. */
+.overlay {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
