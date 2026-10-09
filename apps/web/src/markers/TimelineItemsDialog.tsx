@@ -148,7 +148,12 @@ function MarkersTab({ song, coarse }: { song: Song; coarse: boolean }) {
   return (
     <Stack gap="xs">
       <LockedNote locked={locked} />
-      <Group gap="xs" wrap="wrap" mih={sz.icon} data-testid="items-bulk">
+      <Group
+        gap="xs"
+        wrap={selected.length === 0 ? "nowrap" : "wrap"}
+        mih={sz.icon}
+        data-testid="items-bulk"
+      >
         <Checkbox
           aria-label={t("timelineItems.selectAll")}
           checked={allPicked}
@@ -161,7 +166,7 @@ function MarkersTab({ song, coarse }: { song: Song; coarse: boolean }) {
           data-testid="items-select-all"
         />
         {selected.length === 0 ? (
-          <Text size="sm" c="dimmed">
+          <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 0 }}>
             {t("timelineItems.selectHint")}
           </Text>
         ) : (
@@ -347,7 +352,7 @@ function MarkerRow({
         </Popover>
         <NameInput m={m} coarse={coarse} disabled={!editable} actions={actions} />
       </Group>
-      <Group gap={6} wrap="nowrap" ml={coarse ? 0 : "auto"}>
+      <Group gap={6} wrap="nowrap" ml="auto">
         <ClockInput
           label={t(section ? "timelineItems.startOf" : "timelineItems.positionOf", {
             name: m.name,
@@ -643,6 +648,7 @@ function CommentRow({
           coarse={coarse}
           disabled={!editable || startSec === null}
           allowEmpty
+          placeholder="—"
           onCommit={(sec) => {
             if (startSec === null || (sec !== null && sec <= startSec)) return false;
             void actions.move(c, startSec, sec);
