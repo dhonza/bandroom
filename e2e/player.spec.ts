@@ -61,7 +61,7 @@ async function noHorizontalOverflow(page: Page) {
     .toBeLessThanOrEqual(0);
 }
 
-test("one Player: one waveform with the Mixer closed; toggling moves nothing above the lanes", async ({
+test("one Player: one waveform with the Mixer closed; toggling moves nothing above the timeline", async ({
   page,
   request,
 }, testInfo) => {
@@ -73,6 +73,14 @@ test("one Player: one waveform with the Mixer closed; toggling moves nothing abo
   const timeline = panel.getByTestId("timeline");
   const overview = panel.getByTestId("timeline-overview");
   const transport = page.getByTestId("rehearse-transport");
+  const detail = panel.getByTestId("timeline-detail");
+  // The overview shares the detail view's time axis: same left edge and width (SPEC §11.3).
+  const aligned = async () => {
+    const o = await box(overview);
+    const d = await box(detail);
+    expect(Math.abs(o.x - d.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(o.width - d.width)).toBeLessThanOrEqual(1);
+  };
 
   // Mixer closed: the overview strip is the only waveform (80 px by default), no track lanes.
   await expect(timeline).toHaveAttribute("data-lanes", "0");
@@ -89,6 +97,7 @@ test("one Player: one waveform with the Mixer closed; toggling moves nothing abo
     transport: await box(transport),
     overview: await box(overview),
   };
+  // The overview keeps its row and height; it is indented by the header column like the lanes.
   const same = async () => {
     const now = {
       toggle: await box(toggle),
@@ -96,12 +105,15 @@ test("one Player: one waveform with the Mixer closed; toggling moves nothing abo
       overview: await box(overview),
     };
     for (const k of ["toggle", "transport", "overview"] as const) {
-      expect(Math.abs(now[k].x - before[k].x), k).toBeLessThanOrEqual(1);
       expect(Math.abs(now[k].y - before[k].y), k).toBeLessThanOrEqual(1);
-      expect(Math.abs(now[k].width - before[k].width), k).toBeLessThanOrEqual(1);
       expect(Math.abs(now[k].height - before[k].height), k).toBeLessThanOrEqual(1);
+      if (k === "overview") continue;
+      expect(Math.abs(now[k].x - before[k].x), k).toBeLessThanOrEqual(1);
+      expect(Math.abs(now[k].width - before[k].width), k).toBeLessThanOrEqual(1);
     }
+    await aligned();
   };
+  await aligned();
 
   // Play, then open the Mixer: the same engine plays on; lanes and headers appear below.
   await page.getByTestId("rehearse-play").click();
@@ -141,7 +153,7 @@ test("one Player: one waveform with the Mixer closed; toggling moves nothing abo
   await expect(timeline).toHaveAttribute("data-lanes", "0");
 });
 
-test("lane labels: only lanes with items, in a narrow column with the Mixer closed", async ({
+test("lane labels: only lanes with items, in a narrow column with the Mixer closed; lanes can be hidden", async ({
   page,
   request,
 }, testInfo) => {
@@ -176,12 +188,34 @@ test("lane labels: only lanes with items, in a narrow column with the Mixer clos
   await expect(close).toBeHidden();
   await expect(labels.getByTestId("lane-label-comments")).toHaveText("Comments");
   await expect(labels.getByTestId("lane-label-sections")).toHaveCount(0);
-  // The column is narrow: the detail view starts right of it, the overview keeps the full width.
+  // The column is narrow: the detail view starts right of it, and the overview above it too, so
+  // both share one time axis (the corner left of the overview holds the lanes menu).
   const col = await box(labels);
   expect(col.width).toBeLessThanOrEqual(isMobile(testInfo) ? 72 : 88);
   expect((await box(detail)).x).toBeGreaterThanOrEqual(col.x + col.width - 1);
-  expect((await box(overview)).x).toBeLessThanOrEqual(col.x + 1);
+  expect(Math.abs((await box(overview)).x - (await box(detail)).x)).toBeLessThanOrEqual(1);
+  expect(Math.abs((await box(overview)).width - (await box(detail)).width)).toBeLessThanOrEqual(1);
   await noHorizontalOverflow(page);
+
+  // The lanes menu hides a lane (per device, so it survives a reload) and shows them all again.
+  await panel.getByTestId("lanes-menu").click();
+  await page.getByTestId("lane-toggle-comments").click();
+  await expect(labels.getByTestId("lane-label-comments")).toHaveCount(0);
+  await expect(panel.getByTestId("comment-pin")).toHaveCount(0);
+  await page.getByTestId("lanes-hide-all").click();
+  await expect(labels.getByTestId("lane-label-markers")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await expect(panel.getByTestId("rehearse-play")).toBeEnabled({ timeout: 30_000 });
+  // Every lane hidden: the column stays for the menu, the timeline stays aligned.
+  await expect(labels).toBeVisible();
+  await expect(panel.getByTestId("marker-item")).toHaveCount(0);
+  expect(Math.abs((await box(overview)).x - (await box(detail)).x)).toBeLessThanOrEqual(1);
+  await panel.getByTestId("lanes-menu").click();
+  await page.getByTestId("lanes-show-all").click();
+  await page.keyboard.press("Escape");
+  await expect(labels.getByTestId("lane-label-markers")).toHaveText("Markers");
+  await expect(labels.getByTestId("lane-label-comments")).toHaveText("Comments");
 
   // Mixer open: the labels move to the track-header column; the narrow column goes.
   await page.getByTestId("mixer-toggle").click();

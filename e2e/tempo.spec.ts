@@ -143,6 +143,8 @@ test("Tempo: MIDI import with markers, manual tempo, grid snapping, click and co
   expect((await debug(page))?.hasTempo).toBe(false);
   if (!phone) await expect(page.getByTestId("click-toggle")).toBeDisabled();
   await expect(page.getByTestId("bar-beat")).toHaveCount(0);
+  await expect(page.getByTestId("meter-readout")).toHaveCount(0);
+  await expect(page.getByTestId("signature-item")).toHaveCount(0);
 
   // --- MIDI import (SPEC §7.2): an SMPTE file is rejected, the Reaper export imports. ---
   await page.getByTestId("tempo-button").click();
@@ -207,9 +209,15 @@ test("Tempo: MIDI import with markers, manual tempo, grid snapping, click and co
     [5, 12, 140, "3/4"],
   ]);
 
+  // The time-signature lane labels bar 1 and the change; the transport shows the meter.
+  await expect(page.getByTestId("signature-item")).toHaveText(["6/8", "3/4"]);
+  await expect(page.getByTestId("meter-readout").first()).toHaveText("6/8");
+
   // Reopen (rows come back by bar): 4/4 again, the time signature change to bar 3, and the
-  // tempo change removed → 120 BPM 4/4, 3/4 from bar 3.
-  await page.getByTestId("tempo-button").click();
+  // tempo change removed → 120 BPM 4/4, 3/4 from bar 3. With a mouse, a tap on a time signature
+  // in the lane opens the dialog.
+  if (phone) await page.getByTestId("tempo-button").click();
+  else await page.getByTestId("signature-item").last().click();
   await expect(changes).toHaveCount(2);
   await expect(changes.nth(0).getByTestId("tempo-change-bar")).toHaveValue("4");
   await expect(changes.nth(1).getByTestId("tempo-change-bpm")).toHaveValue("140");
