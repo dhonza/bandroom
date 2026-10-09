@@ -65,6 +65,8 @@ export function createTrackWithVersion(
     source?: TrackVersionRow["source"];
     /** Timeline position in samples at 48 kHz (a recorded take, SPEC §9); default 0. */
     offsetSamples?: number;
+    /** Version gain in dB (a recorded take's auto level, SPEC §9); default 0. */
+    gainDb?: number;
     /** Stored instrument (SPEC §30.3), e.g. `mix` for a bounce; default: guessed at read time. */
     instrument?: Instrument | null;
   },
@@ -122,6 +124,8 @@ export function addTrackVersion(
     source?: TrackVersionRow["source"];
     /** Timeline position in samples at 48 kHz (a recorded take, SPEC §9); default 0. */
     offsetSamples?: number;
+    /** Version gain in dB (a recorded take's auto level, SPEC §9); default 0. */
+    gainDb?: number;
   },
   now: number = Date.now(),
 ): TrackVersionRow {
@@ -146,6 +150,7 @@ function insertVersion(
     uploadedBy: string;
     source?: TrackVersionRow["source"];
     offsetSamples?: number;
+    gainDb?: number;
   },
   now: number,
 ): TrackVersionRow {
@@ -165,6 +170,7 @@ function insertVersion(
       assetId: input.assetId,
       source: input.source ?? "upload",
       offsetSamples: input.offsetSamples ?? 0,
+      gainDb: input.gainDb ?? 0,
       uploadedBy: input.uploadedBy,
       createdAt: now,
     })

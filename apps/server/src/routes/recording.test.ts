@@ -108,6 +108,59 @@ describe("recorded takes (SPEC §9)", () => {
     expect(ApiErrorSchema.parse(JSON.parse(other.body)).code).toBe("VALIDATION_FAILED");
   });
 
+  it("stores a take's auto-level gain on the version and in the event", async () => {
+    const res = await tusUpload(t, member, take, "gain.flac", {
+      type: "newTrack",
+      songId,
+      name: "Loud",
+      source: "recording",
+      offsetSamples: 0,
+      gainDb: 12.5,
+    });
+    const result = UploadResultSchema.parse(JSON.parse(res.body));
+    const id = result.trackVersionId ?? "";
+    expect(getTrackVersionRow(t.db, id)).toMatchObject({ source: "recording", gainDb: 12.5 });
+    const recorded = listEvents(t.db, { action: "version.recorded", targetId: id });
+    expect(recorded.map(details)).toEqual([
+      { trackId: result.trackId, assetId: result.assetId, offsetSamples: 0, gainDb: 12.5 },
+    ]);
+
+    // Without a gain the version stays at 0 dB and the event has no gain.
+    const plain = await tusUpload(t, member, take, "nogain.flac", {
+      type: "newVersion",
+      trackId: result.trackId,
+      source: "recording",
+    });
+    const plainId = UploadResultSchema.parse(JSON.parse(plain.body)).trackVersionId ?? "";
+    expect(getTrackVersionRow(t.db, plainId)?.gainDb).toBe(0);
+    const [event] = listEvents(t.db, { action: "version.recorded", targetId: plainId });
+    expect(details(event ?? { details: null })).not.toHaveProperty("gainDb");
+
+    const song = await tusUpload(t, member, take, "song.flac", {
+      type: "newSong",
+      projectId,
+      title: "Gain song",
+      trackName: "Recording",
+      source: "recording",
+      gainDb: -3,
+    });
+    const songVersion = UploadResultSchema.parse(JSON.parse(song.body)).trackVersionId ?? "";
+    expect(getTrackVersionRow(t.db, songVersion)?.gainDb).toBe(-3);
+  });
+
+  it("refuses invalid gains", async () => {
+    for (const gainDb of [61, -61, "3"]) {
+      const res = await tusUpload(t, member, take, "x.flac", {
+        type: "newTrack",
+        songId,
+        name: "X",
+        source: "recording",
+        gainDb,
+      });
+      expect(ApiErrorSchema.parse(JSON.parse(res.body)).code).toBe("VALIDATION_FAILED");
+    }
+  });
+
   it("needs record: viewers and commenters may not upload takes", async () => {
     for (const role of ["viewer", "commenter"] as const) {
       const { cookie } = await withRole(`rec-${role}`, role);

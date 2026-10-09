@@ -141,6 +141,7 @@ export async function finishUpload(
       uploadedBy: user.id,
       ...(target.source && { source: target.source }),
       ...(target.offsetSamples !== undefined && { offsetSamples: target.offsetSamples }),
+      ...(target.gainDb !== undefined && { gainDb: target.gainDb }),
     };
     let newSong: SongRow | null = null;
     let songId: string;
@@ -287,6 +288,7 @@ function recordUploadEvent(
         assetId: r.assetId,
         ...(audio?.options && { options: audio.options }),
         ...(audio?.offsetSamples !== undefined && { offsetSamples: audio.offsetSamples }),
+        ...(audio?.gainDb !== undefined && { gainDb: audio.gainDb }),
       },
     });
   }
