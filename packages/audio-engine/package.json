@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./worker": "./src/worker/entry.ts",
     "./worklet": "./src/mixer/processor.ts",
-    "./flac": "./src/flac/index.ts"
+    "./flac": "./src/flac/index.ts",
+    "./wav": "./src/wav/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
