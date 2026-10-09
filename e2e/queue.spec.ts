@@ -372,10 +372,21 @@ test("Player bar: repeat one, seeking, editing the queue, and the queue after a 
   await expect(repeat).toHaveAttribute("data-mode", "off");
   await repeat.click();
   await expect(repeat).toHaveAttribute("data-mode", "all");
-  if (isMobile(testInfo)) await page.keyboard.press("Escape");
+  if (isMobile(testInfo)) {
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("mini-sheet")).toBeHidden();
+  }
 
-  // Next goes to the long song (repeat all wraps); the slider seeks in it.
-  await mini.getByTestId("mini-next").click();
+  // A tap in the queue plays the long song (the short one may have wrapped on to it meanwhile:
+  // repeat all); the slider seeks in it.
+  const jump = await openQueue(page, testInfo);
+  await jump
+    .getByTestId("queue-row")
+    .filter({ hasText: long.title })
+    .getByTestId("queue-row-play")
+    .click();
+  await page.keyboard.press("Escape");
+  await expect(jump).toBeHidden();
   await expect.poll(async () => (await debug(page))?.songId, { timeout: 30_000 }).toBe(long.songId);
   await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("playing");
   const seek = mini.getByTestId("mini-seek");
