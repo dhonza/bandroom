@@ -33,6 +33,17 @@ function server(port: number, appUrl: string, name: string, samplyMockPort: numb
   };
 }
 
+/**
+ * Chromium gets a fake microphone (a beep) without the permission prompt, for the recording
+ * spec (SPEC §9); WebKit has no such switch, recording is tested on devices there.
+ */
+const FAKE_MIC = {
+  launchOptions: {
+    args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"],
+  },
+  permissions: ["microphone"],
+};
+
 export default defineConfig({
   testDir: "e2e",
   globalSetup: "./e2e/global-setup.ts",
@@ -49,11 +60,14 @@ export default defineConfig({
     locale: "en-US",
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"], baseURL: ROOT_URL } },
+    { name: "chromium", use: { ...devices["Desktop Chrome"], ...FAKE_MIC, baseURL: ROOT_URL } },
     { name: "webkit", use: { ...devices["Desktop Safari"], baseURL: ROOT_URL } },
     { name: "iphone", use: { ...devices["iPhone 15"], baseURL: ROOT_URL } },
-    { name: "pixel", use: { ...devices["Pixel 7"], baseURL: ROOT_URL } },
-    { name: "subpath-chromium", use: { ...devices["Desktop Chrome"], baseURL: SUBPATH_URL } },
+    { name: "pixel", use: { ...devices["Pixel 7"], ...FAKE_MIC, baseURL: ROOT_URL } },
+    {
+      name: "subpath-chromium",
+      use: { ...devices["Desktop Chrome"], ...FAKE_MIC, baseURL: SUBPATH_URL },
+    },
     { name: "subpath-iphone", use: { ...devices["iPhone 15"], baseURL: SUBPATH_URL } },
   ],
   webServer: [
