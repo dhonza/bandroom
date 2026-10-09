@@ -565,6 +565,8 @@ export class Engine {
    * within the 64 MB budget, repeats play from the mixer's loop cache (SPEC §6.4).
    */
   setLoop(range: ClipRange | null): void {
+    // Loops are off while recording (SPEC §9).
+    if (range && this.rec?.state === "recording") return;
     const start = range ? Math.max(0, Math.round(range.start)) : 0;
     const end = range ? Math.min(this.limit, Math.round(range.end)) : 0;
     const loop = range && end - start >= MIN_LOOP_FRAMES ? { start, end } : null;

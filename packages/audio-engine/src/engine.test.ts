@@ -625,6 +625,8 @@ describe("Engine open end and recording (SPEC §9)", () => {
     expect(mixerSent().at(-1)).toMatchObject({ t: "play", countIn: { clicks: 4 } });
     FakeNode.last?.port.deliver({ type: "take.start", startFrame: 4000, channels: 1 });
     report(9600);
+    e.setLoop({ start: 0, end: 48_000 }); // ignored while recording
+    expect(e.loopRange).toBeNull();
     const stopped = e.stopRecording();
     expect(sentTypes().slice(-2)).toEqual(["recStop", "pause"]);
     takeEnd(9728);
