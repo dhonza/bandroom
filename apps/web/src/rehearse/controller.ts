@@ -2,6 +2,7 @@ import {
   clickTrackFor,
   countInSpecAt,
   Engine,
+  type EngineClip,
   SAMPLE_RATE,
   setPlaybackAudioSession,
   WakeLockController,
@@ -16,6 +17,7 @@ import {
   DEFAULT_MAX_TAKE_MINUTES,
   putSongMixer,
   type ClickSettings,
+  type EditClip,
   practiceOf,
   type MixerState,
   type MixerTrackState,
@@ -74,6 +76,7 @@ import {
   clickLengthFrames,
   clickSettingsOf,
   clipFor,
+  editClipFor,
   enginePracticeOf,
   loadKeyOf,
   loudnessOffsetDb,
@@ -87,6 +90,7 @@ import {
   myInstrumentTracks,
   NO_INSTRUMENT,
   type MyInstrument,
+  type EditTimeline,
   type PlayableTrack,
   type Quality,
   timelineLengthSec,
@@ -348,7 +352,14 @@ function getEngine(): Engine {
 
 // Also before the engine starts: a restored queue is visible to the e2e tests.
 exposeDebug(() => ({
-  ...debugSnapshot(engine, useRehearse.getState(), songGrid() !== null),
+  ...debugSnapshot(
+    engine,
+    useRehearse.getState(),
+    songGrid() !== null,
+    editPlayback && editPlayback.songId === useRehearse.getState().songId
+      ? editPlayback.sessionId
+      : null,
+  ),
   loads: songLoads,
 }));
 
@@ -668,9 +679,11 @@ async function loadIntoEngine(args: OpenArgs, carry: Carry | null = null): Promi
   wake?.setSongOpen(true);
   setMediaInfo(info);
   if (key === loadKey) {
-    // Same audio: a changed version gain applies in place (SPEC §25.6).
-    for (const c of trims) e.setTrackState(c.trackId, { trimDb: c.trimDb });
+    // Same audio: a changed version gain applies in place (SPEC §25.6); in edit mode the clips
+    // carry the gain.
+    if (!editFor(songId)) for (const c of trims) e.setTrackState(c.trackId, { trimDb: c.trimDb });
     syncPractice();
+    syncEditSources();
     return;
   }
   if (recordingOn && sameSong) {
@@ -682,7 +695,9 @@ async function loadIntoEngine(args: OpenArgs, carry: Carry | null = null): Promi
   songLoads++;
   const wasPlaying = sameSong && (e.state === "playing" || e.state === "buffering");
   const kept = sameSong ? e.getPositionFrames() : Math.round((carry?.startSec ?? 0) * SAMPLE_RATE);
-  const timeline = buildTimeline(playable, mix);
+  const edit = editTimeline(songId, playable, quality);
+  const timeline = buildTimeline(playable, mix, edit);
+  editSent = edit ? sentKeys(playable, quality) : new Map<string, string>();
   const lengthSec = timeline.lengthFrames / SAMPLE_RATE;
   const openEnd = (timeline.openEnd ?? false) || recordingOn;
   useRehearse.setState({
@@ -1531,6 +1546,7 @@ export function listenToVersion(
   if (store !== useRehearse) return;
   // Switched in place: the engine now holds this, so openSong need not reload it.
   if (s.songId) loadKey = loadKeyOf(s.songId, tracks, s.mix);
+  if (editFor(s.songId)) return; // edit mode plays the session's clips
   engine?.switchSource(
     trackId,
     [clipFor(version, chosen)],
@@ -1577,6 +1593,7 @@ export function setVersionGain(trackId: string, versionId: string, gainDb: numbe
         : p,
     );
   store.setState({ tracks });
+  if (editFor(store.getState().songId)) return;
   if (tracks.some((p) => p.track.id === trackId && p.version.id === versionId))
     pageEngine()?.setTrackState(trackId, { trimDb: gainDb });
 }
@@ -1622,15 +1639,17 @@ function applyQuality() {
     s.mix,
   );
   if (quality === s.quality) return;
+  const editing = editFor(s.songId) !== null;
   const tracks = s.tracks.map((p) => {
     const chosen = chooseVariant(p.version, quality, blobUrl) ?? p.chosen;
-    if (chosen.variant.hash !== p.chosen.variant.hash) {
+    if (!editing && chosen.variant.hash !== p.chosen.variant.hash) {
       engine?.switchSource(p.track.id, [clipFor(p.version, chosen)]);
     }
     return { ...p, chosen };
   });
   if (s.songId) loadKey = loadKeyOf(s.songId, tracks, s.mix);
   useRehearse.setState({ quality, tracks });
+  syncEditSources();
 }
 
 export function dismissLockHint(): void {
@@ -1764,4 +1783,116 @@ export function previewVersionOffset(
  */
 export function loadPageSongForRecording(): void {
   if (previewing()) closeSong();
+}
+
+// ——— edit mode (SPEC §24.5–§24.6) ———————————————————————————————————————————————————————
+
+/** What the engine plays in edit mode: the session's clips of the page's song. */
+export interface EditPlayback {
+  songId: string;
+  sessionId: string;
+  /** Clips per track id. */
+  clips: Readonly<Record<string, readonly EditClip[]>>;
+  /** The versions the clips play, by id. */
+  versions: Readonly<Record<string, TrackVersion>>;
+  lengthFrames: number;
+}
+
+let editPlayback: EditPlayback | null = null;
+/** Per track: the clips last sent to the engine (edit mode), so only changed tracks switch. */
+let editSent = new Map<string, string>();
+
+function editFor(songId: string | null): EditPlayback | null {
+  return editPlayback && editPlayback.songId === songId ? editPlayback : null;
+}
+
+function editTrackClips(trackId: string, quality: Quality): EngineClip[] {
+  const edit = editPlayback;
+  if (!edit) return [];
+  const out: EngineClip[] = [];
+  for (const c of edit.clips[trackId] ?? []) {
+    const version = edit.versions[c.sourceVersionId];
+    const chosen = version && chooseVariant(version, quality, blobUrl);
+    if (chosen) out.push(editClipFor(c, chosen));
+  }
+  return out;
+}
+
+function editTimeline(
+  songId: string,
+  playable: readonly PlayableTrack[],
+  quality: Quality,
+): EditTimeline | null {
+  const edit = editFor(songId);
+  if (!edit) return null;
+  const clips: Record<string, EngineClip[]> = {};
+  for (const p of playable) clips[p.track.id] = editTrackClips(p.track.id, quality);
+  return { clips, lengthFrames: edit.lengthFrames };
+}
+
+/** What a track plays now, as a comparable key. */
+function sourceKey(p: PlayableTrack, quality: Quality): string {
+  const edit = editPlayback;
+  return edit
+    ? JSON.stringify([quality, edit.clips[p.track.id] ?? []])
+    : JSON.stringify([p.version.id, p.chosen.variant.hash, p.version.offsetSamples]);
+}
+
+function sentKeys(playable: readonly PlayableTrack[], quality: Quality): Map<string, string> {
+  return new Map(playable.map((p) => [p.track.id, sourceKey(p, quality)]));
+}
+
+/**
+ * Brings the engine in line with edit mode: every track whose clips changed switches in place
+ * (crossfaded, SPEC §24.5) and a changed length reloads in place. Leaving edit mode switches back
+ * to the listened versions.
+ */
+function syncEditSources(): void {
+  const e = engine;
+  const s = useRehearse.getState();
+  if (!e || previewing() || s.dormant || !s.songId) return;
+  const edit = editFor(s.songId);
+  if (!edit && editSent.size === 0) return;
+  for (const p of s.tracks) {
+    const key = sourceKey(p, s.quality);
+    if (editSent.get(p.track.id) === key) continue;
+    if (edit) e.switchSource(p.track.id, editTrackClips(p.track.id, s.quality), 0, 0);
+    else {
+      const versions = [p.version];
+      e.switchSource(
+        p.track.id,
+        [clipFor(p.version, p.chosen)],
+        offsetFor(p.track.id, p.version, versions),
+        p.version.gainDb,
+      );
+    }
+    editSent.set(p.track.id, key);
+  }
+  if (!edit) editSent = new Map();
+  const length = edit ? edit.lengthFrames : buildTimeline(s.tracks, s.mix).lengthFrames;
+  if (length !== e.lengthFrames && !s.openEnd) {
+    e.setLength(length);
+    const lengthSec = length / SAMPLE_RATE;
+    useRehearse.setState({ lengthSec, timelineSec: lengthSec });
+  }
+}
+
+/**
+ * Edit mode plays the session's clips instead of the listened versions (null: back to them).
+ * Entering moves a previewed song into the engine (call inside the tap, SPEC §6.10).
+ */
+export function setEditPlayback(next: EditPlayback | null): void {
+  const was = editPlayback;
+  if (next === was) return;
+  editPlayback = next;
+  if (next && previewing() && pageArgs?.[0] === next.songId) {
+    closeSong();
+    return; // the page reopens the song in the engine, with the edit
+  }
+  syncEditSources();
+}
+
+/** The session id edit mode plays (debug state), or null. */
+export function editPlaybackSession(): string | null {
+  return editPlayback?.sessionId ?? null;
 }

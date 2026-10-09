@@ -15,6 +15,7 @@ import {
   type MixerState,
   type Practice,
   type MixerTrackState,
+  type EditClip,
   type Track,
   type TrackVersion,
 } from "@bandroom/shared";
@@ -112,6 +113,26 @@ export function clipFor(version: TrackVersion, chosen: ChosenVariant): EngineCli
   };
 }
 
+/**
+ * An edit clip as the engine plays it (SPEC §24.5): a piece of its source version's file with
+ * the clip's gain and fades. The gain already holds the version gain, so the track's `trimDb` is
+ * 0 in edit mode.
+ */
+export function editClipFor(clip: EditClip, chosen: ChosenVariant): EngineClip {
+  const fetch = defaultFetch(chosen.variant);
+  return {
+    startFrame: clip.startFrame,
+    sourceOffsetFrame: clip.sourceStartFrame,
+    lengthFrames: clip.lengthFrames,
+    variant: fetch ? { ...chosen.variant, fetch } : chosen.variant,
+    gainDb: clip.gainDb,
+    fadeInFrames: clip.fadeInFrames,
+    fadeOutFrames: clip.fadeOutFrames,
+    fadeInShape: clip.fadeInShape,
+    fadeOutShape: clip.fadeOutShape,
+  };
+}
+
 /** A track as Rehearse mode plays it: its listened version and the chosen file. */
 export interface PlayableTrack {
   track: Track;
@@ -135,24 +156,40 @@ export function playableTracks(
   return out;
 }
 
-export function buildTimeline(tracks: readonly PlayableTrack[], mix: MixerState): SongTimeline {
+/** Edit mode's engine clips per track and the edited song's length (SPEC §24.5). */
+export interface EditTimeline {
+  clips: Readonly<Record<string, EngineClip[]>>;
+  lengthFrames: number;
+}
+
+/**
+ * The engine's song: one clip per track (its listened version), or in edit mode the session's
+ * clips (`trimDb` 0: the clip gain holds the version gain) and the edited length.
+ */
+export function buildTimeline(
+  tracks: readonly PlayableTrack[],
+  mix: MixerState,
+  edit: EditTimeline | null = null,
+): SongTimeline {
   const engineTracks = tracks.map((p) => {
     const s = mix.tracks[p.track.id] ?? defaultTrackState(p.track);
     return {
       id: p.track.id,
-      clips: [clipFor(p.version, p.chosen)],
+      clips: edit ? (edit.clips[p.track.id] ?? []) : [clipFor(p.version, p.chosen)],
       gainDb: s.gainDb,
       pan: s.pan,
       mute: s.mute,
       solo: s.solo,
-      trimDb: p.version.gainDb,
+      trimDb: edit ? 0 : p.version.gainDb,
       stretch: stretchPolicyOf(p.track, tracks.length === 1, mix.tracks[p.track.id]),
     };
   });
-  const lengthFrames = Math.max(
-    0,
-    ...engineTracks.flatMap((t) => t.clips.map((c) => c.startFrame + c.lengthFrames)),
-  );
+  const lengthFrames = edit
+    ? edit.lengthFrames
+    : Math.max(
+        0,
+        ...engineTracks.flatMap((t) => t.clips.map((c) => c.startFrame + c.lengthFrames)),
+      );
   // Nothing to play: the transport and the click run until Stop (SPEC §9).
   return { tracks: engineTracks, lengthFrames, openEnd: engineTracks.length === 0 };
 }
