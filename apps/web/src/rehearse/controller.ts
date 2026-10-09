@@ -13,6 +13,7 @@ import workerUrl from "@bandroom/audio-engine/worker?worker&url";
 import workletUrl from "@bandroom/audio-engine/worklet?worker&url";
 import {
   compileTempo,
+  DEFAULT_MAX_TAKE_MINUTES,
   putSongMixer,
   type ClickSettings,
   practiceOf,
@@ -73,7 +74,6 @@ import {
   clickLengthFrames,
   clickSettingsOf,
   clipFor,
-  DEFAULT_MAX_TAKE_MINUTES,
   enginePracticeOf,
   loadKeyOf,
   loudnessOffsetDb,

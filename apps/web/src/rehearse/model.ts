@@ -154,9 +154,6 @@ export function buildTimeline(tracks: readonly PlayableTrack[], mix: MixerState)
   return { tracks: engineTracks, lengthFrames, openEnd: engineTracks.length === 0 };
 }
 
-/** Default max take length (SPEC §9: the admin setting `recording.maxTakeMinutes`). */
-export const DEFAULT_MAX_TAKE_MINUTES = 180;
-
 /**
  * How far the click is generated: the song, or while open-ended (no playable tracks, or
  * recording) at least `horizonFrames` (the max take length), since the transport runs on.
