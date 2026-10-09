@@ -2146,6 +2146,7 @@
     "conflict": "This session was changed elsewhere. It now shows the saved state.",
     "editing": "The song is being edited",
     "startFailed": "Edit mode could not start.",
-    "folded": "Older undo steps were merged into the session."
+    "folded": "Older undo steps were merged into the session.",
+    "tracksTitle": "Tracks to edit"
   }
 }

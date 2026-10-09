@@ -36,7 +36,7 @@ import {
   IconAlertTriangle,
   IconX,
 } from "@tabler/icons-react";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { AppModal, CaptionButton, PanelPopover } from "../components/ResponsivePanel";
 import { setSnap } from "../markers/store";
@@ -50,6 +50,7 @@ import {
   openEditDialog,
   setEditOptions,
   setSelectedTracks,
+  toggleTrackSelected,
   useEdit,
   type SaveStatus,
 } from "./store";
@@ -267,15 +268,21 @@ export function EditToolbar({
 }
 
 /** "3 of 5 tracks" with All / None (SPEC §24.6). */
-export function TrackSelectionSummary() {
+export function TrackSelectionSummary({
+  names,
+}: {
+  /** Track names: phones choose the tracks in a sheet (the strips are too narrow for a box). */
+  names?: Readonly<Record<string, string>>;
+}) {
   const { t } = useTranslation();
-  const selected = useEdit((s) => s.selectedTracks.length);
-  const all = useEdit((s) => s.base?.tracks.map((x) => x.trackId) ?? []);
-  return (
-    <Group gap={4} wrap="nowrap" data-testid="edit-track-count">
-      <Text size="sm" c={selected === 0 ? "red" : "dimmed"} style={{ whiteSpace: "nowrap" }}>
-        {t("edit.tracksCount", { count: selected, total: all.length })}
-      </Text>
+  const selectedIds = useEdit((s) => s.selectedTracks);
+  const selected = selectedIds.length;
+  const base = useEdit((s) => s.base);
+  const all = useMemo(() => base?.tracks.map((x) => x.trackId) ?? [], [base]);
+  const [open, setOpen] = useState(false);
+  const count = t("edit.tracksCount", { count: selected, total: all.length });
+  const buttons = (
+    <>
       <Button
         variant="subtle"
         size="compact-sm"
@@ -300,6 +307,56 @@ export function TrackSelectionSummary() {
       >
         {t("edit.noTracks")}
       </Button>
+    </>
+  );
+  if (names) {
+    return (
+      <>
+        <Button
+          variant="default"
+          h={44}
+          px="sm"
+          color={selected === 0 ? "red" : undefined}
+          onClick={() => {
+            setOpen(true);
+          }}
+          data-testid="edit-track-count"
+        >
+          {count}
+        </Button>
+        <AppModal
+          opened={open}
+          onClose={() => {
+            setOpen(false);
+          }}
+          title={t("edit.tracksTitle")}
+          data-testid="edit-tracks-sheet"
+        >
+          <Stack gap={0}>
+            <Group gap="xs">{buttons}</Group>
+            {all.map((id) => (
+              <Checkbox
+                key={id}
+                py={12}
+                checked={selectedIds.includes(id)}
+                onChange={() => {
+                  toggleTrackSelected(id);
+                }}
+                label={names[id] ?? id}
+                data-testid="edit-track-select"
+              />
+            ))}
+          </Stack>
+        </AppModal>
+      </>
+    );
+  }
+  return (
+    <Group gap={4} wrap="nowrap" data-testid="edit-track-count">
+      <Text size="sm" c={selected === 0 ? "red" : "dimmed"} style={{ whiteSpace: "nowrap" }}>
+        {count}
+      </Text>
+      {buttons}
     </Group>
   );
 }
@@ -331,7 +388,13 @@ export function SaveState() {
  * Replaces the song header's actions in edit mode (SPEC §24.6): the mode, the save status, the
  * track selection (phones) and Cancel (confirmed when there are ops).
  */
-export function EditHeaderBar({ onCancel }: { onCancel: () => Promise<void> }) {
+export function EditHeaderBar({
+  onCancel,
+  trackNames,
+}: {
+  onCancel: () => Promise<void>;
+  trackNames: Readonly<Record<string, string>>;
+}) {
   const { t } = useTranslation();
   const phone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   const ops = useEdit((s) => s.ops.length);
@@ -353,7 +416,7 @@ export function EditHeaderBar({ onCancel }: { onCancel: () => Promise<void> }) {
         {t("edit.mode")}
       </Text>
       <SaveState />
-      {phone && <TrackSelectionSummary />}
+      {phone && <TrackSelectionSummary names={trackNames} />}
       <Button
         variant="light"
         color="red"

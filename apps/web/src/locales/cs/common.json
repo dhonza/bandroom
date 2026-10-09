@@ -2318,6 +2318,7 @@
     "conflict": "Relace se změnila jinde. Teď ukazuje uložený stav.",
     "editing": "Skladba se právě upravuje",
     "startFailed": "Režim úprav se nepodařilo spustit.",
-    "folded": "Starší kroky zpět byly sloučeny do relace."
+    "folded": "Starší kroky zpět byly sloučeny do relace.",
+    "tracksTitle": "Upravované stopy"
   }
 }

@@ -2,7 +2,8 @@ import type { Song, Track } from "@bandroom/shared";
 import { Button, Tooltip } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { IconCut } from "@tabler/icons-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useSongTracks } from "../features/library/queries";
 import { useTranslation } from "react-i18next";
 import { useApiError } from "../api/useApiError";
 import { LockedHint } from "../features/song/songLock";
@@ -70,8 +71,13 @@ export function EditButton({ song, tracks }: { song: Song; tracks: Track[] | nul
 }
 
 /** The song header in edit mode: the edit bar instead of the actions. */
-export function EditModeHeader(_props: { song: Song }) {
-  return <EditHeaderBar onCancel={cancelEditSession} />;
+export function EditModeHeader({ song }: { song: Song }) {
+  const tracks = useSongTracks(song.id).data?.tracks;
+  const names = useMemo(
+    () => Object.fromEntries((tracks ?? []).map((tr) => [tr.id, tr.name])),
+    [tracks],
+  );
+  return <EditHeaderBar onCancel={cancelEditSession} trackNames={names} />;
 }
 
 /** The toolbar under the header (desktop) or the bottom sheet (phones). */

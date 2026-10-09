@@ -113,7 +113,8 @@ export function TrackStrip({
   const dualMono = version.media?.dualMono ?? false;
 
   const editing = edit !== undefined;
-  const editCheck = editing && (
+  // Phones choose the tracks in a sheet from the edit bar (the narrow strip has no room).
+  const editCheck = editing && !compact && (
     <Checkbox
       size="md"
       checked={selected}
