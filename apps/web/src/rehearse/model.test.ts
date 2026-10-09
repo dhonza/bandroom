@@ -4,6 +4,7 @@ import {
   abPartner,
   buildTimeline,
   chooseVariant,
+  clipFor,
   clickLengthFrames,
   timelineLengthSec,
   defaultMix,
@@ -146,6 +147,20 @@ describe("quality (SPEC §6.9)", () => {
     };
     expect(chooseVariant(version({ media }), "high", url)?.variant.dualMono).toBe(true);
     expect(chooseVariant(version({ media }), "lossless", url)?.variant.dualMono).toBe(true);
+  });
+});
+
+describe("windowed Opus (SPEC §24.5)", () => {
+  it("reads Opus versions over 20 min in windows, shorter ones and FLAC as before", () => {
+    const long = version();
+    const frames = 20 * 60 * 48_000 + 1;
+    if (long.variants.opus) long.variants.opus.durationSamples48k = frames;
+    const opus = chooseVariant(long, "high", url);
+    expect(opus && clipFor(long, opus).variant.fetch).toBe("window");
+    const short = chooseVariant(version(), "high", url);
+    expect(short && clipFor(version(), short).variant.fetch).toBeUndefined();
+    const flac = chooseVariant(version(), "lossless", url);
+    expect(flac && clipFor(version(), flac).variant.fetch).toBeUndefined();
   });
 });
 

@@ -6,7 +6,13 @@ import { clickSettingsOf } from "./model";
 // ——— test hook (SPEC §20: engine debug state for e2e) ————————————————————————————
 
 /** The engine and Rehearse state read by the e2e tests. */
-export function debugSnapshot(engine: Engine | null, s: RehearseState, hasTempo: boolean) {
+export function debugSnapshot(
+  engine: Engine | null,
+  s: RehearseState,
+  hasTempo: boolean,
+  editSessionId: string | null = null,
+) {
+  const clipsPerTrack = engine?.clipsPerTrack ?? {};
   return {
     songId: s.songId,
     open: s.open,
@@ -50,6 +56,9 @@ export function debugSnapshot(engine: Engine | null, s: RehearseState, hasTempo:
     openEnd: engine?.openEnd ?? false,
     timelineSec: s.timelineSec,
     recording: engine?.recordingState ?? "off",
+    clipsPerTrack,
+    /** Edit mode (SPEC §24.5); filled once edit sessions exist. */
+    edit: editSessionId ? { sessionId: editSessionId, clipsPerTrack } : null,
   };
 }
 

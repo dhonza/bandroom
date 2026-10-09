@@ -129,6 +129,7 @@ vi.mock("@bandroom/audio-engine", () => ({
   },
   clickTrackFor: (_grid: unknown, lengthFrames: number) => ({ lengthFrames }),
   countInSpecAt: () => null,
+  defaultFetch: () => undefined,
 }));
 vi.mock("@bandroom/audio-engine/worker?worker&url", () => ({ default: "worker.js" }));
 vi.mock("@bandroom/audio-engine/worklet?worker&url", () => ({ default: "worklet.js" }));

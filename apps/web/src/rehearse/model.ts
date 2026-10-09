@@ -6,6 +6,7 @@ import type {
   StretchQuality,
   TrackStretchPolicy,
 } from "@bandroom/audio-engine";
+import { defaultFetch } from "@bandroom/audio-engine";
 import {
   effectiveInstrument,
   guessInstrument,
@@ -101,11 +102,13 @@ export function variantFrames(v: EngineVariant): number {
 }
 
 export function clipFor(version: TrackVersion, chosen: ChosenVariant): EngineClip {
+  // Opus versions over 20 min are read in windows (SPEC §24.5).
+  const fetch = defaultFetch(chosen.variant);
   return {
     startFrame: version.offsetSamples,
     sourceOffsetFrame: 0,
     lengthFrames: variantFrames(chosen.variant),
-    variant: chosen.variant,
+    variant: fetch ? { ...chosen.variant, fetch } : chosen.variant,
   };
 }
 
