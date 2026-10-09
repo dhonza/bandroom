@@ -1,18 +1,25 @@
 import type { TakeEndReason, TakeMessage } from "@bandroom/audio-engine";
-// The FLAC part only: the worker bundle stays small.
+// The FLAC and WAV parts only: the worker bundle stays small.
 import { FLAC_STREAMINFO_OFFSET, FlacEncoder, FlacRecovery } from "@bandroom/audio-engine/flac";
 import {
+  FLOAT_WAV_HEADER_LENGTH,
+  FloatWavWriter,
+  recoverFloatWav,
+} from "@bandroom/audio-engine/wav";
+import {
   parseTakeMeta,
+  TAKE_EXTENSIONS,
   takeFileName,
   takeMetaName,
   type TakeContext,
+  type TakeFormat,
   type TakeMeta,
   type WriterEvent,
 } from "./takeTypes";
 
 /**
  * The take writer (SPEC §9), run in a worker: it receives the mixer's capture chunks over the
- * take port, encodes them to FLAC and appends them to the take's file in OPFS, keeping the JSON
+ * take port, encodes them to FLAC (or a 32-bit float WAV) and appends them to the take's file in OPFS, keeping the JSON
  * sidecar up to date. Pure logic over a small file-system interface, so it runs in Node tests.
  */
 
@@ -52,6 +59,43 @@ const POOL_MAX = 8;
 interface Planar {
   set: Float32Array[];
   frames: number;
+  /** Loudest sample of the chunk (unclipped). */
+  peak: number;
+}
+
+/** The encoder of a take format (FLAC or float WAV share this shape). */
+interface TakeEncoder {
+  readonly totalSamples: number;
+  header(): Uint8Array;
+  encode(planar: readonly Float32Array[], frames?: number): Uint8Array;
+  finish(): Uint8Array;
+  /** The header part to write once the take is complete. */
+  final(): { at: number; bytes: Uint8Array };
+}
+
+function takeEncoder(format: TakeFormat, channels: number): TakeEncoder {
+  if (format === "wav32f") {
+    const w = new FloatWavWriter({ channels });
+    return {
+      get totalSamples() {
+        return w.totalSamples;
+      },
+      header: () => w.header(),
+      encode: (p, n) => w.encode(p, n),
+      finish: () => w.finish(),
+      final: () => ({ at: 0, bytes: w.finalHeader() }),
+    };
+  }
+  const f = new FlacEncoder({ channels });
+  return {
+    get totalSamples() {
+      return f.totalSamples;
+    },
+    header: () => f.header(),
+    encode: (p, n) => f.encode(p, n),
+    finish: () => f.finish(),
+    final: () => ({ at: FLAC_STREAMINFO_OFFSET, bytes: f.streamInfo() }),
+  };
 }
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -75,7 +119,7 @@ interface OpenTake {
   dir: TakeDir;
   file: SyncHandle;
   sidecar: SyncHandle;
-  encoder: FlacEncoder;
+  encoder: TakeEncoder;
   /** File position of the next write. */
   pos: number;
   lastMeta: number;
@@ -185,7 +229,9 @@ export class TakeWriter {
       latencyFrames: ctx.latencyFrames,
       trimmedFrames: trim,
       channels,
+      format: ctx.format,
       frames: 0,
+      peak: 0,
       status: "recording",
       endedBy: null,
       gapFrames: 0,
@@ -193,9 +239,9 @@ export class TakeWriter {
       updatedAt: now,
     };
     const dir = await this.deps.dir(ctx.userId);
-    const file = await dir.open(takeFileName(takeId));
+    const file = await dir.open(takeFileName(takeId, ctx.format));
     const sidecar = await dir.open(takeMetaName(takeId));
-    const enc = new FlacEncoder({ channels });
+    const enc = takeEncoder(ctx.format, channels);
     await file.truncate(0);
     const header = enc.header();
     file.write(header, { at: 0 });
@@ -225,11 +271,17 @@ export class TakeWriter {
     if (!set || set.length !== channels || (set[0]?.length ?? 0) < n) {
       set = Array.from({ length: channels }, () => new Float32Array(Math.max(n, 4096)));
     }
+    let peak = 0;
     for (let c = 0; c < channels; c++) {
       const out = set[c] as Float32Array;
-      for (let i = 0; i < n; i++) out[i] = data[(skip + i) * channels + c] as number;
+      for (let i = 0; i < n; i++) {
+        const x = data[(skip + i) * channels + c] as number;
+        out[i] = x;
+        const a = x < 0 ? -x : x;
+        if (a > peak) peak = a;
+      }
     }
-    return { set, frames: n };
+    return { set, frames: n, peak };
   }
 
   private async encodePlanar(p: Planar): Promise<void> {
@@ -237,6 +289,9 @@ export class TakeWriter {
     try {
       if (!t || t.failed || p.frames === 0) return;
       this.append(t, t.encoder.encode(p.set, p.frames));
+      // FLAC clips at full scale; a float take keeps the overs.
+      const peak = t.meta.format === "flac" ? Math.min(1, p.peak) : p.peak;
+      if (peak > (t.meta.peak ?? 0)) t.meta.peak = peak;
       await this.maybeMeta(t);
     } finally {
       if (this.pool.length < POOL_MAX) this.pool.push(p.set);
@@ -292,12 +347,13 @@ export class TakeWriter {
     if (frames === 0) {
       await closeQuietly(t.file);
       await closeQuietly(t.sidecar);
-      await t.dir.remove(takeFileName(t.meta.takeId)).catch(() => undefined);
+      await t.dir.remove(takeFileName(t.meta.takeId, t.meta.format)).catch(() => undefined);
       await t.dir.remove(takeMetaName(t.meta.takeId)).catch(() => undefined);
       this.deps.emit({ type: "empty" });
       return;
     }
-    t.file.write(t.encoder.streamInfo(), { at: FLAC_STREAMINFO_OFFSET });
+    const final = t.encoder.final();
+    t.file.write(final.bytes, { at: final.at });
     await t.file.flush();
     await t.file.close();
     const meta: TakeMeta = {
@@ -339,8 +395,41 @@ async function closeQuietly(h: SyncHandle): Promise<void> {
 const READ_CHUNK = 1 << 20;
 
 /**
+ * Fixes an unfinished take file in place: cut after its last complete frame, with a STREAMINFO
+ * (FLAC) or header sizes (float WAV) for what it holds. Returns the frames kept; throws when the
+ * file has no readable header.
+ */
+async function repairTakeFile(file: SyncHandle, format: TakeFormat): Promise<number> {
+  const size = await file.getSize();
+  if (format === "wav32f") {
+    const head = new Uint8Array(FLOAT_WAV_HEADER_LENGTH);
+    file.read(head, { at: 0 });
+    const r = recoverFloatWav(head, size);
+    if (r.frames === 0) return 0;
+    await file.truncate(r.validLength);
+    file.write(r.header, { at: 0 });
+    await file.flush();
+    return r.frames;
+  }
+  const rec = new FlacRecovery();
+  const buf = new Uint8Array(READ_CHUNK);
+  for (let at = 0; at < size; at += READ_CHUNK) {
+    const n = file.read(buf, { at });
+    if (n <= 0) break;
+    rec.push(buf.subarray(0, n));
+  }
+  const r = rec.finish();
+  if (r.frames === 0) return 0;
+  await file.truncate(r.validLength);
+  file.write(r.streamInfo, { at: FLAC_STREAMINFO_OFFSET });
+  await file.flush();
+  return r.totalSamples;
+}
+
+/**
  * Finishes the takes a crash or reload left unfinished (sidecar status "recording"): the file is
- * cut after its last complete frame and gets a STREAMINFO for what it holds (SPEC §9). Takes
+ * cut after its last complete frame and gets a STREAMINFO (FLAC) or header sizes (float WAV) for
+ * what it holds (SPEC §9). Their peak is dropped (it may miss the end), so no auto level. Takes
  * held open elsewhere (another tab recording) and `skip` are left alone; empty takes and files
  * without a partner are removed. Returns every finished take of the user on this device.
  */
@@ -353,8 +442,9 @@ export async function recoverTakes(
   const out: TakeMeta[] = [];
   const metas = new Set(names.filter((n) => n.endsWith(".json")).map((n) => n.slice(0, -5)));
   for (const name of names) {
-    if (!name.endsWith(".flac")) continue;
-    const id = name.slice(0, -5);
+    const ext = TAKE_EXTENSIONS.find((e) => name.endsWith(`.${e}`));
+    if (!ext) continue;
+    const id = name.slice(0, -(ext.length + 1));
     if (!metas.has(id) && !skip.has(id)) await dir.remove(name).catch(() => undefined);
   }
   for (const id of metas) {
@@ -367,10 +457,12 @@ export async function recoverTakes(
     }
     try {
       const meta = parseTakeMeta(await readText(sidecar));
-      if (!meta || !names.includes(takeFileName(id))) {
+      if (!meta || !names.includes(takeFileName(id, meta.format))) {
         await closeQuietly(sidecar);
         await dir.remove(takeMetaName(id)).catch(() => undefined);
-        await dir.remove(takeFileName(id)).catch(() => undefined);
+        for (const ext of TAKE_EXTENSIONS) {
+          await dir.remove(`${id}.${ext}`).catch(() => undefined);
+        }
         continue;
       }
       if (meta.status === "finished") {
@@ -379,32 +471,16 @@ export async function recoverTakes(
       }
       let file: SyncHandle;
       try {
-        file = await dir.open(takeFileName(id));
+        file = await dir.open(takeFileName(id, meta.format));
       } catch {
         continue;
       }
       let fixed: TakeMeta | null = null;
       try {
-        const rec = new FlacRecovery();
-        const size = await file.getSize();
-        const buf = new Uint8Array(READ_CHUNK);
-        for (let at = 0; at < size; at += READ_CHUNK) {
-          const n = file.read(buf, { at });
-          if (n <= 0) break;
-          rec.push(buf.subarray(0, n));
-        }
-        const r = rec.finish();
-        if (r.frames > 0) {
-          await file.truncate(r.validLength);
-          file.write(r.streamInfo, { at: FLAC_STREAMINFO_OFFSET });
-          await file.flush();
-          fixed = {
-            ...meta,
-            frames: r.totalSamples,
-            status: "finished",
-            recovered: true,
-            updatedAt: opts.now(),
-          };
+        const frames = await repairTakeFile(file, meta.format);
+        if (frames > 0) {
+          const { peak: _peak, ...rest } = meta;
+          fixed = { ...rest, frames, status: "finished", recovered: true, updatedAt: opts.now() };
         }
       } catch {
         fixed = null; // no header or nothing readable
@@ -417,7 +493,7 @@ export async function recoverTakes(
       } else {
         await closeQuietly(sidecar);
         await dir.remove(takeMetaName(id)).catch(() => undefined);
-        await dir.remove(takeFileName(id)).catch(() => undefined);
+        await dir.remove(takeFileName(id, meta.format)).catch(() => undefined);
       }
     } finally {
       await closeQuietly(sidecar);

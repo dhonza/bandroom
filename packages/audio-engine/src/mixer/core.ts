@@ -330,9 +330,17 @@ export class MixerCore {
 
   // ——— recording (SPEC §9) ——————————————————————————————————————————————
 
-  /** The input is connected: it is metered, and a take records `channels` (1 or 2). */
-  armCapture(channels: number, maxFrames: number): void {
-    this.capture.arm(channels, maxFrames);
+  /**
+   * The input is connected: it is metered, and a take records `channels` (1 or 2), with the input
+   * gain `gainDb`.
+   */
+  armCapture(channels: number, maxFrames: number, gainDb = 0): void {
+    this.capture.arm(channels, maxFrames, gainDb);
+  }
+
+  /** The input gain in dB (ramped across the next block). */
+  setCaptureGain(db: number): void {
+    this.capture.setGain(db);
   }
 
   /** A pooled chunk buffer (from the main thread, then back from the take writer). */

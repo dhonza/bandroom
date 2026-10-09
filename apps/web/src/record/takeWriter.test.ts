@@ -1,4 +1,10 @@
-import { CAPTURE_CHUNK_FRAMES, parseStreamInfo, recoverFlac } from "@bandroom/audio-engine";
+import {
+  CAPTURE_CHUNK_FRAMES,
+  FLOAT_WAV_HEADER_LENGTH,
+  parseFloatWavHeader,
+  parseStreamInfo,
+  recoverFlac,
+} from "@bandroom/audio-engine";
 import type { TakeMessage } from "@bandroom/audio-engine";
 import { describe, expect, it } from "vitest";
 import { FakeTakeDir } from "./fakeTakeDir";
@@ -11,6 +17,7 @@ const ctx = (over: Partial<TakeContext> = {}): TakeContext => ({
   songId: "s1",
   projectId: "p1",
   latencyFrames: 0,
+  format: "flac",
   ...over,
 });
 
@@ -34,10 +41,10 @@ function setup(opts: { metaEveryMs?: number } = {}) {
   return { dir, events, freed, writer, tick };
 }
 
-/** Interleaved chunk of a quiet ramp (any non-silent content). */
-function chunk(seq: number, frames: number, channels: number): TakeMessage {
+/** Interleaved chunk of a quiet sine (any non-silent content), peak `amp`. */
+function chunk(seq: number, frames: number, channels: number, amp = 0.25): TakeMessage {
   const data = new Float32Array(CAPTURE_CHUNK_FRAMES * channels);
-  for (let i = 0; i < frames * channels; i++) data[i] = Math.sin((seq * frames + i) / 7) * 0.25;
+  for (let i = 0; i < frames * channels; i++) data[i] = Math.sin((seq * frames + i) / 7) * amp;
   return { type: "take.chunk", seq, frames, channels, data };
 }
 
@@ -99,6 +106,50 @@ describe("TakeWriter", () => {
     });
     expect(parseTakeMeta(dir.text("take-1.json"))).toEqual(meta);
     expect(dir.locked.size).toBe(0);
+  });
+
+  it("writes a float take as a complete 32-bit float WAV, overs kept", async () => {
+    const { dir, events, writer } = setup();
+    writer.prepare(ctx({ format: "wav32f" }));
+    writer.message(start(0, 2));
+    const chunks = [chunk(0, CAPTURE_CHUNK_FRAMES, 2, 1.5), chunk(1, 1000, 2, 1.5)];
+    for (const c of chunks) writer.message(structuredClone(c));
+    writer.message(end(CAPTURE_CHUNK_FRAMES + 1000, 0, 2));
+    await writer.idle();
+    const meta = finished(events);
+    expect(meta).toMatchObject({ format: "wav32f", frames: CAPTURE_CHUNK_FRAMES + 1000 });
+    expect(dir.files.has("take-1.flac")).toBe(false);
+    const bytes = dir.files.get("take-1.wav") ?? new Uint8Array();
+    expect(bytes.length).toBe(FLOAT_WAV_HEADER_LENGTH + meta.frames * 8);
+    expect(parseFloatWavHeader(bytes)).toEqual({
+      channels: 2,
+      sampleRate: 48_000,
+      frames: meta.frames,
+    });
+    const data = new Float32Array(bytes.slice(FLOAT_WAV_HEADER_LENGTH).buffer);
+    const first = chunks[0]?.type === "take.chunk" ? chunks[0].data : new Float32Array();
+    expect(data.subarray(0, 100)).toEqual(first.subarray(0, 100));
+    // The peak keeps the overs in float.
+    expect(meta.peak).toBeGreaterThan(1.4);
+    expect(parseTakeMeta(dir.text("take-1.json"))).toEqual(meta);
+  });
+
+  it("tracks the take's peak, clipped at full scale for FLAC", async () => {
+    const { events, writer } = setup();
+    writer.prepare(ctx());
+    writer.message(start(0));
+    writer.message(chunk(0, 1000, 1, 0.5));
+    writer.message(end(1000));
+    await writer.idle();
+    expect(finished(events).peak).toBeCloseTo(0.5, 2);
+    writer.prepare(ctx());
+    writer.message(start(0));
+    writer.message(chunk(0, 1000, 1, 2));
+    writer.message(end(1000));
+    await writer.idle();
+    expect(events.filter((e) => e.type === "finished").at(-1)).toMatchObject({
+      meta: { peak: 1 },
+    });
   });
 
   it("drops the head the latency reaches before the song start", async () => {
@@ -221,9 +272,9 @@ describe("TakeWriter", () => {
 });
 
 describe("recoverTakes", () => {
-  async function crashed(frames: number) {
+  async function crashed(frames: number, format: TakeContext["format"] = "flac") {
     const s = setup({ metaEveryMs: 0 });
-    s.writer.prepare(ctx({ latencyFrames: 480 }));
+    s.writer.prepare(ctx({ latencyFrames: 480, format }));
     s.writer.message(start(96_000));
     let left = frames;
     let seq = 0;
@@ -248,6 +299,8 @@ describe("recoverTakes", () => {
     const meta = takes[0];
     // The encoder holds the unfinished block; complete frames are kept, the cut one dropped.
     expect(meta).toMatchObject({ takeId: "take-1", status: "finished", recovered: true });
+    // The peak may miss the end: no auto level for a recovered take.
+    expect(meta).not.toHaveProperty("peak");
     expect(meta?.frames).toBe(4 * CAPTURE_CHUNK_FRAMES);
     const fixed = dir.files.get("take-1.flac") ?? new Uint8Array();
     expect(parseStreamInfo(fixed.subarray(8, 42)).totalSamples).toBe(meta?.frames);
@@ -256,9 +309,43 @@ describe("recoverTakes", () => {
     expect(dir.locked.size).toBe(0);
   });
 
+  it("finishes a float take a crash left behind (whole frames from the file length)", async () => {
+    const { dir } = await crashed(3 * CAPTURE_CHUNK_FRAMES + 100, "wav32f");
+    const bytes = dir.files.get("take-1.wav") ?? new Uint8Array();
+    expect(parseFloatWavHeader(bytes)?.frames).toBe(0);
+    // A cut-off last write.
+    dir.files.set("take-1.wav", bytes.subarray(0, bytes.length - 3));
+    const takes = await recoverTakes(dir, { now: () => 9 });
+    const meta = takes[0];
+    expect(meta).toMatchObject({ format: "wav32f", status: "finished", recovered: true });
+    expect(meta).not.toHaveProperty("peak");
+    expect(meta?.frames).toBe(3 * CAPTURE_CHUNK_FRAMES + 99);
+    const fixed = dir.files.get("take-1.wav") ?? new Uint8Array();
+    expect(fixed.length).toBe(FLOAT_WAV_HEADER_LENGTH + (meta?.frames ?? 0) * 4);
+    expect(parseFloatWavHeader(fixed)?.frames).toBe(meta?.frames);
+    expect(parseTakeMeta(dir.text("take-1.json"))).toEqual(meta);
+    expect(dir.locked.size).toBe(0);
+  });
+
+  it("reads old sidecars without a format as FLAC", () => {
+    const meta = parseTakeMeta(
+      JSON.stringify({
+        v: 1,
+        takeId: "a",
+        userId: "u",
+        projectId: "p",
+        startFrame: 0,
+        frames: 1,
+        channels: 1,
+      }),
+    );
+    expect(meta?.format).toBe("flac");
+  });
+
   it("lists finished takes, skips held and active ones, removes empty and orphan files", async () => {
     const { dir } = await crashed(100); // no complete frame
     dir.files.set("orphan.flac", new Uint8Array(10));
+    dir.files.set("orphan2.wav", new Uint8Array(10));
     dir.files.set("junk.json", new TextEncoder().encode("{}"));
     expect(await recoverTakes(dir, { now: () => 1 })).toEqual([]);
     expect([...dir.files.keys()]).toEqual([]);

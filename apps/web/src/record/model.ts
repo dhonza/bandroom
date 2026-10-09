@@ -1,6 +1,6 @@
-import { msToFrames, SAMPLE_RATE } from "@bandroom/audio-engine";
+import { floatWavMaxFrames, msToFrames, SAMPLE_RATE } from "@bandroom/audio-engine";
 import { MAX_OFFSET_SAMPLES } from "@bandroom/shared";
-import type { TakeMeta } from "./takeTypes";
+import type { TakeFormat, TakeMeta } from "./takeTypes";
 
 /**
  * Where a take goes on the timeline with the user's nudge (SPEC §9): the start minus the latency,
@@ -26,6 +26,41 @@ export function clampNudge(ms: number): number {
   return Math.max(-MAX_NUDGE_MS, Math.min(MAX_NUDGE_MS, Math.round(ms)));
 }
 
+/** The input gain's range and step in dB (digital gain before writing, SPEC §9). */
+export const INPUT_GAIN_MIN_DB = 0;
+export const INPUT_GAIN_MAX_DB = 40;
+export const INPUT_GAIN_STEP_DB = 0.5;
+
+/** An input gain within its range (0 for a non-number), to 0.01 dB. */
+export function clampInputGain(db: number): number {
+  if (!Number.isFinite(db)) return 0;
+  const v = Math.max(INPUT_GAIN_MIN_DB, Math.min(INPUT_GAIN_MAX_DB, db));
+  return Math.round(v * 100) / 100;
+}
+
+/** The target peak's range in dBFS (the stop dialog; the admin default is −6). */
+export const PEAK_TARGET_MIN_DB = -24;
+export const PEAK_TARGET_MAX_DB = 0;
+/** The auto level's range in dB. */
+export const AUTO_LEVEL_MAX_DB = 40;
+
+export function clampPeakTarget(db: number): number {
+  if (!Number.isFinite(db)) return PEAK_TARGET_MAX_DB;
+  return Math.max(PEAK_TARGET_MIN_DB, Math.min(PEAK_TARGET_MAX_DB, Math.round(db * 100) / 100));
+}
+
+/**
+ * The version gain that puts the take's loudest sample (`peak`, linear) at `targetDb` dBFS
+ * (SPEC §9): up for a quiet take, down for one with overs (float). Rounded to 0.5 dB, within
+ * ±40 dB; null without a peak (silence, or a take recovered after a crash).
+ */
+export function autoLevelDb(peak: number | undefined, targetDb: number): number | null {
+  if (peak === undefined || !Number.isFinite(peak) || peak <= 0) return null;
+  const db = Math.round((targetDb - 20 * Math.log10(peak)) * 2) / 2;
+  const v = Math.max(-AUTO_LEVEL_MAX_DB, Math.min(AUTO_LEVEL_MAX_DB, db));
+  return v === 0 ? 0 : v; // no −0
+}
+
 /** "Recording N" with the next free N among the track names (base = the localized word). */
 export function nextRecordingName(base: string, names: readonly string[]): string {
   const re = new RegExp(`^${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} (\\d+)$`, "i");
@@ -39,16 +74,32 @@ export function nextRecordingName(base: string, names: readonly string[]): strin
 
 /**
  * Bytes of a take: 24-bit FLAC is about 0.6 × the raw size on music (SPEC §9 estimate), plus 10 %
- * headroom. Used for the quota and local storage checks before arming.
+ * headroom; a 32-bit float WAV is exactly 4 bytes per sample. Used for the quota and local
+ * storage checks before arming.
  */
-export function estimateTakeBytes(minutes: number, channels: number): number {
-  return Math.ceil(minutes * 60 * SAMPLE_RATE * channels * 3 * 0.6 * 1.1);
+export function estimateTakeBytes(
+  minutes: number,
+  channels: number,
+  format: TakeFormat = "flac",
+): number {
+  const samples = minutes * 60 * SAMPLE_RATE * channels;
+  return Math.ceil(format === "wav32f" ? samples * 4 : samples * 3 * 0.6 * 1.1);
 }
 
 /** Whole minutes of recording that fit in `bytes`. */
-export function minutesThatFit(bytes: number, channels: number): number {
-  const perMinute = estimateTakeBytes(1, channels);
+export function minutesThatFit(
+  bytes: number,
+  channels: number,
+  format: TakeFormat = "flac",
+): number {
+  const perMinute = estimateTakeBytes(1, channels, format);
   return Math.max(0, Math.floor(bytes / perMinute));
+}
+
+/** The longest take in minutes: the admin's limit, for float also what fits in a WAV (4 GiB). */
+export function maxTakeMinutesFor(adminMax: number, channels: number, format: TakeFormat): number {
+  if (format !== "wav32f") return adminMax;
+  return Math.min(adminMax, Math.floor(floatWavMaxFrames(channels) / SAMPLE_RATE / 60));
 }
 
 /** m:ss (or h:mm:ss) of a frame count, for the timer and take lists. */

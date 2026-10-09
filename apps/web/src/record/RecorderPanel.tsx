@@ -7,9 +7,11 @@ import {
   Button,
   Group,
   Loader,
+  NumberInput,
   Progress,
   SegmentedControl,
   Select,
+  Slider,
   Stack,
   Switch,
   Text,
@@ -33,8 +35,20 @@ import { useOnline } from "../offline/online";
 import { useClickSettings } from "../rehearse/ClickControls";
 import { recordingEngine, setClickSettings, setMaxTakeMinutes } from "../rehearse/controller";
 import { useTempoUi } from "../tempo/store";
-import { estimateTakeBytes, formatTakeTime, meterPercent, minutesThatFit } from "./model";
+import { formatGain, parseGain } from "../rehearse/VersionGain";
+import {
+  clampInputGain,
+  estimateTakeBytes,
+  formatTakeTime,
+  INPUT_GAIN_MAX_DB,
+  INPUT_GAIN_MIN_DB,
+  INPUT_GAIN_STEP_DB,
+  maxTakeMinutesFor,
+  meterPercent,
+  minutesThatFit,
+} from "./model";
 import { recordingSupported } from "./opfs";
+import { loadFloatTakes, saveFloatTakes } from "./prefs";
 import {
   armRecorder,
   clearTake,
@@ -44,6 +58,7 @@ import {
   openInput,
   inputChannelsOf,
   resetClip,
+  setInputGain,
   startRecorder,
   stopRecorder,
   useRecorder,
@@ -110,6 +125,76 @@ function useTakeSpace(online: boolean) {
 }
 
 /**
+ * The input gain (SPEC §9): a digital gain before writing, set with the slider or typed in dB.
+ * Usable while armed and while recording; the meter shows the result.
+ */
+function InputGain() {
+  const { t } = useTranslation();
+  const gain = useRecorder((s) => s.inputGainDb);
+  const [draft, setDraft] = useState<string | number | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const v = parseGain(draft);
+    setDraft(null);
+    if (v !== null) setInputGain(clampInputGain(v));
+  };
+  return (
+    <Stack gap={4}>
+      <Group justify="space-between" gap="xs" wrap="nowrap">
+        <Text size="sm" fw={500}>
+          {t("record.inputGain")}
+        </Text>
+        <Text size="xs" c="dimmed" ta="right">
+          {t("record.inputGainHint")}
+        </Text>
+      </Group>
+      <Group gap="sm" wrap="nowrap">
+        <Slider
+          style={{ flex: 1 }}
+          min={INPUT_GAIN_MIN_DB}
+          max={INPUT_GAIN_MAX_DB}
+          step={INPUT_GAIN_STEP_DB}
+          value={gain}
+          onChange={(v) => {
+            setDraft(null);
+            setInputGain(v);
+          }}
+          label={(v) => formatGain(v, t)}
+          thumbSize={20}
+          thumbProps={{ "aria-label": t("record.inputGain") }}
+          data-testid="record-gain-slider"
+        />
+        <NumberInput
+          w={96}
+          size="sm"
+          styles={{ input: { minHeight: 44 } }}
+          value={draft ?? gain}
+          onChange={setDraft}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") setDraft(null);
+          }}
+          min={INPUT_GAIN_MIN_DB}
+          max={INPUT_GAIN_MAX_DB}
+          step={INPUT_GAIN_STEP_DB}
+          decimalScale={2}
+          allowDecimal
+          allowNegative={false}
+          clampBehavior="none"
+          // The spin buttons would be far below 44 px (touch targets); arrow keys still step.
+          hideControls
+          inputMode="decimal"
+          suffix=" dB"
+          aria-label={t("record.inputGain")}
+          data-testid="record-gain-input"
+        />
+      </Group>
+    </Stack>
+  );
+}
+
+/**
  * The recorder (SPEC §9): opens the microphone and arms on mount, shows the input meter, the
  * device and Mono/Stereo choices, the count-in, the warnings, and Record; while recording the
  * timer, the meter and Stop. A take that ends (Stop or an interruption) calls `onTakeEnded`; the
@@ -144,6 +229,7 @@ export function RecorderPanel({
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [stereo, setStereo] = useState(true);
+  const [float, setFloat] = useState(loadFloatTakes);
   const arming = useRef(0);
   /** Takes count only once this panel armed (not one left from before). */
   const armedOnce = useRef(false);
@@ -160,7 +246,7 @@ export function RecorderPanel({
   const space = useTakeSpace(online);
 
   const supported = recordingSupported();
-  const arm = async (device: string | null, wantStereo: boolean) => {
+  const arm = async (device: string | null, wantStereo: boolean, wantFloat: boolean) => {
     const run = ++arming.current;
     if (!supported) return;
     disarmRecorder();
@@ -181,7 +267,7 @@ export function RecorderPanel({
     }
     try {
       const ch = inputChannelsOf(stream) === 2 && wantStereo ? 2 : 1;
-      await armRecorder({ stream, channels: ch, port: newTakePort() });
+      await armRecorder({ stream, channels: ch, port: newTakePort(), float: wantFloat });
       armedOnce.current = true;
     } catch (err) {
       closeInput(stream);
@@ -195,7 +281,7 @@ export function RecorderPanel({
 
   useEffect(() => {
     const runs = arming;
-    void arm(null, true);
+    void arm(null, true, loadFloatTakes());
     return () => {
       runs.current++;
       // Closed while recording: the take ends as with Stop (kept; its dialog follows).
@@ -232,12 +318,14 @@ export function RecorderPanel({
     if (writerError && phase === "recording") void stopRecorder().catch(() => undefined);
   }, [writerError, phase]);
 
-  const need = estimateTakeBytes(maxMinutes, channels);
+  const format = float ? "wav32f" : "flac";
+  const takeMinutes = maxTakeMinutesFor(maxMinutes, channels, format);
+  const need = estimateTakeBytes(takeMinutes, channels, format);
   const free = Math.min(
     space.server ?? Number.POSITIVE_INFINITY,
     space.local ?? Number.POSITIVE_INFINITY,
   );
-  const fits = Number.isFinite(free) ? minutesThatFit(free, channels) : null;
+  const fits = Number.isFinite(free) ? minutesThatFit(free, channels, format) : null;
   const noSpace = fits !== null && fits < 1;
   const lowSpace = fits !== null && !noSpace && free < need;
   const locale = i18n.resolvedLanguage ?? "en";
@@ -253,6 +341,7 @@ export function RecorderPanel({
       songId: scope.songId,
       projectId: scope.projectId,
       latencyFrames: latencyFrames(latency),
+      format,
     });
   };
 
@@ -307,7 +396,7 @@ export function RecorderPanel({
             h={44}
             onClick={() => {
               setError(null);
-              void arm(deviceId, stereo);
+              void arm(deviceId, stereo, float);
             }}
           >
             {t("common.retry")}
@@ -327,7 +416,10 @@ export function RecorderPanel({
           </Text>
         </Group>
       ) : (
-        meters
+        <>
+          {meters}
+          <InputGain />
+        </>
       )}
 
       {!recording && (
@@ -343,7 +435,7 @@ export function RecorderPanel({
               allowDeselect={false}
               onChange={(v) => {
                 setDeviceId(v);
-                void arm(v, stereo);
+                void arm(v, stereo, float);
               }}
               comboboxProps={{ withinPortal: true }}
               data-testid="record-device"
@@ -358,11 +450,25 @@ export function RecorderPanel({
               ]}
               onChange={(v) => {
                 setStereo(v === "stereo");
-                void arm(deviceId, v === "stereo");
+                void arm(deviceId, v === "stereo", float);
               }}
               data-testid="record-channels"
             />
           )}
+          <Switch
+            size="md"
+            label={t("record.float")}
+            description={t("record.floatHint")}
+            checked={float}
+            onChange={(e) => {
+              const on = e.currentTarget.checked;
+              setFloat(on);
+              saveFloatTakes(on);
+              // The longest take depends on the format (a WAV file holds up to 4 GiB).
+              void arm(deviceId, stereo, on);
+            }}
+            data-testid="record-float"
+          />
           {scope.mode === "song" && hasTempo && (
             <Switch
               size="md"
@@ -414,7 +520,7 @@ export function RecorderPanel({
               {t("record.lowSpace", {
                 minutes: fits,
                 free: formatBytes(free, locale),
-                max: maxMinutes,
+                max: takeMinutes,
               })}
             </Alert>
           )}

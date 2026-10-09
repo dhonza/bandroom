@@ -27,6 +27,7 @@ const meta = (id: string, over: Partial<TakeMeta> = {}): TakeMeta => ({
   latencyFrames: 0,
   trimmedFrames: 0,
   channels: 1,
+  format: "flac",
   frames: 48_000,
   status: "finished",
   endedBy: "user",

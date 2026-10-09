@@ -1,4 +1,9 @@
-import { listSongTracks, type UploadTarget } from "@bandroom/shared";
+import {
+  DEFAULT_PEAK_TARGET_DB,
+  getMeta,
+  listSongTracks,
+  type UploadTarget,
+} from "@bandroom/shared";
 import {
   ActionIcon,
   Alert,
@@ -9,6 +14,7 @@ import {
   SegmentedControl,
   Select,
   Stack,
+  Switch,
   Text,
   TextInput,
 } from "@mantine/core";
@@ -17,24 +23,30 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api/client";
+import { metaKey } from "../branding/BrandLogo";
 import { AppModal } from "../components/ResponsivePanel";
 import { songKeys } from "../features/library/queries";
+import { formatGain, parseGain } from "../rehearse/VersionGain";
 import { uploadOptions } from "../upload/prefs";
 import {
+  autoLevelDb,
   clampNudge,
+  clampPeakTarget,
   formatOffset,
   formatTakeTime,
   NUDGE_STEPS,
   nextRecordingName,
+  PEAK_TARGET_MAX_DB,
+  PEAK_TARGET_MIN_DB,
   takeOffsetSamples,
 } from "./model";
 import { discardTake, saveTake, useTakes } from "./takes";
-import type { TakeMeta } from "./takeTypes";
+import { takeExtension, type TakeFormat, type TakeMeta } from "./takeTypes";
 
-/** File names keep letters, digits and a few separators. */
-function fileNameFor(name: string): string {
+/** File names keep letters, digits and a few separators; the extension follows the format. */
+function fileNameFor(name: string, format: TakeFormat): string {
   const base = name.replace(/[\\/:*?"<>|]+/g, " ").trim() || "Recording";
-  return `${base.slice(0, 100)}.flac`;
+  return `${base.slice(0, 100)}.${takeExtension(format)}`;
 }
 
 /** "Recording 2026-10-09 19:30", localized. */
@@ -100,9 +112,89 @@ export function NudgeControl({
 }
 
 /**
+ * Auto level (SPEC §9): on by default, it sets the new version's gain so the take's loudest peak
+ * reaches the target (the admin's default, changeable per take). Typed targets commit on blur or
+ * Enter; Escape cancels.
+ */
+function AutoLevel({
+  on,
+  onToggle,
+  target,
+  onTarget,
+  gain,
+}: {
+  on: boolean;
+  onToggle: (on: boolean) => void;
+  target: number;
+  onTarget: (db: number) => void;
+  gain: number;
+}) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState<string | number | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const v = parseGain(draft);
+    setDraft(null);
+    if (v !== null) onTarget(clampPeakTarget(v));
+  };
+  return (
+    <Stack gap="xs">
+      <Switch
+        size="md"
+        label={t("record.autoLevel")}
+        description={t("record.autoLevelHint")}
+        checked={on}
+        onChange={(e) => {
+          onToggle(e.currentTarget.checked);
+        }}
+        data-testid="take-auto-level"
+      />
+      {on && (
+        <Group gap="sm" wrap="nowrap" align="flex-end">
+          <NumberInput
+            w={130}
+            label={t("record.peakTarget")}
+            size="sm"
+            styles={{ input: { minHeight: 44 } }}
+            value={draft ?? target}
+            onChange={setDraft}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape") setDraft(null);
+            }}
+            min={PEAK_TARGET_MIN_DB}
+            max={PEAK_TARGET_MAX_DB}
+            step={0.5}
+            decimalScale={2}
+            allowDecimal
+            allowNegative
+            clampBehavior="none"
+            // The spin buttons would be far below 44 px (touch targets); arrow keys still step.
+            hideControls
+            inputMode="decimal"
+            suffix=" dBFS"
+            data-testid="take-peak-target"
+          />
+          <Text
+            size="sm"
+            pb={10}
+            className="tabular-nums"
+            data-testid="take-auto-gain"
+            data-gain={gain}
+          >
+            {t("record.autoLevelGain", { value: formatGain(gain, t) })}
+          </Text>
+        </Group>
+      )}
+    </Stack>
+  );
+}
+
+/**
  * The stop dialog (SPEC §9), also for recovered takes: where the take goes (a new track or a new
- * version on a song; a new song on the project page), its label and a nudge; Save queues the
- * upload, Discard (confirmed) deletes the take.
+ * version on a song; a new song on the project page), its label, a nudge and the auto level;
+ * Save queues the upload, Discard (confirmed) deletes the take.
  */
 export function TakeDialog({ meta }: { meta: TakeMeta }) {
   const { t, i18n } = useTranslation();
@@ -131,6 +223,15 @@ export function TakeDialog({ meta }: { meta: TakeMeta }) {
       list.map((tr) => tr.name),
     );
   const offset = takeOffsetSamples(meta, nudge);
+  const instance = useQuery({
+    queryKey: metaKey,
+    queryFn: ({ signal }) => api(getMeta, undefined, { signal }),
+    staleTime: 5 * 60_000,
+  });
+  const [autoOn, setAutoOn] = useState(true);
+  const [peakTarget, setPeakTarget] = useState<number | null>(null);
+  const target = peakTarget ?? instance.data?.recordingPeakTargetDb ?? DEFAULT_PEAK_TARGET_DB;
+  const autoGain = autoLevelDb(meta.peak, target);
   const pendingCount = useTakes((s) => s.review.length);
 
   const save = async () => {
@@ -139,6 +240,7 @@ export function TakeDialog({ meta }: { meta: TakeMeta }) {
       source: "recording" as const,
       offsetSamples: offset,
       ...(opts && { options: opts }),
+      ...(autoOn && autoGain !== null && { gainDb: autoGain }),
     };
     let target: UploadTarget;
     let shown: string;
@@ -168,7 +270,12 @@ export function TakeDialog({ meta }: { meta: TakeMeta }) {
     setBusy(true);
     setError(null);
     try {
-      await saveTake(meta, { target, label, title: shown, filename: fileNameFor(shown) });
+      await saveTake(meta, {
+        target,
+        label,
+        title: shown,
+        filename: fileNameFor(shown, meta.format),
+      });
     } catch {
       setError(t("record.errors.save"));
       setBusy(false);
@@ -290,6 +397,15 @@ export function TakeDialog({ meta }: { meta: TakeMeta }) {
             {t("record.nudgeHint")}
           </Text>
         </Stack>
+        {autoGain !== null && (
+          <AutoLevel
+            on={autoOn}
+            onToggle={setAutoOn}
+            target={target}
+            onTarget={setPeakTarget}
+            gain={autoGain}
+          />
+        )}
         {error && <Alert color="red">{error}</Alert>}
 
         {confirmDiscard ? (

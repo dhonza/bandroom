@@ -55,6 +55,8 @@ export interface RecordArmOptions {
   maxFrames: number;
   /** Chunk buffers in the pool (default 48, about 4 s of slack for the writer). */
   poolChunks?: number;
+  /** Input gain in dB (digital, before metering and writing; default 0). */
+  gainDb?: number;
 }
 
 /** What a take was (SPEC §9); the audio itself went to the take port. */

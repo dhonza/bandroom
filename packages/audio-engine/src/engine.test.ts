@@ -604,6 +604,9 @@ describe("Engine open end and recording (SPEC §9)", () => {
     expect(arm.maxFrames).toBe(48_000 * 60);
     expect(arm.buffers).toHaveLength(48);
     expect(arm.buffers[0]?.length).toBe(4096);
+    expect(arm.gainDb).toBe(0);
+    e.setRecordingGain(12);
+    expect(mixerSent().at(-1)).toEqual({ t: "recGain", db: 12 });
     const input: { peaks: [number, number]; recFrames: number }[] = [];
     e.on("input", (m) => input.push(m));
     report(0, [0.25, 1]);

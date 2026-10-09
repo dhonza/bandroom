@@ -1,8 +1,8 @@
-import { takeFileName, takeMetaName } from "./takeTypes";
+import { TAKE_EXTENSIONS, takeMetaName } from "./takeTypes";
 
 /**
- * Take files in the origin private file system (SPEC §9): `takes/<userId>/<takeId>.flac` and
- * its sidecar. The take writer worker writes them; the main thread reads a take for its upload
+ * Take files in the origin private file system (SPEC §9): `takes/<userId>/<takeId>.flac` (or
+ * `.wav` for a float take) and its sidecar. The take writer worker writes them; the main thread reads a take for its upload
  * and removes takes.
  */
 
@@ -36,22 +36,25 @@ export async function userTakeDir(
   }
 }
 
-/** The recorded FLAC file of a take, or null when it is gone. */
+/** The recorded audio file of a take (FLAC or float WAV), or null when it is gone. */
 export async function takeFile(userId: string, takeId: string): Promise<File | null> {
   const dir = await userTakeDir(userId, false);
   if (!dir) return null;
-  try {
-    return await (await dir.getFileHandle(takeFileName(takeId))).getFile();
-  } catch {
-    return null;
+  for (const ext of TAKE_EXTENSIONS) {
+    try {
+      return await (await dir.getFileHandle(`${takeId}.${ext}`)).getFile();
+    } catch {
+      // not this format
+    }
   }
+  return null;
 }
 
 /** Removes a take's file and sidecar. */
 export async function removeTakeFiles(userId: string, takeId: string): Promise<void> {
   const dir = await userTakeDir(userId, false);
   if (!dir) return;
-  for (const name of [takeFileName(takeId), takeMetaName(takeId)]) {
+  for (const name of [...TAKE_EXTENSIONS.map((e) => `${takeId}.${e}`), takeMetaName(takeId)]) {
     await dir.removeEntry(name).catch(() => undefined);
   }
 }

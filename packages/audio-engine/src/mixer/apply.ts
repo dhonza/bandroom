@@ -61,8 +61,11 @@ export function applyMixerCommand(core: MixerCore, cmd: MixerCommand): void {
       break;
     case "recArm":
       // The port is wired by the worklet itself.
-      core.armCapture(cmd.channels, cmd.maxFrames);
+      core.armCapture(cmd.channels, cmd.maxFrames, cmd.gainDb ?? 0);
       for (const b of cmd.buffers) core.addCaptureBuffer(b);
+      break;
+    case "recGain":
+      core.setCaptureGain(cmd.db);
       break;
     case "recStart":
       core.startCapture();

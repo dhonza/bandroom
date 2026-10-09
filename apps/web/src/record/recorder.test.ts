@@ -7,7 +7,8 @@ type Listener = (e: unknown) => void;
 const fake = vi.hoisted(() => {
   class FakeEngine {
     recordingState = "off";
-    armed: { channels: number; maxFrames: number }[] = [];
+    armed: { channels: number; maxFrames: number; gainDb?: number }[] = [];
+    gains: number[] = [];
     started: unknown[] = [];
     stops: string[] = [];
     disarms = 0;
@@ -25,7 +26,10 @@ const fake = vi.hoisted(() => {
     emit(event: string, payload: unknown) {
       for (const cb of this.listeners.get(event) ?? []) cb(payload);
     }
-    armRecording(o: { channels: number; maxFrames: number }) {
+    setRecordingGain(db: number) {
+      this.gains.push(db);
+    }
+    armRecording(o: { channels: number; maxFrames: number; gainDb?: number }) {
       this.armed.push(o);
       this.recordingState = "armed";
       return Promise.resolve();
@@ -84,11 +88,11 @@ vi.mock("@bandroom/audio-engine", async (importOriginal) => ({
 const rec = await import("./recorder");
 const { useTimelineUi } = await import("../markers/store");
 
-function stream(label = "MacBook Pro Microphone", channelCount = 2) {
+function stream(label = "MacBook Pro Microphone", channelCount = 2, deviceId = "mic1") {
   const stopped: string[] = [];
   const track = {
     label,
-    getSettings: () => ({ channelCount }),
+    getSettings: () => ({ channelCount, deviceId }),
     stop: () => stopped.push(label),
   };
   return {
@@ -107,6 +111,8 @@ beforeEach(() => {
   fake.engine.armed = [];
   fake.engine.stops = [];
   fake.engine.started = [];
+  fake.engine.gains = [];
+  localStorage.clear();
   fake.engine.latency = { outputSec: 0.02, inputSec: 0.005 };
   ctl.modes = [];
   ctl.holds = [];
@@ -222,5 +228,38 @@ describe("recorder (SPEC §9)", () => {
     // Hidden again: nothing to stop any more.
     document.dispatchEvent(new Event("visibilitychange"));
     expect(fake.engine.stops).toEqual([]);
+  });
+
+  it("sets the input gain while armed and remembers it per input device", async () => {
+    await rec.armRecorder({ stream: stream().stream, channels: 1, port });
+    expect(fake.engine.armed[0]?.gainDb).toBe(0);
+    rec.setInputGain(12.5);
+    rec.setInputGain(99);
+    expect(fake.engine.gains).toEqual([12.5, 40]);
+    expect(rec.useRecorder.getState().inputGainDb).toBe(40);
+    rec.setInputGain(18);
+    // Another device starts at 0 dB and keeps its own gain.
+    await rec.armRecorder({ stream: stream("USB", 2, "usb").stream, channels: 1, port });
+    expect(fake.engine.armed[1]?.gainDb).toBe(0);
+    rec.setInputGain(6);
+    // Back on the first device: its gain is armed with.
+    await rec.armRecorder({ stream: stream().stream, channels: 1, port });
+    expect(fake.engine.armed[2]?.gainDb).toBe(18);
+    expect(rec.useRecorder.getState().inputGainDb).toBe(18);
+    await rec.armRecorder({ stream: stream("USB", 2, "usb").stream, channels: 1, port });
+    expect(fake.engine.armed[3]?.gainDb).toBe(6);
+  });
+
+  it("keeps the input gain when storage fails", async () => {
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
+    try {
+      await rec.armRecorder({ stream: stream().stream, channels: 1, port });
+      rec.setInputGain(10);
+      expect(fake.engine.gains).toEqual([10]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

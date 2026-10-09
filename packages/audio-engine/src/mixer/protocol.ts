@@ -49,7 +49,11 @@ export type MixerCommand =
       channels: number;
       maxFrames: number;
       buffers: Float32Array[];
+      /** Input gain in dB (digital, before metering and writing). */
+      gainDb?: number;
     }
+  /** The input gain in dB while armed or recording (ramped across one block). */
+  | { t: "recGain"; db: number }
   | { t: "recStart" }
   | { t: "recStop"; reason: TakeEndReason }
   | { t: "recDisarm" };
