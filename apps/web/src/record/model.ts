@@ -38,6 +38,29 @@ export function clampInputGain(db: number): number {
   return Math.round(v * 100) / 100;
 }
 
+/** The target peak's range in dBFS (the stop dialog; the admin default is −6). */
+export const PEAK_TARGET_MIN_DB = -24;
+export const PEAK_TARGET_MAX_DB = 0;
+/** The auto level's range in dB. */
+export const AUTO_LEVEL_MAX_DB = 40;
+
+export function clampPeakTarget(db: number): number {
+  if (!Number.isFinite(db)) return PEAK_TARGET_MAX_DB;
+  return Math.max(PEAK_TARGET_MIN_DB, Math.min(PEAK_TARGET_MAX_DB, Math.round(db * 100) / 100));
+}
+
+/**
+ * The version gain that puts the take's loudest sample (`peak`, linear) at `targetDb` dBFS
+ * (SPEC §9): up for a quiet take, down for one with overs (float). Rounded to 0.5 dB, within
+ * ±40 dB; null without a peak (silence, or a take recovered after a crash).
+ */
+export function autoLevelDb(peak: number | undefined, targetDb: number): number | null {
+  if (peak === undefined || !Number.isFinite(peak) || peak <= 0) return null;
+  const db = Math.round((targetDb - 20 * Math.log10(peak)) * 2) / 2;
+  const v = Math.max(-AUTO_LEVEL_MAX_DB, Math.min(AUTO_LEVEL_MAX_DB, db));
+  return v === 0 ? 0 : v; // no −0
+}
+
 /** "Recording N" with the next free N among the track names (base = the localized word). */
 export function nextRecordingName(base: string, names: readonly string[]): string {
   const re = new RegExp(`^${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} (\\d+)$`, "i");
