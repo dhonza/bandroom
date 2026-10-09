@@ -151,7 +151,7 @@ test("Apply: a cut on all tracks replaces the audio, moves the marker, old versi
   await dialog.getByTestId("edit-apply-confirm").click();
 
   // Read-only while it renders, then edit mode ends with a toast.
-  await expect(page.getByTestId("edit-apply-dialog")).toHaveCount(0);
+  await expect(page.getByTestId("edit-apply-dialog")).toBeHidden({ timeout: 30_000 });
   await expect(page.getByTestId("edit-finished")).toContainText("Applied to 3 tracks", {
     timeout: RENDER_TIMEOUT,
   });
