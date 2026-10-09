@@ -32,5 +32,8 @@ export function trackPermissions(song: Song, track: Track, userId: string) {
     canEditTrack: canActOn(role, "edit", track.createdBy === userId),
     canRetry: v !== null && canActOn(role, "edit", v.uploadedBy === userId),
     canUpload: song.access.capabilities.includes("upload"),
+    // Adjust position (SPEC §9): the version's uploader, the track's creator or an editor.
+    canAdjust:
+      v !== null && canActOn(role, "edit", v.uploadedBy === userId || track.createdBy === userId),
   };
 }

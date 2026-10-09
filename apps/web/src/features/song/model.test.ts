@@ -33,13 +33,23 @@ describe("trackPermissions", () => {
       canEditTrack: true,
       canRetry: true,
       canUpload: true,
+      canAdjust: true,
     });
     expect(trackPermissions(song("contributor"), track("other", "other"), "me")).toEqual({
       canDelete: false,
       canEditTrack: false,
       canRetry: false,
       canUpload: false,
+      canAdjust: false,
     });
+  });
+
+  it("lets the uploader, the track's creator or an editor adjust the position", () => {
+    const c = song("contributor");
+    expect(trackPermissions(c, track("other", "me"), "me").canAdjust).toBe(true);
+    expect(trackPermissions(c, track("me", "other"), "me").canAdjust).toBe(true);
+    expect(trackPermissions(song("editor"), track("other", "other"), "me").canAdjust).toBe(true);
+    expect(trackPermissions(song("editor"), track("other", null), "me").canAdjust).toBe(false);
   });
 
   it("lets editors act on everyone's tracks; no version means no retry", () => {

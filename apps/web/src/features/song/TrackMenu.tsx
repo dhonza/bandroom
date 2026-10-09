@@ -2,6 +2,7 @@ import type { TrackVersion } from "@bandroom/shared";
 import { ActionIcon, Button, FileButton, Group, Menu, Tooltip } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import {
+  IconArrowsHorizontal,
   IconDots,
   IconDownload,
   IconPencil,
@@ -24,9 +25,12 @@ export function TrackMenu({
   onUpload,
   canEditTrack,
   onEditTrack,
+  onAdjust,
 }: {
   canEditTrack: boolean;
   onEditTrack: () => void;
+  /** Opens "Adjust position" of the current version (SPEC §9); absent when not allowed. */
+  onAdjust?: (() => void) | undefined;
   version: TrackVersion | null;
   canDelete: boolean;
   canRetry: boolean;
@@ -39,7 +43,8 @@ export function TrackMenu({
   // Phones: "New version" is an icon, so the track name keeps its room (360 px).
   const phone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   const downloads = version?.downloads ?? [];
-  if (!canDelete && !canRetry && !canUpload && !canEditTrack && downloads.length === 0) return null;
+  if (!canDelete && !canRetry && !canUpload && !canEditTrack && !onAdjust && downloads.length === 0)
+    return null;
   return (
     <Group gap={0} wrap="nowrap">
       {canUpload && (
@@ -95,6 +100,15 @@ export function TrackMenu({
               data-testid="edit-track"
             >
               {t("tracks.edit")}
+            </Menu.Item>
+          )}
+          {onAdjust && (
+            <Menu.Item
+              leftSection={<IconArrowsHorizontal size={16} />}
+              onClick={onAdjust}
+              data-testid="adjust-position-open"
+            >
+              {t("record.adjust.action")}
             </Menu.Item>
           )}
           {version &&

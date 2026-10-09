@@ -28,6 +28,8 @@ import { trackPermissions, uploadTargetFor } from "./model";
 import { TrackEditModal } from "./TrackEditModal";
 import { isSongLocked } from "./songLock";
 import { TrackMenu } from "./TrackMenu";
+import { AdjustPositionModal } from "./AdjustPositionModal";
+import { useOnline } from "../../offline/online";
 import { VersionStackModal } from "./VersionStackModal";
 import { VersionStatus } from "./VersionStatus";
 import { useLongPress } from "../../selection/useLongPress";
@@ -77,7 +79,13 @@ export function TrackRow({
     onSuccess: refresh,
     onError,
   });
-  const { canDelete, canEditTrack, canRetry, canUpload } = trackPermissions(song, track, user.id);
+  const { canDelete, canEditTrack, canRetry, canUpload, canAdjust } = trackPermissions(
+    song,
+    track,
+    user.id,
+  );
+  const online = useOnline();
+  const [adjustOpen, setAdjustOpen] = useState(false);
   const [stackOpen, setStackOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -231,6 +239,13 @@ export function TrackRow({
                 onEditTrack={() => {
                   setEditOpen(true);
                 }}
+                onAdjust={
+                  canAdjust && online && v?.status === "ready"
+                    ? () => {
+                        setAdjustOpen(true);
+                      }
+                    : undefined
+                }
               />
             )}
           </Group>
@@ -251,6 +266,16 @@ export function TrackRow({
           opened
           onClose={() => {
             setStackOpen(false);
+          }}
+        />
+      )}
+      {adjustOpen && v && (
+        <AdjustPositionModal
+          song={song}
+          track={track}
+          version={v}
+          onClose={() => {
+            setAdjustOpen(false);
           }}
         />
       )}
