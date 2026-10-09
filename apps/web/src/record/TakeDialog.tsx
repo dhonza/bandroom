@@ -29,12 +29,12 @@ import {
   takeOffsetSamples,
 } from "./model";
 import { discardTake, saveTake, useTakes } from "./takes";
-import type { TakeMeta } from "./takeTypes";
+import { takeExtension, type TakeFormat, type TakeMeta } from "./takeTypes";
 
-/** File names keep letters, digits and a few separators. */
-function fileNameFor(name: string): string {
+/** File names keep letters, digits and a few separators; the extension follows the format. */
+function fileNameFor(name: string, format: TakeFormat): string {
   const base = name.replace(/[\\/:*?"<>|]+/g, " ").trim() || "Recording";
-  return `${base.slice(0, 100)}.flac`;
+  return `${base.slice(0, 100)}.${takeExtension(format)}`;
 }
 
 /** "Recording 2026-10-09 19:30", localized. */
@@ -168,7 +168,12 @@ export function TakeDialog({ meta }: { meta: TakeMeta }) {
     setBusy(true);
     setError(null);
     try {
-      await saveTake(meta, { target, label, title: shown, filename: fileNameFor(shown) });
+      await saveTake(meta, {
+        target,
+        label,
+        title: shown,
+        filename: fileNameFor(shown, meta.format),
+      });
     } catch {
       setError(t("record.errors.save"));
       setBusy(false);

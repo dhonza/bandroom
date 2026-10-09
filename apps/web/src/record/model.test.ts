@@ -5,6 +5,7 @@ import {
   estimateTakeBytes,
   formatOffset,
   formatTakeTime,
+  maxTakeMinutesFor,
   meterPercent,
   minutesThatFit,
   nextRecordingName,
@@ -47,6 +48,17 @@ describe("helpers", () => {
     expect(estimateTakeBytes(1, 2)).toBe(Math.ceil(60 * 48_000 * 2 * 3 * 0.66));
     expect(minutesThatFit(estimateTakeBytes(10, 1) + 5, 1)).toBe(10);
     expect(minutesThatFit(-5, 1)).toBe(0);
+    // Float: 4 bytes per sample, no compression.
+    expect(estimateTakeBytes(1, 2, "wav32f")).toBe(60 * 48_000 * 2 * 4);
+    expect(minutesThatFit(estimateTakeBytes(10, 2, "wav32f") + 5, 2, "wav32f")).toBe(10);
+    expect(minutesThatFit(estimateTakeBytes(10, 2, "wav32f"), 2)).toBeGreaterThan(10);
+  });
+
+  it("caps float takes at what fits in a WAV file", () => {
+    expect(maxTakeMinutesFor(240, 2, "flac")).toBe(240);
+    expect(maxTakeMinutesFor(240, 2, "wav32f")).toBe(186);
+    expect(maxTakeMinutesFor(240, 1, "wav32f")).toBe(240);
+    expect(maxTakeMinutesFor(600, 1, "wav32f")).toBe(372);
   });
 
   it("formats times and levels", () => {

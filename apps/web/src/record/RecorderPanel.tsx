@@ -43,10 +43,12 @@ import {
   INPUT_GAIN_MAX_DB,
   INPUT_GAIN_MIN_DB,
   INPUT_GAIN_STEP_DB,
+  maxTakeMinutesFor,
   meterPercent,
   minutesThatFit,
 } from "./model";
 import { recordingSupported } from "./opfs";
+import { loadFloatTakes, saveFloatTakes } from "./prefs";
 import {
   armRecorder,
   clearTake,
@@ -227,6 +229,7 @@ export function RecorderPanel({
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [stereo, setStereo] = useState(true);
+  const [float, setFloat] = useState(loadFloatTakes);
   const arming = useRef(0);
   /** Takes count only once this panel armed (not one left from before). */
   const armedOnce = useRef(false);
@@ -243,7 +246,7 @@ export function RecorderPanel({
   const space = useTakeSpace(online);
 
   const supported = recordingSupported();
-  const arm = async (device: string | null, wantStereo: boolean) => {
+  const arm = async (device: string | null, wantStereo: boolean, wantFloat: boolean) => {
     const run = ++arming.current;
     if (!supported) return;
     disarmRecorder();
@@ -264,7 +267,7 @@ export function RecorderPanel({
     }
     try {
       const ch = inputChannelsOf(stream) === 2 && wantStereo ? 2 : 1;
-      await armRecorder({ stream, channels: ch, port: newTakePort() });
+      await armRecorder({ stream, channels: ch, port: newTakePort(), float: wantFloat });
       armedOnce.current = true;
     } catch (err) {
       closeInput(stream);
@@ -278,7 +281,7 @@ export function RecorderPanel({
 
   useEffect(() => {
     const runs = arming;
-    void arm(null, true);
+    void arm(null, true, loadFloatTakes());
     return () => {
       runs.current++;
       // Closed while recording: the take ends as with Stop (kept; its dialog follows).
@@ -315,12 +318,14 @@ export function RecorderPanel({
     if (writerError && phase === "recording") void stopRecorder().catch(() => undefined);
   }, [writerError, phase]);
 
-  const need = estimateTakeBytes(maxMinutes, channels);
+  const format = float ? "wav32f" : "flac";
+  const takeMinutes = maxTakeMinutesFor(maxMinutes, channels, format);
+  const need = estimateTakeBytes(takeMinutes, channels, format);
   const free = Math.min(
     space.server ?? Number.POSITIVE_INFINITY,
     space.local ?? Number.POSITIVE_INFINITY,
   );
-  const fits = Number.isFinite(free) ? minutesThatFit(free, channels) : null;
+  const fits = Number.isFinite(free) ? minutesThatFit(free, channels, format) : null;
   const noSpace = fits !== null && fits < 1;
   const lowSpace = fits !== null && !noSpace && free < need;
   const locale = i18n.resolvedLanguage ?? "en";
@@ -336,6 +341,7 @@ export function RecorderPanel({
       songId: scope.songId,
       projectId: scope.projectId,
       latencyFrames: latencyFrames(latency),
+      format,
     });
   };
 
@@ -390,7 +396,7 @@ export function RecorderPanel({
             h={44}
             onClick={() => {
               setError(null);
-              void arm(deviceId, stereo);
+              void arm(deviceId, stereo, float);
             }}
           >
             {t("common.retry")}
@@ -429,7 +435,7 @@ export function RecorderPanel({
               allowDeselect={false}
               onChange={(v) => {
                 setDeviceId(v);
-                void arm(v, stereo);
+                void arm(v, stereo, float);
               }}
               comboboxProps={{ withinPortal: true }}
               data-testid="record-device"
@@ -444,11 +450,25 @@ export function RecorderPanel({
               ]}
               onChange={(v) => {
                 setStereo(v === "stereo");
-                void arm(deviceId, v === "stereo");
+                void arm(deviceId, v === "stereo", float);
               }}
               data-testid="record-channels"
             />
           )}
+          <Switch
+            size="md"
+            label={t("record.float")}
+            description={t("record.floatHint")}
+            checked={float}
+            onChange={(e) => {
+              const on = e.currentTarget.checked;
+              setFloat(on);
+              saveFloatTakes(on);
+              // The longest take depends on the format (a WAV file holds up to 4 GiB).
+              void arm(deviceId, stereo, on);
+            }}
+            data-testid="record-float"
+          />
           {scope.mode === "song" && hasTempo && (
             <Switch
               size="md"
@@ -500,7 +520,7 @@ export function RecorderPanel({
               {t("record.lowSpace", {
                 minutes: fits,
                 free: formatBytes(free, locale),
-                max: maxMinutes,
+                max: takeMinutes,
               })}
             </Alert>
           )}

@@ -2109,6 +2109,8 @@
     "deviceN": "Vstup {{n}}",
     "stereo": "Stereo",
     "mono": "Mono",
+    "float": "32bitový float (větší soubory)",
+    "floatHint": "Zachová i špičky nad plnou úrovní. Soubory jsou zhruba dvakrát větší než výchozí 24bitový FLAC.",
     "plays": "Hraje: klik a neztlumené stopy.",
     "headphones": "Použijte drátová sluchátka, aby mikrofon nesnímal přehrávání.",
     "practiceReset": "Rychlost a ladění pro cvičení se kvůli nahrávání vrátily na normál.",

@@ -1,7 +1,7 @@
 import type { UploadResult, UploadTarget } from "@bandroom/shared";
 import { create } from "zustand";
 import { memoryOfflineDb, type OfflineDb, type PendingTake } from "../offline/db";
-import type { TakeMeta, WriterEvent } from "./takeTypes";
+import { takeMimeType, type TakeMeta, type WriterEvent } from "./takeTypes";
 
 /**
  * The user's recorded takes on this device (SPEC §9): takes waiting for the stop dialog (just
@@ -224,7 +224,7 @@ export async function uploadTake(takeId: string): Promise<void> {
       return;
     }
     setPending(takeId, { status: "uploading", errorCode: null });
-    const upload = new File([file], p.filename, { type: "audio/flac" });
+    const upload = new File([file], p.filename, { type: takeMimeType(file.name) });
     let result: UploadResult;
     try {
       result = await d.upload(upload, p.target, { songId: p.songId, projectId: p.projectId });

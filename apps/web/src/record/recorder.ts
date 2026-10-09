@@ -1,5 +1,6 @@
 import {
   CLIP_LEVEL,
+  floatWavMaxFrames,
   latencyFrames,
   looksLikeBluetooth,
   msToFrames,
@@ -159,12 +160,14 @@ async function outputLabels(): Promise<string[]> {
  * Arms recording on the engine song (the song page's, not a preview): the input is metered and
  * a take can start. Practice goes neutral (notice), the loop goes off, the audio session records
  * and the screen stays on. Takes ownership of `stream` (stopped on disarm). `port` is the take
- * port (transferred to the worklet; see `TakeMessage`).
+ * port (transferred to the worklet; see `TakeMessage`). A float take (`float`) is also capped at
+ * what fits in a WAV file (4 GiB).
  */
 export async function armRecorder(opts: {
   stream: MediaStream;
   channels: 1 | 2;
   port: MessagePort;
+  float?: boolean;
 }): Promise<void> {
   const engine = recordingEngine();
   if (!engine) throw new Error("The song is not loaded in the player");
@@ -192,7 +195,9 @@ export async function armRecorder(opts: {
       stream: opts.stream,
       channels: opts.channels,
       port: opts.port,
-      maxFrames: maxTakeFrames(),
+      maxFrames: opts.float
+        ? Math.min(maxTakeFrames(), floatWavMaxFrames(opts.channels))
+        : maxTakeFrames(),
       gainDb,
     });
   } catch (err) {

@@ -1,6 +1,6 @@
-import { msToFrames, SAMPLE_RATE } from "@bandroom/audio-engine";
+import { floatWavMaxFrames, msToFrames, SAMPLE_RATE } from "@bandroom/audio-engine";
 import { MAX_OFFSET_SAMPLES } from "@bandroom/shared";
-import type { TakeMeta } from "./takeTypes";
+import type { TakeFormat, TakeMeta } from "./takeTypes";
 
 /**
  * Where a take goes on the timeline with the user's nudge (SPEC §9): the start minus the latency,
@@ -51,16 +51,32 @@ export function nextRecordingName(base: string, names: readonly string[]): strin
 
 /**
  * Bytes of a take: 24-bit FLAC is about 0.6 × the raw size on music (SPEC §9 estimate), plus 10 %
- * headroom. Used for the quota and local storage checks before arming.
+ * headroom; a 32-bit float WAV is exactly 4 bytes per sample. Used for the quota and local
+ * storage checks before arming.
  */
-export function estimateTakeBytes(minutes: number, channels: number): number {
-  return Math.ceil(minutes * 60 * SAMPLE_RATE * channels * 3 * 0.6 * 1.1);
+export function estimateTakeBytes(
+  minutes: number,
+  channels: number,
+  format: TakeFormat = "flac",
+): number {
+  const samples = minutes * 60 * SAMPLE_RATE * channels;
+  return Math.ceil(format === "wav32f" ? samples * 4 : samples * 3 * 0.6 * 1.1);
 }
 
 /** Whole minutes of recording that fit in `bytes`. */
-export function minutesThatFit(bytes: number, channels: number): number {
-  const perMinute = estimateTakeBytes(1, channels);
+export function minutesThatFit(
+  bytes: number,
+  channels: number,
+  format: TakeFormat = "flac",
+): number {
+  const perMinute = estimateTakeBytes(1, channels, format);
   return Math.max(0, Math.floor(bytes / perMinute));
+}
+
+/** The longest take in minutes: the admin's limit, for float also what fits in a WAV (4 GiB). */
+export function maxTakeMinutesFor(adminMax: number, channels: number, format: TakeFormat): number {
+  if (format !== "wav32f") return adminMax;
+  return Math.min(adminMax, Math.floor(floatWavMaxFrames(channels) / SAMPLE_RATE / 60));
 }
 
 /** m:ss (or h:mm:ss) of a frame count, for the timer and take lists. */

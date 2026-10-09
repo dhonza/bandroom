@@ -1,9 +1,13 @@
 import type { TakeEndReason } from "@bandroom/audio-engine";
 
+/** A take's file format: 24-bit FLAC (default) or 32-bit float WAV (SPEC §9). */
+export type TakeFormat = "flac" | "wav32f";
+
 /**
- * A recorded take on this device (SPEC §9): the FLAC file `takes/<userId>/<takeId>.flac` in OPFS
- * and this JSON sidecar next to it (`<takeId>.json`), which the take writer rewrites every few
- * seconds while recording, so a crash or reload keeps the take and its placement.
+ * A recorded take on this device (SPEC §9): the audio file `takes/<userId>/<takeId>.flac` (or
+ * `.wav` for a float take) in OPFS and this JSON sidecar next to it (`<takeId>.json`), which the
+ * take writer rewrites every few seconds while recording, so a crash or reload keeps the take
+ * and its placement.
  */
 export interface TakeMeta {
   v: 1;
@@ -23,8 +27,15 @@ export interface TakeMeta {
    */
   trimmedFrames: number;
   channels: number;
+  /** The file format (sidecars from before v0.7.2 have none: FLAC). */
+  format: TakeFormat;
   /** Frames in the file. */
   frames: number;
+  /**
+   * Loudest sample (linear, as stored: clipped to 1 in FLAC, overs kept in float) for the auto
+   * level. Missing for takes recovered after a crash.
+   */
+  peak?: number;
   status: "recording" | "finished";
   endedBy: TakeEndReason | null;
   gapFrames: number;
@@ -41,6 +52,7 @@ export interface TakeContext {
   songId: string | null;
   projectId: string;
   latencyFrames: number;
+  format: TakeFormat;
 }
 
 /** Main thread → take writer worker. */
@@ -64,7 +76,14 @@ export type WriterEvent =
   | { type: "failed"; error: string; meta: TakeMeta | null }
   | { type: "recovered"; requestId: number; takes: TakeMeta[] };
 
-export const takeFileName = (takeId: string) => `${takeId}.flac`;
+/** The file extension of a take format. */
+export const takeExtension = (format: TakeFormat) => (format === "wav32f" ? "wav" : "flac");
+/** Every audio file extension a take can have. */
+export const TAKE_EXTENSIONS = ["flac", "wav"] as const;
+export const takeFileName = (takeId: string, format: TakeFormat) =>
+  `${takeId}.${takeExtension(format)}`;
+/** The upload MIME type of a take file name. */
+export const takeMimeType = (name: string) => (name.endsWith(".wav") ? "audio/wav" : "audio/flac");
 export const takeMetaName = (takeId: string) => `${takeId}.json`;
 
 /** Parses a sidecar; null when it is not one of ours. */
@@ -82,7 +101,9 @@ export function parseTakeMeta(text: string): TakeMeta | null {
       typeof m.channels !== "number"
     )
       return null;
-    return m as TakeMeta;
+    const out = { ...m, format: m.format === "wav32f" ? "wav32f" : "flac" } as TakeMeta;
+    if (typeof out.peak !== "number" || !Number.isFinite(out.peak)) delete out.peak;
+    return out;
   } catch {
     return null;
   }
