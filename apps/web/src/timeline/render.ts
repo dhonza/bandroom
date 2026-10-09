@@ -25,6 +25,38 @@ export interface Lane {
   tint?: boolean;
   /** The click lane (SPEC §11.3): ticks from the tempo map instead of a waveform. */
   click?: ClickLane;
+  /**
+   * Edit mode (SPEC §24.6): pieces of source versions instead of one waveform at
+   * `offsetSamples`; `peaks` and `scale` of the lane are then unused.
+   */
+  clips?: readonly LaneClip[];
+}
+
+/** One clip of an edit-mode lane: where it plays, which part of its source, gain and fades. */
+export interface LaneClip {
+  startSec: number;
+  endSec: number;
+  /** Where in the source the clip starts. */
+  sourceStartSec: number;
+  peaks: Pyramid | null;
+  /** The clip gain as an amplitude factor. */
+  scale: number;
+  fadeInSec: number;
+  fadeOutSec: number;
+  fadeInShape: "linear" | "equalPower";
+  fadeOutShape: "linear" | "equalPower";
+}
+
+/** A clip's gain envelope at `t` seconds (its fades; frame-centre details do not matter here). */
+export function clipEnvelopeAt(c: LaneClip, t: number): number {
+  const shape = (k: number, s: LaneClip["fadeInShape"]) =>
+    s === "linear" ? k : Math.sin((k * Math.PI) / 2);
+  let g = 1;
+  if (c.fadeInSec > 0 && t < c.startSec + c.fadeInSec)
+    g *= shape(Math.max(0, (t - c.startSec) / c.fadeInSec), c.fadeInShape);
+  if (c.fadeOutSec > 0 && t > c.endSec - c.fadeOutSec)
+    g *= shape(Math.max(0, (c.endSec - t) / c.fadeOutSec), c.fadeOutShape);
+  return g;
 }
 
 const colorCache = new Map<string, string>();
@@ -96,22 +128,52 @@ export function drawWaveform(
   h: number,
   color: string,
 ): void {
+  if (lane.clips) {
+    for (const c of lane.clips) {
+      if (!c.peaks) continue;
+      drawPeaks(ctx, view, c.peaks, c.startSec - c.sourceStartSec, c.scale, y, h, color, {
+        from: Math.max(0, Math.floor(secToX(view, c.startSec))),
+        to: Math.min(view.widthPx, Math.ceil(secToX(view, c.endSec))),
+        envelope: (t) => clipEnvelopeAt(c, t),
+      });
+    }
+    return;
+  }
   const p = lane.peaks;
   if (!p) return;
-  const offsetSec = lane.offsetSamples / 48_000;
+  drawPeaks(ctx, view, p, lane.offsetSamples / 48_000, lane.scale ?? 1, y, h, color);
+}
+
+function drawPeaks(
+  ctx: CanvasRenderingContext2D,
+  view: View,
+  p: Pyramid,
+  offsetSec: number,
+  amp: number,
+  y: number,
+  h: number,
+  color: string,
+  part?: { from: number; to: number; envelope: (sec: number) => number },
+): void {
   const samplesPerPx = p.sampleRate / view.pxPerSec;
   const level = pickLevel(p, samplesPerPx);
   const mid = y + h / 2;
-  const scale = ((h / 2 - 1) / 128) * (lane.scale ?? 1);
+  const scale = ((h / 2 - 1) / 128) * amp;
   ctx.fillStyle = color;
   ctx.globalAlpha = 0.75; // SPEC §11.5: ~70 % opacity
-  for (let x = 0; x < view.widthPx; x++) {
+  for (let x = part?.from ?? 0; x < (part?.to ?? view.widthPx); x++) {
     const t0 = xToSec(view, x) - offsetSec;
     const t1 = xToSec(view, x + 1) - offsetSec;
     if (t1 <= 0) continue;
     const pk = rangePeak(level, t0 * p.sampleRate, t1 * p.sampleRate);
     if (!pk) continue;
-    const [top, bottom, clipped] = clipColumn(mid - pk[1] * scale, mid - pk[0] * scale, y, y + h);
+    const k = part ? part.envelope(xToSec(view, x + 0.5)) : 1;
+    const [top, bottom, clipped] = clipColumn(
+      mid - pk[1] * scale * k,
+      mid - pk[0] * scale * k,
+      y,
+      y + h,
+    );
     ctx.fillRect(x, top, 1, Math.max(1, bottom - top));
     if (clipped) {
       // Louder than the lane: solid caps at the edges show where it clips.

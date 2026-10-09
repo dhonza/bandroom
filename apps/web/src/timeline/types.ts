@@ -77,8 +77,8 @@ export interface TimelineProps {
    * with the overlay item under the pointer (`data-timeline-item`), if any (SPEC §25.7).
    */
   onLongPress?: (sec: number, clientX: number, clientY: number, item: string | null) => void;
-  /** Tap on an overlay item (`data-timeline-item="<id>"`) instead of a seek. */
-  onItemTap?: (id: string) => void;
+  /** Tap on an overlay item (`data-timeline-item="<id>"`) instead of a seek; `sec`: where. */
+  onItemTap?: (id: string, sec: number) => void;
   /** Tempo grid: bar/beat lines and a bars.beats ruler instead of m:ss (SPEC §11.3, §11.6). */
   grid?: TempoGrid | null;
 }

@@ -426,7 +426,7 @@ export function Timeline({
       );
     } else if (action === "tap") {
       const item = anchor.current.item;
-      if (item && onItemTap) onItemTap(item);
+      if (item && onItemTap) onItemTap(item, secAt(v, localX(e)));
       else {
         onSeek(secAt(v, localX(e)));
         drawPlayhead.current?.();
