@@ -50,6 +50,7 @@ import {
   IconDots,
   IconGripVertical,
   IconListCheck,
+  IconMicrophone,
   IconMusic,
   IconPlus,
   IconTrash,
@@ -63,7 +64,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormatters } from "../../i18n/format";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
+import { recordingSupported } from "../../record/opfs";
+import { prepareEngine } from "../../rehearse/controller";
 import { api } from "../../api/client";
 import { useApiError } from "../../api/useApiError";
 import { projectKeys, queueKey, useProjectSongs } from "../library/queries";
@@ -119,6 +122,9 @@ export function SongsList({ project }: { project: Project }) {
   const [createOpen, create] = useDisclosure(false);
   const caps = new Set(project.access.capabilities);
   const canReorder = caps.has("edit.any");
+  // Record a new song (SPEC §9): contributors too.
+  const canRecord = caps.has("record") && recordingSupported();
+  const navigate = useNavigate();
   const finePointer = useMediaQuery(FINE_POINTER_QUERY, false);
   const wide = useMediaQuery(WIDE_ROW_QUERY, false);
   const list0 = songs.data?.songs ?? [];
@@ -200,7 +206,7 @@ export function SongsList({ project }: { project: Project }) {
 
   return (
     <Stack gap="sm">
-      {(caps.has("song.create") || (selectable && !selection.active)) && (
+      {(caps.has("song.create") || canRecord || (selectable && !selection.active)) && (
         <Group justify="flex-end" gap="xs">
           {selectable && !selection.active && (
             <Button
@@ -212,6 +218,21 @@ export function SongsList({ project }: { project: Project }) {
               data-testid="songs-select"
             >
               {t("selection.select")}
+            </Button>
+          )}
+          {canRecord && (
+            <Button
+              variant="default"
+              color="red"
+              leftSection={<IconMicrophone size={18} color="var(--mantine-color-red-filled)" />}
+              onClick={() => {
+                // Inside the tap: the audio unlocks (iOS) for the recorder page.
+                prepareEngine();
+                void navigate(`/projects/${project.id}/record`);
+              }}
+              data-testid="project-record"
+            >
+              {t("record.record")}
             </Button>
           )}
           {caps.has("song.create") && (

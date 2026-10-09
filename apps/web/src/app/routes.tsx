@@ -8,6 +8,7 @@ import { ResetPasswordPage } from "../features/auth/ResetPasswordPage";
 import { LibraryPage } from "../features/library/LibraryPage";
 import { OfflinePage } from "../features/offline/OfflinePage";
 import { ProjectPage } from "../features/project/ProjectPage";
+import { ProjectRecordPage } from "../record/ProjectRecordPage";
 import { SongPage } from "../features/song/SongPage";
 import { DocumentPage } from "../documents/DocumentPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
@@ -40,6 +41,7 @@ export const routes: RouteObject[] = [
           { index: true, element: <Navigate to="/library" replace /> },
           { path: "library", element: <LibraryPage /> },
           { path: "projects/:projectId", element: <ProjectPage /> },
+          { path: "projects/:projectId/record", element: <ProjectRecordPage /> },
           { path: "songs/:songId", element: <SongPage /> },
           { path: "documents/:documentId", element: <DocumentPage /> },
           { path: "recent", element: <PlaceholderPage pageKey="recent" icon={IconClockHour4} /> },

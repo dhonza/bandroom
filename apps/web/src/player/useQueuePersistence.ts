@@ -1,6 +1,11 @@
 import { useEffect } from "react";
 import { isLinkMode } from "../links/linkMode";
-import { restoreQueue, useRehearse, type RehearseState } from "../rehearse/controller";
+import {
+  isRecordingSongId,
+  restoreQueue,
+  useRehearse,
+  type RehearseState,
+} from "../rehearse/controller";
 import { loadSavedQueue, saveQueue, setQueueStorageUser } from "./queueStorage";
 import { useQueueLoader } from "./useProjectQueue";
 
@@ -10,6 +15,8 @@ import { useQueueLoader } from "./useProjectQueue";
  */
 function worthSaving(s: RehearseState): boolean {
   if (!s.queue) return false;
+  // The empty song of a project-page recording is not a song to come back to.
+  if (isRecordingSongId(s.songId)) return false;
   return s.queue.source.kind !== "song" || s.dormant || s.status === "playing";
 }
 

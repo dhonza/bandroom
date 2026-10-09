@@ -30,6 +30,7 @@ import {
   closeSong,
   cycleRepeat,
   hasNextSong,
+  isRecordingSongId,
   nextSong,
   previousSong,
   togglePlay,
@@ -56,7 +57,9 @@ const MEDIA = { getInitialValueInEffect: false } as const;
 export function useMiniPlayerVisible(): boolean {
   const location = useLocation();
   const songId = useRehearse((s) => (s.open ? s.songId : null));
-  return songId !== null && !location.pathname.endsWith(`/songs/${songId}`);
+  return (
+    songId !== null && !isRecordingSongId(songId) && !location.pathname.endsWith(`/songs/${songId}`)
+  );
 }
 
 /** Play/pause state of the bar: a dormant queue (restored, added) shows Play, not loading. */
