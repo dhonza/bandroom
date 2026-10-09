@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Engine, type EngineState } from "./engine";
+import type { RecordedTake } from "./engineTypes";
 import type { MixerCommand } from "./mixer/protocol";
 import type { SongTimeline, WorkerCommand } from "./types";
 
@@ -27,6 +28,9 @@ class FakeContext {
   state: string = "suspended";
   destination = {};
   onstatechange: (() => void) | null = null;
+  outputLatency = 0;
+  baseLatency = 0;
+  sources: FakeSource[] = [];
   resumes = 0;
   suspends = 0;
   audioWorklet = {
@@ -56,6 +60,25 @@ class FakeContext {
   close() {
     this.set("closed");
     return Promise.resolve();
+  }
+  /** The OS took the audio (phone call). */
+  interrupt() {
+    this.set("interrupted");
+  }
+  createMediaStreamSource() {
+    const s = new FakeSource();
+    this.sources.push(s);
+    return s;
+  }
+}
+
+class FakeSource {
+  connected = false;
+  connect() {
+    this.connected = true;
+  }
+  disconnect() {
+    this.connected = false;
   }
 }
 
@@ -490,5 +513,192 @@ describe("Engine practice speed and pitch (SPEC §30.5)", () => {
     e.setTrackState("dr", { mute: false });
     const drum = FakeWorker.commands.flatMap((c) => (c.t === "source" && c.index === 1 ? [c] : []));
     expect(drum.map((c) => c.stretch?.silent ?? null)).toEqual([true, null]);
+  });
+});
+
+describe("Engine open end and recording (SPEC §9)", () => {
+  const mixerSent = () => FakeNode.last?.port.sent ?? [];
+  const sentTypes = () => mixerSent().map((c) => c.t);
+  const ctx = () => {
+    const c = FakeContext.all.at(-1);
+    if (!c) throw new Error("no context");
+    return c;
+  };
+  const report = (recFrames: number, peaks: [number, number] = [0.5, 1]) => {
+    FakeNode.last?.port.deliver({
+      type: "report",
+      frame: 0,
+      lap: 0,
+      time: 0,
+      playing: true,
+      preroll: 0,
+      prerollInterval: 0,
+      prerollClicks: 0,
+      clicks: 0,
+      peaks: new Float32Array(2),
+      underruns: new Float32Array(0),
+      inputPeaks: new Float32Array(peaks),
+      recording: recFrames > 0,
+      recFrames,
+    });
+  };
+  const takeEnd = (frames: number, endedBy = "user") => {
+    FakeNode.last?.port.deliver({
+      type: "take.end",
+      startFrame: 4000,
+      frames,
+      channels: 1,
+      gapFrames: 0,
+      endedBy,
+    });
+  };
+  function fakeStream() {
+    const listeners = new Set<() => void>();
+    const track = {
+      getSettings: () => ({ latency: 0.01 }),
+      addEventListener: (_: string, l: () => void) => listeners.add(l),
+      removeEventListener: (_: string, l: () => void) => listeners.delete(l),
+      end: () => {
+        for (const l of [...listeners]) l();
+      },
+      listeners,
+    };
+    const stream = { getAudioTracks: () => [track] } as unknown as MediaStream;
+    return { stream, track };
+  }
+  const port = () => ({}) as MessagePort;
+  async function armed(over: { idleSuspendMs?: number } = {}) {
+    const e = new Engine({ workerUrl: "w.js", workletUrl: "m.js", cacheBytes: 1 << 20, ...over });
+    const rec: string[] = [];
+    const takes: RecordedTake[] = [];
+    e.on("recording", (r) => rec.push(r));
+    e.on("take", (t) => takes.push(t));
+    await e.loadSong({ lengthFrames: 48_000, tracks: [] });
+    const { stream, track } = fakeStream();
+    await e.armRecording({ stream, channels: 1, port: port(), maxFrames: 48_000 * 60 });
+    return { e, rec, takes, track };
+  }
+
+  it("loads an open-ended song: seeks and the playhead go past its length", async () => {
+    const e = engine();
+    await e.loadSong({ lengthFrames: 0, tracks: [], openEnd: true });
+    expect(e.openEnd).toBe(true);
+    expect(mixerSent()).toContainEqual({ t: "openEnd", on: true });
+    e.seek(96_000);
+    expect(mixerSent().at(-1)).toMatchObject({ t: "seek", frame: 96_000 });
+    expect(e.getPositionFrames()).toBe(96_000);
+    // A song with an end clamps as before.
+    await e.loadSong({ lengthFrames: 48_000, tracks: [] });
+    expect(mixerSent().at(-1)).toEqual({ t: "openEnd", on: false });
+    e.seek(96_000);
+    expect(mixerSent().at(-1)).toMatchObject({ t: "seek", frame: 48_000 });
+  });
+
+  it("arms the input: connects it, sends the pool and the port, meters it", async () => {
+    const { e, rec } = await armed();
+    expect(e.recordingState).toBe("armed");
+    expect(ctx().sources[0]?.connected).toBe(true);
+    const arm = mixerSent().find((c) => c.t === "recArm");
+    if (arm?.t !== "recArm") throw new Error("no recArm");
+    expect(arm.channels).toBe(1);
+    expect(arm.maxFrames).toBe(48_000 * 60);
+    expect(arm.buffers).toHaveLength(48);
+    expect(arm.buffers[0]?.length).toBe(4096);
+    const input: { peaks: [number, number]; recFrames: number }[] = [];
+    e.on("input", (m) => input.push(m));
+    report(0, [0.25, 1]);
+    expect(input).toEqual([{ peaks: [0.25, 1], recFrames: 0 }]);
+    expect(rec).toEqual(["armed"]);
+    ctx().baseLatency = 0.005;
+    expect(e.recordingLatency()).toEqual({ outputSec: 0.005, inputSec: 0.01 });
+    ctx().outputLatency = 0.02;
+    expect(e.recordingLatency()).toEqual({ outputSec: 0.02, inputSec: 0.01 });
+  });
+
+  it("records open-ended without a loop and resolves Stop with the take", async () => {
+    const { e, takes } = await armed();
+    e.setLoop({ start: 0, end: 48_000 });
+    const before = mixerSent().length;
+    e.startRecording({ countIn: { clicks: 4, perBar: 4, intervalFrames: 12_000 } });
+    expect(e.openEnd).toBe(true);
+    expect(sentTypes().slice(before)).toEqual(["loop", "openEnd", "recStart", "play"]);
+    expect(mixerSent().at(-1)).toMatchObject({ t: "play", countIn: { clicks: 4 } });
+    FakeNode.last?.port.deliver({ type: "take.start", startFrame: 4000, channels: 1 });
+    report(9600);
+    const stopped = e.stopRecording();
+    expect(sentTypes().slice(-2)).toEqual(["recStop", "pause"]);
+    takeEnd(9728);
+    const take = await stopped;
+    expect(take).toEqual({
+      startFrame: 4000,
+      frames: 9728,
+      channels: 1,
+      gapFrames: 0,
+      endedBy: "user",
+      confirmed: true,
+    });
+    expect(takes).toEqual([take]);
+    expect(e.recordingState).toBe("armed");
+    expect(e.openEnd).toBe(false);
+    expect(mixerSent().at(-1)).toEqual({ t: "openEnd", on: false });
+  });
+
+  it("stops the transport when the mixer ends the take (max length)", async () => {
+    const { e, takes } = await armed();
+    e.startRecording();
+    takeEnd(1000, "maxLength");
+    expect(sentTypes().at(-2)).toBe("pause");
+    expect(takes[0]).toMatchObject({ endedBy: "maxLength", frames: 1000, confirmed: true });
+  });
+
+  it("ends the take unconfirmed when the worklet does not answer", async () => {
+    vi.useFakeTimers();
+    const { e } = await armed();
+    e.startRecording();
+    FakeNode.last?.port.deliver({ type: "take.start", startFrame: 0, channels: 1 });
+    report(4800);
+    const stopped = e.stopRecording();
+    vi.advanceTimersByTime(1500);
+    expect(await stopped).toMatchObject({ frames: 4800, endedBy: "user", confirmed: false });
+  });
+
+  it("ends the take on an interruption, a lost input, a rebuild or dispose", async () => {
+    vi.useFakeTimers();
+    let s = await armed();
+    s.e.startRecording();
+    ctx().interrupt();
+    expect(sentTypes()).toContain("recStop");
+    expect(mixerSent().find((c) => c.t === "recStop")).toEqual({
+      t: "recStop",
+      reason: "interrupted",
+    });
+    vi.advanceTimersByTime(1500);
+    expect(s.takes[0]).toMatchObject({ endedBy: "interrupted", confirmed: false });
+
+    s = await armed();
+    s.e.startRecording();
+    s.track.end();
+    takeEnd(100, "inputEnded");
+    expect(s.takes[0]).toMatchObject({ endedBy: "inputEnded" });
+
+    s = await armed();
+    s.e.startRecording();
+    s.e.dispose();
+    expect(s.takes[0]).toMatchObject({ endedBy: "disposed", confirmed: false });
+    expect(s.e.recordingState).toBe("off");
+    expect(s.rec.at(-1)).toBe("off");
+    expect(s.track.listeners.size).toBe(0);
+  });
+
+  it("disarms: disconnects the input and lets the idle context suspend again", async () => {
+    vi.useFakeTimers();
+    const { e } = await armed({ idleSuspendMs: 1000 });
+    vi.advanceTimersByTime(5000);
+    expect(ctx().state).toBe("running"); // never while armed
+    e.disarmRecording();
+    expect(sentTypes().at(-1)).toBe("recDisarm");
+    expect(ctx().sources[0]?.connected).toBe(false);
+    vi.advanceTimersByTime(1000);
+    expect(ctx().state).toBe("suspended");
   });
 });

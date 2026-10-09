@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import { applyMixerCommand } from "./apply";
-import { MixerCore, type MixerEvent } from "./core";
+import { MixerCore, type MixerEvent, type TakeFree } from "./core";
 import type { MixerCommand, ToDecoder } from "./protocol";
 
 /**
@@ -29,6 +29,10 @@ class MixerProcessor extends AudioWorkletProcessor {
   private pos = { t: "pos" as const, load: 0, frame: 0, lap: 0 } satisfies ToDecoder;
   /** The current song load (see `ToDecoder`). */
   private load = 0;
+  /** The take writer's port while armed (SPEC §9). */
+  private take: MessagePort | null = null;
+  /** Transfer list for take chunks, reused. */
+  private transfer: ArrayBuffer[] = [new ArrayBuffer(0)];
 
   constructor() {
     super();
@@ -45,7 +49,17 @@ class MixerProcessor extends AudioWorkletProcessor {
       };
       return;
     }
+    if (cmd.t === "recArm") {
+      // A take still running ends on its own writer's port.
+      this.core.stopCapture("disarmed");
+      this.closeTake();
+      this.take = cmd.port;
+      this.take.onmessage = (e: MessageEvent<TakeFree>) => {
+        this.core.addCaptureBuffer(e.data.data);
+      };
+    }
     applyMixerCommand(this.core, cmd);
+    if (cmd.t === "recDisarm") this.closeTake();
     if (cmd.t === "load") {
       this.load = cmd.id;
       this.port.postMessage({ type: "loaded", id: cmd.id });
@@ -57,7 +71,29 @@ class MixerProcessor extends AudioWorkletProcessor {
     }
   }
 
+  private closeTake() {
+    if (!this.take) return;
+    this.take.onmessage = null;
+    this.take.close();
+    this.take = null;
+  }
+
   private onEvent(e: MixerEvent) {
+    if (e.type === "take.chunk") {
+      // The pooled buffer moves to the take writer (it sends it back when written).
+      this.transfer[0] = e.data.buffer as ArrayBuffer;
+      this.take?.postMessage(e, this.transfer);
+      return;
+    }
+    if (e.type === "take.gap") {
+      this.take?.postMessage(e);
+      return;
+    }
+    if (e.type === "take.start" || e.type === "take.end") {
+      this.take?.postMessage(e);
+      this.port.postMessage(e);
+      return;
+    }
     if (e.type === "retime") {
       const { fromLap, frame, base, loop, cache } = e;
       const msg: ToDecoder = { t: "retime", load: this.load, fromLap, frame, base, loop, cache };
@@ -74,12 +110,13 @@ class MixerProcessor extends AudioWorkletProcessor {
     }
   }
 
-  process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+  process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
     const out = outputs[0];
     const l = out?.[0];
     if (!l) return true;
     if (this.silent.length < l.length) this.silent = new Float32Array(l.length);
-    this.core.mixBlock(l, out[1] ?? this.silent, l.length, currentTime);
+    // The input has no channels unless the microphone is connected (armed).
+    this.core.mixBlock(l, out[1] ?? this.silent, l.length, currentTime, inputs[0]);
     return true;
   }
 }

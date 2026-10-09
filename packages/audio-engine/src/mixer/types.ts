@@ -1,3 +1,4 @@
+import type { TakeMessage } from "./capture";
 import type { ClickSound } from "./click";
 
 /** Mixer constants and the types shared by the mixer, its protocol and the engine. */
@@ -81,12 +82,19 @@ export interface MixerReport {
   peaks: Float32Array;
   /** Underrun frames per track since the previous report. */
   underruns: Float32Array;
+  /** Input peak per channel (left, right) since the previous report; 0 while not armed. */
+  inputPeaks: Float32Array;
+  /** A take is being recorded (`recFrames` long so far). */
+  recording: boolean;
+  recFrames: number;
 }
 
 export type MixerEvent =
   | { type: "state"; state: TransportState }
   | MixerReport
   | { type: "ended" }
+  /** Recording (SPEC §9): routed to the take port; `take.start`/`take.end` also to the engine. */
+  | TakeMessage
   /**
    * A loop change was applied at `(fromLap, frame)`; the lap continues as `base`. Sent to the
    * decoder worker (not the main thread) so it can relabel its producers without a rebuffer.

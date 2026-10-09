@@ -1,6 +1,6 @@
 import { Session } from "node:inspector/promises";
 import { describe, expect, it } from "vitest";
-import { MixerCore, type MixerEvent, type MixerTrackConfig } from "./core";
+import { CAPTURE_CHUNK_FRAMES, MixerCore, type MixerEvent, type MixerTrackConfig } from "./core";
 
 /**
  * The render loop must not allocate (CLAUDE.md, SPEC §6.2): garbage collection in the audio
@@ -37,6 +37,21 @@ const track = (id: string, pan: number): MixerTrackConfig => ({
   mute: false,
   solo: false,
 });
+
+async function profileBytes(run: () => void): Promise<{ bytes: number; where: string[] }> {
+  const session = new Session();
+  session.connect();
+  await session.post("HeapProfiler.startSampling", {
+    samplingInterval: 16,
+    includeObjectsCollectedByMajorGC: true,
+    includeObjectsCollectedByMinorGC: true,
+  });
+  run();
+  const { profile } = await session.post("HeapProfiler.stopSampling");
+  session.disconnect();
+  const where: string[] = [];
+  return { bytes: mixerBytes(profile.head, where), where };
+}
 
 describe("MixerCore allocations", () => {
   it("mixBlock allocates nothing while playing and reporting", async () => {
@@ -91,5 +106,46 @@ describe("MixerCore allocations", () => {
     expect(m.position.state).toBe("playing");
     // One preallocated report object, reused (the worklet's postMessage copies it).
     expect(reports.size).toBe(1);
+  });
+
+  // Runs after the test above: V8 shares optimized code between the two mixers, and a function
+  // first optimized with zero tracks deopts when tracks appear (a test artefact).
+  it("records (open end, metering, pooled chunks) without allocating", async () => {
+    let chunks = 0;
+    const m = new MixerCore((e) => {
+      // The take writer hands the buffer back (here at once, the same buffer).
+      if (e.type === "take.chunk") {
+        chunks++;
+        m.addCaptureBuffer(e.data);
+      }
+    });
+    m.startFrames = 1024;
+    m.load([], 0);
+    m.setOpenEnd(true);
+    m.setClickTrack(
+      Float64Array.from({ length: 4000 }, (_, i) => i * 24_000),
+      new Uint8Array(4000).fill(1),
+    );
+    m.setClick({ enabled: true });
+    m.armCapture(2, 0);
+    for (let i = 0; i < 4; i++) m.addCaptureBuffer(new Float32Array(CAPTURE_CHUNK_FRAMES * 2));
+    m.startCapture();
+    m.play({ clicks: 4, perBar: 4, intervalFrames: 1000.5 });
+    const b0 = new Float32Array(128);
+    const b1 = new Float32Array(128);
+    const in0 = new Float32Array(128).fill(0.25);
+    const in1 = new Float32Array(128).fill(-0.5);
+    const input = [in0, in1];
+    const mono = [in0];
+    const run = (blocks: number) => {
+      for (let i = 0; i < blocks; i++) m.mixBlock(b0, b1, 128, 1, i % 64 < 32 ? input : mono);
+    };
+    run(20_000); // warm-up
+    const { bytes, where } = await profileBytes(() => {
+      run(6000);
+    });
+    expect(bytes, where.join(", ")).toBeLessThan(4096);
+    expect(m.captureState.recording).toBe(true);
+    expect(chunks).toBeGreaterThan(700);
   });
 });

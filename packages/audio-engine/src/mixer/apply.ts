@@ -56,6 +56,23 @@ export function applyMixerCommand(core: MixerCore, cmd: MixerCommand): void {
     case "repeatCountIn":
       core.setRepeatCountIn(cmd.countIn);
       break;
+    case "openEnd":
+      core.setOpenEnd(cmd.on);
+      break;
+    case "recArm":
+      // The port is wired by the worklet itself.
+      core.armCapture(cmd.channels, cmd.maxFrames);
+      for (const b of cmd.buffers) core.addCaptureBuffer(b);
+      break;
+    case "recStart":
+      core.startCapture();
+      break;
+    case "recStop":
+      core.stopCapture(cmd.reason);
+      break;
+    case "recDisarm":
+      core.disarmCapture();
+      break;
     case "workerPort":
       break; // handled by the worklet itself
   }

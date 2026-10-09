@@ -89,6 +89,11 @@ export interface WorkerStretch {
 export interface SongTimeline {
   tracks: EngineTrack[];
   lengthFrames: number;
+  /**
+   * The transport runs past `lengthFrames` until stopped (SPEC §9: a song without playable
+   * tracks plays its click until Stop). Omitted = false.
+   */
+  openEnd?: boolean;
 }
 
 export function clipRanges(clips: EngineClip[]): ClipRange[] {

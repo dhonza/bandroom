@@ -1,5 +1,12 @@
 import type { CountInSpec } from "./click";
-import type { ClickParams, ClipRange, MixerEvent, MixerTrackConfig, TrackParams } from "./core";
+import type {
+  ClickParams,
+  ClipRange,
+  MixerEvent,
+  MixerTrackConfig,
+  TakeEndReason,
+  TrackParams,
+} from "./core";
 
 /** Messages the mixer worklet accepts (from the main thread or the decoder worker). */
 export type MixerCommand =
@@ -29,7 +36,23 @@ export type MixerCommand =
   | { t: "clickTrack"; frames: Float64Array; levels: Uint8Array }
   | { t: "click"; params: Partial<ClickParams> }
   | { t: "repeatCountIn"; countIn: CountInSpec | null }
-  | { t: "workerPort"; port: MessagePort };
+  | { t: "workerPort"; port: MessagePort }
+  /** Open end (SPEC §9): the transport runs past the song length until stopped. */
+  | { t: "openEnd"; on: boolean }
+  /**
+   * Recording (SPEC §9): the input is connected. Chunks go to `port` (the take writer's end
+   * replies with `TakeFree`); `buffers` are the initial pool (transferred).
+   */
+  | {
+      t: "recArm";
+      port: MessagePort;
+      channels: number;
+      maxFrames: number;
+      buffers: Float32Array[];
+    }
+  | { t: "recStart" }
+  | { t: "recStop"; reason: TakeEndReason }
+  | { t: "recDisarm" };
 
 /** Mixer worklet → main thread. `loaded` acknowledges the `load` with that `id`. */
 export type MixerMessage = MixerEvent | { type: "loaded"; id: number };

@@ -1,5 +1,6 @@
 import { dbToGain } from "@bandroom/shared/audio";
 import { SAMPLE_RATE } from "../constants";
+import { Capture, type TakeEndReason } from "./capture";
 import {
   clickSampleLevel,
   clickSamples,
@@ -33,6 +34,12 @@ import {
 } from "./types";
 
 export * from "./types";
+export {
+  CAPTURE_CHUNK_FRAMES,
+  type TakeEndReason,
+  type TakeFree,
+  type TakeMessage,
+} from "./capture";
 
 /**
  * The mixer (SPEC §6.2, §6.5, §6.6) as plain logic, so it runs unchanged in the AudioWorklet and
@@ -55,6 +62,11 @@ const ENDED: MixerEvent = { type: "ended" };
 export class MixerCore {
   private tracks: Track[] = [];
   private length = 0;
+  /**
+   * Open end (SPEC §9): the transport runs past `length` until stopped (a song without playable
+   * tracks, or while recording). Kept across loads; the engine sets it.
+   */
+  private openEnd = false;
   private state: TransportState = "stopped";
   private frame = 0;
   private lap = 0;
@@ -112,13 +124,25 @@ export class MixerCore {
     clicks: 0,
     peaks: new Float32Array(2),
     underruns: new Float32Array(0),
+    inputPeaks: new Float32Array(2),
+    recording: false,
+    recFrames: 0,
   };
 
-  constructor(private readonly emit: (e: MixerEvent) => void) {}
+  // ——— recording (SPEC §9) ———
+  private readonly capture: Capture;
+  /** Block offset where the take began in this block (0 when it runs on from earlier). */
+  private capFrom = 0;
+
+  constructor(private readonly emit: (e: MixerEvent) => void) {
+    this.capture = new Capture(emit);
+  }
 
   // ——— configuration ————————————————————————————————————————————————
 
   load(tracks: MixerTrackConfig[], lengthFrames: number): void {
+    // A reload ends a take (its timeline is gone); the input stays armed.
+    this.capture.end("reloaded");
     this.tracks = tracks.map(newTrack);
     this.report.peaks = new Float32Array(tracks.length + 2);
     this.report.underruns = new Float32Array(tracks.length);
@@ -299,6 +323,46 @@ export class MixerCore {
     };
   }
 
+  /** Open end: the transport neither stops nor clamps at the song length (SPEC §9). */
+  setOpenEnd(on: boolean): void {
+    this.openEnd = on;
+  }
+
+  // ——— recording (SPEC §9) ——————————————————————————————————————————————
+
+  /** The input is connected: it is metered, and a take records `channels` (1 or 2). */
+  armCapture(channels: number, maxFrames: number): void {
+    this.capture.arm(channels, maxFrames);
+  }
+
+  /** A pooled chunk buffer (from the main thread, then back from the take writer). */
+  addCaptureBuffer(data: Float32Array): void {
+    this.capture.addBuffer(data);
+  }
+
+  /**
+   * Starts a take: at the frame where the count-in ends, or at the start of playback, or (already
+   * playing) at the next block. The engine sends `play` after this.
+   */
+  startCapture(): void {
+    this.capture.request();
+  }
+
+  /** Ends the take at the end of the last rendered block. */
+  stopCapture(reason: TakeEndReason): void {
+    this.capture.end(reason);
+  }
+
+  disarmCapture(): void {
+    this.capture.disarm();
+  }
+
+  /** Capture state (tests and debug). */
+  get captureState(): { armed: boolean; recording: boolean; frames: number; pool: number } {
+    const c = this.capture;
+    return { armed: c.armed, recording: c.on, frames: c.frames, pool: c.poolSize };
+  }
+
   // ——— transport ————————————————————————————————————————————————————
 
   /** Starts playback; with `countIn`, the count-in plays first (SPEC §6.7). */
@@ -307,7 +371,8 @@ export class MixerCore {
     const ci = countIn && countIn.clicks > 0 && countIn.intervalFrames > 0 ? countIn : null;
     if (this.state === "stopped") {
       // At the song end (and not inside a loop that wraps back): start over.
-      if (this.frame >= this.length && !(this.loop && this.frame < this.loop.end)) this.frame = 0;
+      if (!this.openEnd && this.frame >= this.length && !(this.loop && this.frame < this.loop.end))
+        this.frame = 0;
       this.pendingCountIn = ci;
       this.setState("buffering");
     } else if (this.state === "buffering") {
@@ -337,7 +402,7 @@ export class MixerCore {
 
   /** Jumps to `frame`; `lap` must be a fresh base (a multiple of LAPS_PER_SEEK). */
   seek(frame: number, lap: number): void {
-    const f = Math.max(0, Math.min(frame, this.length));
+    const f = Math.max(0, this.openEnd ? frame : Math.min(frame, this.length));
     // The decoder retries failed tracks after a seek.
     for (const t of this.tracks) t.failed = false;
     if (this.state === "playing" && this.fade > 0) {
@@ -355,9 +420,21 @@ export class MixerCore {
 
   // ——— rendering ————————————————————————————————————————————————————
 
-  /** Renders one block into `out0`/`out1` (overwritten). `time` = context time of frame 0. */
-  mixBlock(out0: Float32Array, out1: Float32Array, n: number, time: number): void {
+  /**
+   * Renders one block into `out0`/`out1` (overwritten). `time` = context time of frame 0.
+   * `input`: the block's input channels (the microphone while armed), metered and recorded.
+   */
+  mixBlock(
+    out0: Float32Array,
+    out1: Float32Array,
+    n: number,
+    time: number,
+    input?: readonly Float32Array[],
+  ): void {
     if (this.a0.length < n) this.grow(n);
+    const cap = this.capture;
+    cap.meter(input, n);
+    this.capFrom = cap.on ? 0 : -1;
     out0.fill(0, 0, n);
     out1.fill(0, 0, n);
     if (this.state === "buffering" && this.isBuffered()) {
@@ -370,6 +447,7 @@ export class MixerCore {
       this.sendReport(time);
     }
     if (this.state === "playing") this.renderPlaying(out0, out1, n);
+    if (cap.on && this.capFrom >= 0) cap.write(input, this.capFrom, n);
     const pk = this.voices.render(out0, out1, n);
     if (pk > this.master0) this.master0 = pk;
     if (pk > this.master1) this.master1 = pk;
@@ -395,10 +473,15 @@ export class MixerCore {
         }
         continue;
       }
+      // A take begins where the count-in ends (SPEC §9): input and output share this frame.
+      if (this.capture.wanted) {
+        this.capture.begin(this.frame);
+        this.capFrom = o;
+      }
       const loop = this.loop;
       // Past the loop end (or without a loop) playback runs to the song end and stops.
       const looping = loop !== null && this.frame < loop.end;
-      if (!looping && this.frame >= this.length) {
+      if (!looping && !this.openEnd && this.frame >= this.length) {
         this.frame = this.length;
         this.setState("stopped");
         this.fade = 0;
@@ -408,7 +491,7 @@ export class MixerCore {
       }
       let len = n - o;
       if (looping) len = Math.min(len, loop.end - this.frame);
-      else len = Math.min(len, this.length - this.frame);
+      else if (!this.openEnd) len = Math.min(len, this.length - this.frame);
       // Transport fades end on segment boundaries so the pending action lands exactly.
       if (this.fadeDir < 0) len = Math.min(len, Math.max(1, Math.ceil(this.fade * FADE_FRAMES)));
       this.renderSegment(out0, out1, o, len);
@@ -623,6 +706,8 @@ export class MixerCore {
   }
 
   private jump(frame: number, lap: number) {
+    // A take is one continuous stretch of the timeline.
+    this.capture.end("transport");
     this.frame = frame;
     this.lap = lap;
     this.wrapFade = 0;
@@ -673,6 +758,7 @@ export class MixerCore {
   }
 
   private remainingFrames(): number {
+    if (this.openEnd) return Infinity;
     return this.loop && this.frame < this.loop.end ? Infinity : this.length - this.frame;
   }
 
@@ -682,6 +768,8 @@ export class MixerCore {
 
   private setState(s: TransportState) {
     if (s === this.state) return;
+    // The transport stopped by itself (media keys, the end): the take ends with it.
+    if (s === "stopped") this.capture.end("transport");
     this.state = s;
     this.emit(STATE_EVENTS[s]);
   }
@@ -710,6 +798,13 @@ export class MixerCore {
     r.peaks[n + 1] = this.master1;
     this.master0 = 0;
     this.master1 = 0;
+    const cap = this.capture;
+    r.inputPeaks[0] = cap.peak0;
+    r.inputPeaks[1] = cap.peak1;
+    cap.peak0 = 0;
+    cap.peak1 = 0;
+    r.recording = cap.on;
+    r.recFrames = cap.frames;
     this.emit(r);
   }
 

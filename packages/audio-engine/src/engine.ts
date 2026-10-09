@@ -5,11 +5,16 @@ import type {
   EngineEvents,
   EngineOptions,
   EngineState,
+  RecordArmOptions,
+  RecordedTake,
+  RecordingState,
   TrackState,
 } from "./engineTypes";
+import type { RecordingLatency } from "./record/placement";
 import type { ClickTrack, CountInSpec } from "./mixer/click";
 import { loopCacheFits } from "./mixer/loopCache";
 import {
+  CAPTURE_CHUNK_FRAMES,
   DEFAULT_CLICK,
   FADE_FRAMES,
   LAPS_PER_SEEK,
@@ -17,11 +22,13 @@ import {
   type ClipRange,
   type MixerReport,
   type MixerTrackConfig,
+  type TakeEndReason,
   type TrackParams,
 } from "./mixer/core";
 import type { MixerCommand, MixerMessage } from "./mixer/protocol";
 import { countInAt, NO_REPORT, playheadAt, type Report } from "./playhead";
 import {
+  isNeutralPractice,
   mixerClips,
   NEUTRAL_PRACTICE,
   playbackLength,
@@ -49,12 +56,33 @@ const RESUME_TIMEOUT_MS = 3000;
 const IDLE_SUSPEND_MS = 30_000;
 /** Silent meter reports still sent (1 s at 20 Hz: meters fall back to zero). */
 const SILENT_METER_REPORTS = 20;
+/** How long `stopRecording()` waits for the worklet to confirm the end of a take. */
+const TAKE_END_TIMEOUT_MS = 1500;
+/** Default take chunk pool (4096-frame chunks: ~4 s for the writer to catch up). */
+const TAKE_POOL_CHUNKS = 48;
+/** Transport limit while open-ended (no song end). */
+const NO_END = Number.MAX_SAFE_INTEGER;
+
+/** The armed input and the take in progress (SPEC §9). */
+interface Recorder {
+  source: MediaStreamAudioSourceNode;
+  track: MediaStreamTrack | null;
+  onTrackEnded: () => void;
+  channels: number;
+  state: "armed" | "recording";
+  /** From `take.start` (−1 until the take begins) and the latest report. */
+  startFrame: number;
+  frames: number;
+  waiters: ((t: RecordedTake) => void)[];
+  timer: ReturnType<typeof setTimeout> | null;
+}
 /** Mixer settings that survive a load (the rest of the queue belongs to the superseded song). */
 const KEPT_ACROSS_LOADS: ReadonlySet<MixerCommand["t"]> = new Set([
   "startFrames",
   "click",
   "clickTrack",
   "repeatCountIn",
+  "openEnd",
 ]);
 
 /**
@@ -109,6 +137,11 @@ export class Engine {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   /** Silent meter reports in a row (after a second of them, no more are sent). */
   private silentReports = 0;
+  /** The song has no end (SPEC §9: no playable tracks): the transport runs until stopped. */
+  private songOpenEnd = false;
+  /** The open end the mixer has (sent only on change; the mixer keeps it across loads). */
+  private mixerOpenEnd = false;
+  private rec: Recorder | null = null;
 
   constructor(private readonly opts: EngineOptions) {}
 
@@ -166,8 +199,9 @@ export class Engine {
     if (ctx.sampleRate !== SAMPLE_RATE)
       throw new Error(`AudioContext runs at ${ctx.sampleRate} Hz`);
     await ctx.audioWorklet.addModule(this.opts.workletUrl);
+    // One input: the microphone, connected only while recording is armed (SPEC §9).
     const node = new AudioWorkletNode(ctx, "bandroom-mixer", {
-      numberOfInputs: 0,
+      numberOfInputs: 1,
       numberOfOutputs: 1,
       outputChannelCount: [2],
     });
@@ -195,6 +229,7 @@ export class Engine {
     ]);
     this.node = node;
     this.worker = worker;
+    this.mixerOpenEnd = false; // a new worklet
     this.toMixer({
       t: "startFrames",
       frames: Math.round((this.opts.startSeconds ?? 1.5) * SAMPLE_RATE),
@@ -219,12 +254,14 @@ export class Engine {
   private load(song: SongTimeline): Promise<boolean> {
     this.song = {
       lengthFrames: song.lengthFrames,
+      ...(song.openEnd !== undefined && { openEnd: song.openEnd }),
       tracks: song.tracks.map((t) => ({ ...t, clips: [...t.clips] })),
     };
     this.offsets = song.tracks.map(() => 0);
     this.trackIds = song.tracks.map((t) => t.id);
     this.sources = song.tracks.map(() => 1);
     this.length = song.lengthFrames;
+    this.songOpenEnd = song.openEnd ?? false;
     this.loop = null;
     this.mixerLoop = null;
     this.cacheOn = false;
@@ -266,12 +303,37 @@ export class Engine {
       lengthFrames: length,
       mixer,
     });
+    this.syncOpenEnd();
     return done;
   }
 
   /** Song length in the mixer's playback frames. */
   private get mixerLength(): number {
     return playbackLength(this.length, this.practice.rate);
+  }
+
+  /**
+   * The transport runs until stopped (SPEC §9): the song has no playable tracks, or a take is
+   * being recorded. Otherwise playback ends at the song end.
+   */
+  get openEnd(): boolean {
+    return this.songOpenEnd || this.rec?.state === "recording";
+  }
+
+  /** Where seeks, loops and the playhead stop (timeline frames). */
+  private get limit(): number {
+    return this.openEnd ? NO_END : this.length;
+  }
+
+  private get mixerLimit(): number {
+    return this.openEnd ? NO_END : this.mixerLength;
+  }
+
+  private syncOpenEnd() {
+    const on = this.openEnd;
+    if (on === this.mixerOpenEnd) return;
+    this.mixerOpenEnd = on;
+    this.toMixer({ t: "openEnd", on });
   }
 
   /**
@@ -485,14 +547,14 @@ export class Engine {
   }
 
   seek(frame: number): void {
-    const f = Math.max(0, Math.min(Math.round(frame), this.length));
+    const f = Math.max(0, Math.min(Math.round(frame), this.limit));
     this.seekCount++;
     const lap = this.seekCount * LAPS_PER_SEEK;
     this.seekTarget = f;
     // The mixer forwards the seek to the decoder worker (ordered with loop changes).
     this.toMixer({
       t: "seek",
-      frame: Math.min(toPlayback(f, this.practice.rate), this.mixerLength),
+      frame: Math.min(toPlayback(f, this.practice.rate), this.mixerLimit),
       lap,
     });
   }
@@ -504,14 +566,14 @@ export class Engine {
    */
   setLoop(range: ClipRange | null): void {
     const start = range ? Math.max(0, Math.round(range.start)) : 0;
-    const end = range ? Math.min(this.length, Math.round(range.end)) : 0;
+    const end = range ? Math.min(this.limit, Math.round(range.end)) : 0;
     const loop = range && end - start >= MIN_LOOP_FRAMES ? { start, end } : null;
     if (loop === null && this.loop === null) return;
     this.loop = loop;
     const rate = this.practice.rate;
     const mixerLoop = loop && {
       start: toPlayback(loop.start, rate),
-      end: Math.min(toPlayback(loop.end, rate), this.mixerLength),
+      end: Math.min(toPlayback(loop.end, rate), this.mixerLimit),
     };
     this.mixerLoop = mixerLoop;
     this.cacheOn =
@@ -597,16 +659,16 @@ export class Engine {
     const ctx = this.ctx;
     const r = this.report;
     const rate = this.practice.rate;
-    if (!ctx || this._state !== "playing") return Math.min(toTimeline(r.frame, rate), this.length);
+    if (!ctx || this._state !== "playing") return Math.min(toTimeline(r.frame, rate), this.limit);
     const elapsed = this.heardSince(r) * SAMPLE_RATE;
     const p = playheadAt(
       r,
       elapsed,
       this.mixerLoop,
       this.scaledCountIn(this.repeatCountIn),
-      this.mixerLength,
+      this.mixerLimit,
     );
-    return Math.min(toTimeline(p, rate), this.length);
+    return Math.min(toTimeline(p, rate), this.limit);
   }
 
   on<K extends keyof EngineEvents>(event: K, cb: (e: EngineEvents[K]) => void): () => void {
@@ -614,6 +676,7 @@ export class Engine {
   }
 
   dispose(): void {
+    this.abortTake("disposed");
     this.wantPlaying = false;
     this.toWorker({ t: "unload" });
     this.teardown();
@@ -622,6 +685,8 @@ export class Engine {
   }
 
   private teardown() {
+    // The worklet goes with the context: a take ends where its last chunk reached the writer.
+    this.abortTake("rebuilt");
     if (this.resumeTimer) clearTimeout(this.resumeTimer);
     this.resumeTimer = null;
     this.cancelIdle();
@@ -652,7 +717,7 @@ export class Engine {
     this.idleTimer = setTimeout(() => {
       this.idleTimer = null;
       const st = this._state;
-      if (this.wantPlaying || this.restoring) return;
+      if (this.wantPlaying || this.restoring || this.rec) return;
       if (st !== "stopped" && st !== "interrupted") return;
       if (this.ctx?.state === "running") void this.ctx.suspend();
     }, this.opts.idleSuspendMs ?? IDLE_SUSPEND_MS);
@@ -678,6 +743,10 @@ export class Engine {
   /** Interruption (phone call, other app): pause and wait for a tap (SPEC §6.8). */
   private onContextState() {
     const st = this.ctx?.state as string | undefined;
+    if ((st === "interrupted" || st === "suspended") && this.rec?.state === "recording") {
+      // The take ends and keeps what was recorded (SPEC §9).
+      void this.stopRecording("interrupted");
+    }
     if ((st === "interrupted" || st === "suspended") && this.wantPlaying) {
       this.wantPlaying = false;
       this.toMixer({ t: "pause" });
@@ -722,10 +791,36 @@ export class Engine {
         this.wantPlaying = false;
         this.emit("ended", undefined);
         break;
+      case "take.start":
+        if (this.rec?.state === "recording") this.rec.startFrame = m.startFrame;
+        break;
+      case "take.end": {
+        const rec = this.rec;
+        if (rec?.state !== "recording") break;
+        // Ended by the mixer itself (max length, the transport): the transport stops too.
+        if (rec.waiters.length === 0) this.pause();
+        this.finishTake({
+          startFrame: m.startFrame,
+          frames: m.frames,
+          channels: m.channels,
+          gapFrames: m.gapFrames,
+          endedBy: m.endedBy,
+          confirmed: true,
+        });
+        break;
+      }
     }
   }
 
   private onReport(m: MixerReport) {
+    const rec = this.rec;
+    if (rec) {
+      if (rec.state === "recording") rec.frames = m.recFrames;
+      this.emit("input", {
+        peaks: [m.inputPeaks[0] ?? 0, m.inputPeaks[1] ?? 0],
+        recFrames: rec.state === "recording" ? m.recFrames : 0,
+      });
+    }
     if (this.restoring) return;
     if (this.seekTarget !== null && m.lap < this.seekCount * LAPS_PER_SEEK) return;
     this.seekTarget = null;
@@ -748,6 +843,166 @@ export class Engine {
     } else {
       this.emit("error", { trackId: this.trackIds[m.index] ?? "", message: m.message });
     }
+  }
+
+  // ——— recording (SPEC §9) ————————————————————————————————————————————————
+
+  get recordingState(): RecordingState {
+    return this.rec?.state ?? "off";
+  }
+
+  /**
+   * Connects the microphone to the mixer: it is metered (`input` events) and a take can start.
+   * Practice goes back to neutral (SPEC §30.5; the caller shows the notice) and the loop is
+   * cleared. While armed the context is not suspended when idle.
+   */
+  async armRecording(opts: RecordArmOptions): Promise<void> {
+    await this.init();
+    const ctx = this.ctx;
+    const node = this.node;
+    if (!ctx || !node) throw new Error("The audio engine is not running");
+    if (this.rec) this.disarmRecording();
+    if (!isNeutralPractice(this.practice)) {
+      this.setPractice({ ...NEUTRAL_PRACTICE, quality: this.practice.quality });
+    }
+    this.setLoop(null);
+    const source = ctx.createMediaStreamSource(opts.stream);
+    source.connect(node);
+    const track = opts.stream.getAudioTracks()[0] ?? null;
+    const channels = opts.channels === 2 ? 2 : 1;
+    const rec: Recorder = {
+      source,
+      track,
+      onTrackEnded: () => {
+        if (this.rec !== rec) return;
+        if (rec.state === "recording") void this.stopRecording("inputEnded");
+      },
+      channels,
+      state: "armed",
+      startFrame: -1,
+      frames: 0,
+      waiters: [],
+      timer: null,
+    };
+    track?.addEventListener("ended", rec.onTrackEnded);
+    const buffers = Array.from(
+      { length: opts.poolChunks ?? TAKE_POOL_CHUNKS },
+      () => new Float32Array(CAPTURE_CHUNK_FRAMES * channels),
+    );
+    // Straight to the worklet (not queued behind a load): a load keeps the input armed.
+    const arm: MixerCommand = {
+      t: "recArm",
+      port: opts.port,
+      channels,
+      maxFrames: Math.max(1, Math.round(opts.maxFrames)),
+      buffers,
+    };
+    node.port.postMessage(arm, [opts.port, ...buffers.map((b) => b.buffer)]);
+    this.rec = rec;
+    this.cancelIdle();
+    void ctx.resume();
+    this.emit("recording", "armed");
+  }
+
+  /**
+   * Starts a take (call inside the tap): plays from the playhead, with `countIn` first, and
+   * records from the frame where the count-in ends. The transport runs until stopped and the
+   * loop is off. Already playing: the take starts at the next render quantum.
+   */
+  startRecording(opts: { countIn?: CountInSpec | null } = {}): void {
+    const rec = this.rec;
+    if (rec?.state !== "armed") return;
+    rec.state = "recording";
+    rec.startFrame = -1;
+    rec.frames = 0;
+    this.setLoop(null);
+    this.syncOpenEnd();
+    this.node?.port.postMessage({ t: "recStart" } satisfies MixerCommand);
+    this.emit("recording", "recording");
+    const playing = this._state === "playing" || this._state === "buffering";
+    if (!playing) this.play({ countIn: opts.countIn ?? null });
+  }
+
+  /**
+   * Ends the take (and pauses). Resolves once the worklet sent its last chunk and `take.end` to
+   * the take port, or after a timeout when the context no longer runs (`confirmed: false`).
+   */
+  stopRecording(reason: TakeEndReason = "user"): Promise<RecordedTake> {
+    const rec = this.rec;
+    if (rec?.state !== "recording") return Promise.reject(new Error("Not recording"));
+    return new Promise<RecordedTake>((resolve) => {
+      const first = rec.waiters.length === 0;
+      rec.waiters.push(resolve);
+      if (!first) return;
+      this.node?.port.postMessage({ t: "recStop", reason } satisfies MixerCommand);
+      this.pause();
+      rec.timer = setTimeout(() => {
+        if (this.rec === rec && rec.state === "recording")
+          this.finishTake(this.unconfirmed(reason));
+      }, TAKE_END_TIMEOUT_MS);
+    });
+  }
+
+  /** Disconnects the microphone (a take in progress ends unconfirmed: `disarmed`). */
+  disarmRecording(): void {
+    const rec = this.rec;
+    if (!rec) return;
+    if (rec.state === "recording") this.finishTake(this.unconfirmed("disarmed"));
+    this.node?.port.postMessage({ t: "recDisarm" } satisfies MixerCommand);
+    this.releaseInput(rec);
+  }
+
+  /** Latency parts for placing the take (SPEC §9; see `placement.ts`). */
+  recordingLatency(): RecordingLatency {
+    const ctx = this.ctx;
+    const settings = this.rec?.track?.getSettings() as { latency?: number } | undefined;
+    return {
+      outputSec: ctx ? ctx.outputLatency || ctx.baseLatency || 0 : 0,
+      inputSec: settings?.latency ?? 0,
+    };
+  }
+
+  private unconfirmed(reason: TakeEndReason): RecordedTake {
+    const rec = this.rec;
+    return {
+      startFrame: rec?.startFrame ?? -1,
+      frames: rec && rec.startFrame >= 0 ? rec.frames : 0,
+      channels: rec?.channels ?? 1,
+      gapFrames: 0,
+      endedBy: reason,
+      confirmed: false,
+    };
+  }
+
+  /** The take is over: back to armed, waiters resolved, `take` emitted. */
+  private finishTake(take: RecordedTake) {
+    const rec = this.rec;
+    if (rec?.state !== "recording") return;
+    rec.state = "armed";
+    if (rec.timer) clearTimeout(rec.timer);
+    rec.timer = null;
+    const waiters = rec.waiters;
+    rec.waiters = [];
+    this.syncOpenEnd();
+    for (const w of waiters) w(take);
+    this.emit("take", take);
+    this.emit("recording", "armed");
+  }
+
+  /** The context (and the worklet) is going away: the take ends unconfirmed, the input goes. */
+  private abortTake(reason: TakeEndReason) {
+    const rec = this.rec;
+    if (!rec) return;
+    if (rec.state === "recording") this.finishTake(this.unconfirmed(reason));
+    this.releaseInput(rec);
+  }
+
+  private releaseInput(rec: Recorder) {
+    rec.track?.removeEventListener("ended", rec.onTrackEnded);
+    rec.source.disconnect();
+    if (this.rec === rec) this.rec = null;
+    this.emit("recording", "off");
+    if (this._state === "stopped" || this._state === "interrupted") this.scheduleIdle();
   }
 
   private toMixer(cmd: MixerCommand) {
