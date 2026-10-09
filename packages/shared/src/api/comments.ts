@@ -48,7 +48,7 @@ export const updateComment = defineContract({
   params: IdParams,
   body: UpdateCommentSchema,
   response: z.object({ comment: CommentSchema }),
-  errors: ["NOT_FOUND", "FORBIDDEN"],
+  errors: ["NOT_FOUND", "FORBIDDEN", "BAD_REQUEST"],
   auth: { capability: "comment", scope: "comment" },
 });
 

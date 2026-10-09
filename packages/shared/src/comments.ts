@@ -104,7 +104,31 @@ export const CreateCommentSchema = z
   });
 export type CreateComment = z.input<typeof CreateCommentSchema>;
 
-export const UpdateCommentSchema = z.object({ body: CommentBodySchema });
+/**
+ * Editing the text and/or moving a comment. `startSec: null` makes it a general comment (its end
+ * goes too), `endSec: null` a point comment. Replies have no times; the server checks the
+ * resulting range against the stored one.
+ */
+export const UpdateCommentSchema = z
+  .object({
+    body: CommentBodySchema,
+    startSec: CommentSecSchema.nullable(),
+    endSec: CommentSecSchema.nullable(),
+  })
+  .partial()
+  .refine((c) => c.body !== undefined || c.startSec !== undefined || c.endSec !== undefined, {
+    message: "Nothing to change",
+  })
+  .refine(
+    (c) =>
+      c.endSec == null ||
+      c.startSec === undefined ||
+      (c.startSec !== null && c.endSec > c.startSec),
+    {
+      message: "A range ends after it starts",
+      path: ["endSec"],
+    },
+  );
 export type UpdateComment = z.infer<typeof UpdateCommentSchema>;
 
 /** A user who can view the song, for `@` autocomplete (SPEC §8). */

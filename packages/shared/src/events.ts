@@ -121,6 +121,8 @@ export const EVENT_ACTIONS = [
   // comments (SPEC §8)
   "comment.created",
   "comment.edited",
+  /** A comment's time changed (details: from/to start and end). */
+  "comment.moved",
   "comment.deleted",
   "comment.restored",
   "comment.resolved",
