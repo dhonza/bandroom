@@ -2084,7 +2084,9 @@
       "outsideSong": "Move the playhead into the song",
       "noMarkers": "The song has no markers or sections inside it.",
       "nothingToUndo": "Nothing to undo",
-      "nothingToRedo": "Nothing to redo"
+      "nothingToRedo": "Nothing to redo",
+      "applying": "The edit is being applied",
+      "noEdits": "Edit something first"
     },
     "refusals": {
       "tooManyOps": "Too many operations in this session",
@@ -2150,6 +2152,131 @@
     "editing": "The song is being edited",
     "startFailed": "Edit mode could not start.",
     "folded": "Older undo steps were merged into the session.",
-    "tracksTitle": "Tracks to edit"
+    "tracksTitle": "Tracks to edit",
+    "apply": "Apply",
+    "bounce": "Bounce…",
+    "bounceShort": "Bounce",
+    "applyTitle": "Apply the edit?",
+    "applyBody": "The edited tracks get new audio rendered from the edit; markers, sections, comments and the tempo map follow it as shown.",
+    "bannerApplying": "{{name}} is applying an edit",
+    "bannerApplyingNoName": "An edit is being applied",
+    "bannerApplyingBody": "The song changes when the new audio is ready. You hear it as it was until then.",
+    "review": {
+      "loading": "Saving and checking the edit…",
+      "notSaved": "The edit could not be saved. Check the connection and try again.",
+      "track": "Track",
+      "duration": "Length",
+      "oldNew": "{{old}} → {{new}}",
+      "size": "New audio ≈ {{size}}",
+      "sizeQuota": "New audio ≈ {{size}} of your {{left}} left",
+      "disk": "{{free}} free on the server",
+      "time": {
+        "sec": "Takes about {{lo}}–{{hi}} s",
+        "min": "Takes about {{lo}}–{{hi}} min"
+      },
+      "overQuota": "This does not fit into your storage quota. Free some space or ask an admin.",
+      "overDisk": "The server does not have enough free disk for this.",
+      "warningsTitle": "Please note",
+      "warnings": {
+        "LOSSY_SOURCE_one": "{{tracks}}: the source is a lossy file, so the result is marked lossy.",
+        "LOSSY_SOURCE_other": "{{tracks}}: the sources are lossy files, so the results are marked lossy.",
+        "ARCHIVED_SOURCE_one": "{{tracks}}: full quality was removed, the edit uses the compressed audio.",
+        "ARCHIVED_SOURCE_other": "{{tracks}}: full quality was removed, the edit uses the compressed audio.",
+        "MIXED_SAMPLE_RATES_one": "{{tracks}}: regions with different sample rates are resampled to 48 kHz.",
+        "MIXED_SAMPLE_RATES_other": "{{tracks}}: regions with different sample rates are resampled to 48 kHz.",
+        "OUT_OF_SYNC_one": "{{tracks}} is out of sync with the other tracks.",
+        "OUT_OF_SYNC_other": "{{tracks}} are out of sync with the other tracks.",
+        "PEAK_OVER_0DBFS_one": "{{tracks}} may clip: the peak goes over 0 dBFS (there is no limiter).",
+        "PEAK_OVER_0DBFS_other": "{{tracks}} may clip: the peak goes over 0 dBFS (there is no limiter)."
+      },
+      "timelineNone": "Markers, sections, comments and the tempo map stay where they are.",
+      "timeline": {
+        "markersMoved_one": "{{count}} marker moved",
+        "markersMoved_other": "{{count}} markers moved",
+        "markersDeleted_one": "{{count}} deleted",
+        "markersDeleted_other": "{{count}} deleted",
+        "sectionsMoved_one": "{{count}} section moved",
+        "sectionsMoved_other": "{{count}} sections moved",
+        "sectionsDeleted_one": "{{count}} section deleted",
+        "sectionsDeleted_other": "{{count}} sections deleted",
+        "commentsMoved_one": "{{count}} comment moved",
+        "commentsMoved_other": "{{count}} comments moved",
+        "commentsEditedOut_one": "{{count}} comment edited out",
+        "commentsEditedOut_other": "{{count}} comments edited out",
+        "tempo_one": "tempo map adjusted",
+        "tempo_other": "tempo map adjusted"
+      },
+      "trashNote": "The old audio goes to the Trash; you can restore it there."
+    },
+    "bounceDialog": {
+      "title": "Bounce the edit",
+      "kind": "Make",
+      "kinds": {
+        "bounceVersions": "New versions",
+        "bounceTracks": "New tracks in this song",
+        "bounceSongs": "Split into songs"
+      },
+      "kindHints": {
+        "bounceVersions": "Each edited track gets a new current version; the old ones stay in the version stack.",
+        "bounceTracks": "Each edited track gets a copy “<track> (edit)”; the originals stay as they are.",
+        "bounceSongs": "One new song per section or marker range, with every track; this song stays as it is."
+      },
+      "splitAt": "Split at",
+      "sections": "Sections",
+      "markers": "Markers",
+      "noRanges": "The edited song has no sections or markers to split at.",
+      "fromStart": "From the start",
+      "naming": "Song titles",
+      "titleSection": "Section or marker name",
+      "titleSession": "“{{song}} – section”",
+      "numbered": "Numbered (01, 02, …)",
+      "trackNames": "Name the tracks “{{example}}”",
+      "exampleSection": "Intro",
+      "exampleTrack": "Guitar",
+      "titleOf": "Title of “{{title}}”",
+      "carryTempo": "Carry the tempo map",
+      "keepEditing": "Keep editing afterwards",
+      "keepEditingHint": "The session stays open, so you can cut more songs from the rest.",
+      "confirm": "Bounce",
+      "titles_one": "{{count}} new song",
+      "titles_other": "{{count}} new songs",
+      "confirmSongs_one": "Make {{count}} song",
+      "confirmSongs_other": "Make {{count}} songs"
+    },
+    "progress": {
+      "title": {
+        "apply": "Applying the edit…",
+        "bounceVersions": "Making new versions…",
+        "bounceTracks": "Making new tracks…",
+        "bounceSongs": "Making new songs…"
+      },
+      "status": {
+        "queued": "Waiting",
+        "running": "Rendering",
+        "done": "Done",
+        "failed": "Failed",
+        "skipped": "Skipped"
+      },
+      "retry": "Retry failed",
+      "cancel": "Cancel",
+      "retried": "Trying the failed tracks again.",
+      "song": "Song {{n}}",
+      "failedNote": "The edit could not be applied; the song is unchanged. You can retry, keep editing or cancel.",
+      "cancelledNote": "The edit session was cancelled; the song is unchanged.",
+      "failedTitle_one": "{{count}} track failed",
+      "failedTitle_other": "{{count}} tracks failed"
+    },
+    "finished": {
+      "generic": "The edit is done.",
+      "openProject": "Open project",
+      "apply_one": "Applied to {{count}} track",
+      "apply_other": "Applied to {{count}} tracks",
+      "bounceVersions_one": "Created {{count}} version",
+      "bounceVersions_other": "Created {{count}} versions",
+      "bounceTracks_one": "Created {{count}} track",
+      "bounceTracks_other": "Created {{count}} tracks",
+      "bounceSongs_one": "Created {{count}} song",
+      "bounceSongs_other": "Created {{count}} songs"
+    }
   }
 }

@@ -9,6 +9,7 @@ import { useEffect, useRef } from "react";
 import { projectKeys, songKeys } from "../features/library/queries";
 import { apiUrl } from "../lib/media";
 import { docKeys } from "../documents/queries";
+import { noteEditChanged } from "../edit/editSync";
 import { onReconnect } from "../offline/online";
 import { processingKey } from "../processing/queries";
 import type { GoneSongs } from "../player/queue";
@@ -111,10 +112,16 @@ export function useEventStream(
         void qc.invalidateQueries({ queryKey: docKeys.all });
         return;
       }
-      // Edit sessions (SPEC §24.7): the session's owner, status and rev; the edit lock itself
-      // arrives as `song.updated`.
+      // Edit sessions (SPEC §24.7): the session's owner, status, rev and render progress; the
+      // edit lock itself arrives as `song.updated`. A status change (Apply/Bounce starting or
+      // ending) also refreshes the song's `editing` for the banner.
       if (e.type === "edit.changed") {
-        if (songId) void qc.invalidateQueries({ queryKey: ["songs", songId, "edit-session"] });
+        noteEditChanged(e.data);
+        if (songId) {
+          void qc.invalidateQueries({ queryKey: ["songs", songId, "edit-session"] });
+          if (e.data.status !== "open")
+            void qc.invalidateQueries({ queryKey: songKeys.detail(songId), exact: true });
+        }
         return;
       }
       if (e.type === "tempo.changed") {

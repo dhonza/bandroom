@@ -17,9 +17,13 @@ import { api, ApiError } from "../api/client";
 import { errorMessage } from "../api/errorMessage";
 import { useOptionalUser } from "../auth/session";
 import { onReconnect } from "../offline/online";
+import { editSyncAction, endingOf, rememberApplying, resultOf } from "./editSync";
+import { useFinishedEdit } from "./finished";
 import {
   enterEdit,
   exitEdit,
+  setEditPhase,
+  type EditPhase,
   runOp,
   savedAt,
   setSaveStatus,
@@ -74,9 +78,9 @@ export function loadedOf(session: EditSession, tracks: readonly Track[]): Loaded
   };
 }
 
-function load(session: EditSession, tracks: readonly Track[]): boolean {
+function load(session: EditSession, tracks: readonly Track[], phase?: EditPhase): boolean {
   const loaded = loadedOf(session, tracks);
-  if (loaded) enterEdit(loaded);
+  if (loaded) enterEdit(phase ? { ...loaded, phase } : loaded);
   return loaded !== null;
 }
 
@@ -139,26 +143,79 @@ export function useEditSessionSync(
   const query = useEditSessionQuery(songId, me !== null);
   const server = query.data?.session ?? null;
   const loaded = query.data !== undefined;
+  const finish = useFinishedEdit(songId);
   useEffect(() => {
     if (!loaded || !tracks) return;
     const local = useEdit.getState();
     const mineLocal = local.songId === songId && local.session !== null ? local.session : null;
-    if (server && server.status === "open" && server.owner.id === me && server.base) {
-      if (!mineLocal || mineLocal.id !== server.id) {
-        load(server, tracks);
+    const action = editSyncAction(
+      server,
+      me,
+      mineLocal && {
+        id: mineLocal.id,
+        rev: mineLocal.rev,
+        busy: local.dirty || local.save === "saving",
+        phase: local.phase,
+      },
+      mineLocal ? endingOf(mineLocal.id) : null,
+    );
+    if (server?.status === "applying") rememberApplying(server);
+    switch (action.kind) {
+      case "none":
         return;
-      }
-      if ((server.rev ?? 0) > mineLocal.rev && !local.dirty && local.save !== "saving")
-        load(server, tracks);
-      return;
+      case "load":
+        if (server) load(server, tracks, action.phase);
+        return;
+      case "applying":
+        setEditPhase("applying");
+        return;
+      case "failed":
+        if (server) load(server, tracks, "editing");
+        notify(t("edit.progress.failedNote"), "red");
+        return;
+      case "committedKeep":
+        if (server) load(server, tracks, "editing");
+        finish(mineLocal ? resultOf(mineLocal.id) : null);
+        return;
+      case "finished":
+        exitEdit();
+        finish(mineLocal ? resultOf(mineLocal.id) : null);
+        return;
+      case "cancelled":
+        exitEdit();
+        notify(t("edit.progress.cancelledNote"));
+        return;
+      case "takenOver":
+        exitEdit();
+        notify(t("edit.takenOver", { name: action.name }));
+        return;
+      case "ended":
+        exitEdit();
+        notify(t("edit.ended"));
+        return;
     }
-    if (!mineLocal) return;
-    exitEdit();
-    if (server && server.owner.id !== me) notify(t("edit.takenOver", { name: server.owner.name }));
-    else notify(t("edit.ended"));
-  }, [loaded, server, tracks, songId, me, t]);
+  }, [loaded, server, tracks, songId, me, t, finish]);
   useAutosave(songId, tracks, t);
   return server;
+}
+
+/** Sends the pending changes now (the autosave of the page registers it). */
+let flusher: (() => void) | null = null;
+
+/**
+ * Saves what is not saved yet and waits for it (Apply and Bounce build on the saved state,
+ * SPEC §24.8). False when the session is gone or the save does not get through in time.
+ */
+export async function flushEditSave(timeoutMs = 15_000): Promise<boolean> {
+  const started = Date.now();
+  for (;;) {
+    const s = useEdit.getState();
+    if (!s.session) return false;
+    if (!s.dirty && s.save !== "saving") return true;
+    if (Date.now() - started > timeoutMs) return false;
+    if (s.save !== "saving") flusher?.();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
 }
 
 const samePrefix = <T>(list: readonly T[], prefix: readonly T[]) =>
@@ -237,6 +294,11 @@ function useAutosave(songId: string, tracks: readonly Track[] | undefined, t: TF
         }
       }
     };
+    const flush = () => {
+      clearTimeout(timer);
+      void save();
+    };
+    flusher = flush;
     const unsub = useEdit.subscribe((s, p) => {
       if (s.changeSeq !== p.changeSeq && s.songId === songId) schedule();
     });
@@ -244,6 +306,7 @@ function useAutosave(songId: string, tracks: readonly Track[] | undefined, t: TF
       if (useEdit.getState().dirty) schedule(0);
     });
     return () => {
+      if (flusher === flush) flusher = null;
       unsub();
       stopReconnect();
       clearTimeout(timer);

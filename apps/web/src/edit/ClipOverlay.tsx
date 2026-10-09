@@ -94,6 +94,8 @@ export function ClipOverlay({
   const picked = useEdit((s) => s.picked);
   const picking = useEdit((s) => s.picking);
   const snapMode = useEdit((s) => s.options.snap);
+  // While the edit renders (SPEC §24.8) the clips are read-only.
+  const readOnly = useEdit((s) => s.phase !== "editing");
   const runOp = useRunOp();
   const [draft, setDraft] = useState<Draft | null>(null);
   const drag = useRef<Drag | null>(null);
@@ -154,7 +156,7 @@ export function ClipOverlay({
   };
 
   const onBodyDown = (e: ReactPointerEvent, box: ClipBox) => {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (readOnly || (e.pointerType === "mouse" && e.button !== 0)) return;
     const isPicked = pickedSet.has(box.clip.id);
     // Touch on a clip that is not picked: the timeline scrolls, seeks (tap) or picks (long-press).
     if (e.pointerType === "touch" && !isPicked && !picking) return;
@@ -174,7 +176,7 @@ export function ClipOverlay({
   };
 
   const onHandleDown = (e: ReactPointerEvent, clip: EditClip, edge: "start" | "end") => {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (readOnly || (e.pointerType === "mouse" && e.button !== 0)) return;
     e.stopPropagation();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     drag.current = { kind: "trim", pointerId: e.pointerId, x: e.clientX, moved: false, clip, edge };

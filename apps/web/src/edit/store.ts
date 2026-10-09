@@ -61,9 +61,16 @@ export interface EditStore {
   dragging: boolean;
   /** The toolbar dialog that is open. */
   dialog: EditDialog | null;
+  /**
+   * `applying`: Apply or a Bounce is rendering (SPEC §24.8); the edit is read-only until the
+   * commit (or a failure, which returns the session to `editing`).
+   */
+  phase: EditPhase;
 }
 
-export type EditDialog = "gain" | "splitAtMarkers" | "options" | "cancel";
+export type EditPhase = "editing" | "applying";
+
+export type EditDialog = "gain" | "splitAtMarkers" | "options" | "cancel" | "apply" | "bounce";
 
 export const DEFAULT_EDIT_OPTIONS: EditOptions = {
   fades: DEFAULT_EDIT_FADES,
@@ -88,6 +95,7 @@ const idle = (): Omit<EditStore, "options"> => ({
   changeSeq: 0,
   dragging: false,
   dialog: null,
+  phase: "editing",
 });
 
 export const useEdit = create<EditStore>(() => ({ ...idle(), options: DEFAULT_EDIT_OPTIONS }));
@@ -99,6 +107,8 @@ export interface LoadedSession {
   cursor: number;
   options: EditOptions;
   versions: Record<string, TrackVersion>;
+  /** `applying` while the server renders the edit (read-only); default `editing`. */
+  phase?: EditPhase;
 }
 
 /**
@@ -127,6 +137,7 @@ export function enterEdit(s: LoadedSession): void {
     save: "saved",
     dirty: false,
     dragging: false,
+    phase: s.phase ?? "editing",
   });
 }
 
@@ -146,7 +157,7 @@ export function isEditing(songId?: string): boolean {
  */
 export function runOp(op: EditOp): EditRefusal | null {
   const s = useEdit.getState();
-  if (!s.state || !s.base) return "noChange";
+  if (!s.state || !s.base || s.phase !== "editing") return "noChange";
   const refusal = validateOp(s.state, op);
   if (refusal) return refusal;
   const h = pushOp({ ops: s.ops, cursor: s.cursor }, op);
@@ -168,7 +179,7 @@ function changed(s: EditStore): Pick<EditStore, "dirty" | "changeSeq" | "save"> 
 
 function moveCursor(next: { ops: EditOp[]; cursor: number }): boolean {
   const s = useEdit.getState();
-  if (!s.base || next.cursor === s.cursor) return false;
+  if (!s.base || s.phase !== "editing" || next.cursor === s.cursor) return false;
   const state = replay(s.base, next.ops, next.cursor);
   const clipIds = new Set(state.tracks.flatMap((t) => t.clips.map((c) => c.id)));
   useEdit.setState({
@@ -201,6 +212,7 @@ export function editCanRedo(s: Pick<EditStore, "ops" | "cursor">): boolean {
 /** Options apply to the next ops only (each op keeps its own copy, SPEC §24.2). */
 export function setEditOptions(patch: Partial<EditOptions>): void {
   const s = useEdit.getState();
+  if (s.phase !== "editing") return;
   const options = { ...s.options, ...patch };
   if (JSON.stringify(options) === JSON.stringify(s.options)) return;
   useEdit.setState({ options, ...(s.session ? changed(s) : {}) });
@@ -224,6 +236,7 @@ export function toggleTrackSelected(id: string): void {
 /** Picks a clip: alone, or added (Shift/Cmd, or touch picking mode; a picked one is removed). */
 export function pickClip(id: string, add: boolean): void {
   const s = useEdit.getState();
+  if (s.phase !== "editing") return;
   if (!add) {
     useEdit.setState({ picked: [id] });
     return;
@@ -236,6 +249,7 @@ export function pickClip(id: string, add: boolean): void {
 /** Touch: a long-press picks the clip and starts picking (further taps add). */
 export function startPicking(id: string): void {
   const s = useEdit.getState();
+  if (s.phase !== "editing") return;
   useEdit.setState({ picking: true, picked: s.picked.includes(id) ? s.picked : [...s.picked, id] });
 }
 
@@ -249,6 +263,19 @@ export function clearPick(): boolean {
 
 export function openEditDialog(dialog: EditDialog | null): void {
   useEdit.setState({ dialog });
+}
+
+/** Read-only while the server renders the edit (SPEC §24.8). */
+export function setEditPhase(phase: EditPhase): void {
+  const s = useEdit.getState();
+  if (s.phase === phase) return;
+  useEdit.setState(
+    phase === "applying" ? { phase, picked: [], picking: false, dragging: false } : { phase },
+  );
+}
+
+export function isEditReadOnly(s: Pick<EditStore, "phase">): boolean {
+  return s.phase !== "editing";
 }
 
 export function setEditDragging(dragging: boolean): void {

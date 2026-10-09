@@ -31,6 +31,14 @@ export function useRunOp() {
   const userId = useOptionalUser()?.id ?? "";
   return useCallback(
     (build: (ctx: { options: EditOptions; userId: string }) => EditOp | null): boolean => {
+      if (useEdit.getState().phase !== "editing") {
+        notifications.show({
+          id: "edit-refusal",
+          color: "yellow",
+          message: t("edit.reasons.applying"),
+        });
+        return false;
+      }
       const op = build({ options: useEdit.getState().options, userId });
       if (!op) return false;
       const refusal = runOp(op);

@@ -13,6 +13,7 @@ import { LockedHint } from "../features/song/songLock";
 import { useFormatters } from "../i18n/format";
 import { useTimelineUi } from "../markers/store";
 import { prepareEngine, usePlayerView } from "../rehearse/controller";
+import { ApplyProgress } from "./ApplyBounce";
 import { EditHeaderBar, EditToolbar } from "./EditToolbar";
 import { cancelEdit, editKeys, startEdit, takeOverEdit } from "./session";
 import { useEdit } from "./store";
@@ -91,14 +92,22 @@ export function EditModeHeader({ song }: { song: Song }) {
     const id = useEdit.getState().session?.id;
     if (id) await cancelEdit(qc, id, song.id);
   };
-  return <EditHeaderBar onCancel={onCancel} trackNames={names} />;
+  return <EditHeaderBar onCancel={onCancel} trackNames={names} songTitle={song.title} />;
 }
 
-/** The toolbar under the header (desktop) or the bottom sheet (phones). */
+/**
+ * The toolbar under the header (desktop) or the bottom sheet (phones), and the progress of a
+ * running (or failed) Apply/Bounce above it.
+ */
 export function EditModeToolbar() {
   const markers = useTimelineUi((s) => s.markers);
   const durationSec = usePlayerView((s) => s.timelineSec);
-  return <EditToolbar markers={markers} durationSec={durationSec} />;
+  return (
+    <>
+      <ApplyProgress />
+      <EditToolbar markers={markers} durationSec={durationSec} />
+    </>
+  );
 }
 
 /**
@@ -118,8 +127,16 @@ export function EditBanner({ song, tracks }: { song: Song; tracks: Track[] | nul
   if (!editing || mine) return null;
   const name = editing.by.name;
   const time = fmt.dateTime(editing.since);
-  const title = name ? t("edit.banner", { name, time }) : t("edit.bannerNoName", { time });
-  const canAct = mayEditAudio(song) && editing.sessionId !== null && editing.status === "open";
+  // While Apply/Bounce renders (SPEC §24.8) the banner says so; a takeover waits for it.
+  const applying = editing.status === "applying";
+  const title = applying
+    ? name
+      ? t("edit.bannerApplying", { name })
+      : t("edit.bannerApplyingNoName")
+    : name
+      ? t("edit.banner", { name, time })
+      : t("edit.bannerNoName", { time });
+  const canAct = mayEditAudio(song) && editing.sessionId !== null;
   const run = async () => {
     const id = editing.sessionId;
     if (!id || !confirm) return;
@@ -144,21 +161,24 @@ export function EditBanner({ song, tracks }: { song: Song; tracks: Track[] | nul
       icon={<IconCut size={18} />}
       title={title}
       data-testid="edit-banner"
+      data-status={editing.status}
     >
       <Stack gap="xs">
-        <Text size="sm">{t("edit.bannerBody")}</Text>
+        <Text size="sm">{applying ? t("edit.bannerApplyingBody") : t("edit.bannerBody")}</Text>
         {canAct && (
           <Group gap="xs">
-            <Button
-              variant="light"
-              h={44}
-              onClick={() => {
-                setConfirm("takeOver");
-              }}
-              data-testid="edit-take-over"
-            >
-              {t("edit.takeOver")}
-            </Button>
+            {!applying && (
+              <Button
+                variant="light"
+                h={44}
+                onClick={() => {
+                  setConfirm("takeOver");
+                }}
+                data-testid="edit-take-over"
+              >
+                {t("edit.takeOver")}
+              </Button>
+            )}
             <Button
               variant="subtle"
               color="red"

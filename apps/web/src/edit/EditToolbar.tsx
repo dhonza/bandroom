@@ -29,6 +29,7 @@ import {
   IconCheck,
   IconCloudUpload,
   IconCut,
+  IconFileExport,
   IconFlag,
   IconScissors,
   IconVolume,
@@ -43,10 +44,12 @@ import { setSnap } from "../markers/store";
 import { formatClock } from "../player/format";
 import { PHONE_QUERY } from "../shell/mediaQueries";
 import { useEditActions, useEditAvailability } from "./actions";
+import { ApplyDialog, BounceDialog } from "./ApplyBounce";
 import { splitPoints, type UnavailableReason } from "./model";
 import {
   editCanRedo,
   editCanUndo,
+  isEditReadOnly,
   openEditDialog,
   setEditOptions,
   setSelectedTracks,
@@ -87,8 +90,11 @@ function useToolActions(): ToolAction[] {
   const avail = useEditAvailability();
   const canUndo = useEdit(editCanUndo);
   const canRedo = useEdit(editCanRedo);
-  const why = (r: UnavailableReason | null) => (r ? t(`edit.reasons.${r}`) : null);
-  return [
+  // While Apply/Bounce renders the edit is read-only (SPEC §24.8).
+  const readOnly = useEdit(isEditReadOnly);
+  const why = (r: UnavailableReason | null) =>
+    readOnly ? t("edit.reasons.applying") : r ? t(`edit.reasons.${r}`) : null;
+  const tools: ToolAction[] = [
     {
       key: "split",
       label: t("edit.split"),
@@ -165,6 +171,42 @@ function useToolActions(): ToolAction[] {
       testId: "edit-redo",
     },
   ];
+  return readOnly
+    ? tools.map((a) => ({ ...a, disabledReason: t("edit.reasons.applying") }))
+    : tools;
+}
+
+/** Apply and Bounce… (SPEC §24.6): need an edit and not a running one. */
+function useFinishActions(): ToolAction[] {
+  const { t } = useTranslation();
+  const readOnly = useEdit(isEditReadOnly);
+  const edited = useEdit((s) => s.cursor > 0);
+  const reason = readOnly ? t("edit.reasons.applying") : edited ? null : t("edit.reasons.noEdits");
+  return [
+    {
+      key: "apply",
+      label: t("edit.apply"),
+      short: t("edit.apply"),
+      icon: <IconCheck size={18} />,
+      onClick: () => {
+        openEditDialog("apply");
+      },
+      disabledReason: reason,
+      testId: "edit-apply",
+      color: "green",
+    },
+    {
+      key: "bounce",
+      label: t("edit.bounce"),
+      short: t("edit.bounceShort"),
+      icon: <IconFileExport size={18} />,
+      onClick: () => {
+        openEditDialog("bounce");
+      },
+      disabledReason: reason,
+      testId: "edit-bounce",
+    },
+  ];
 }
 
 /**
@@ -182,6 +224,7 @@ export function EditToolbar({
   const { t } = useTranslation();
   const phone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   const tools = useToolActions();
+  const finish = useFinishActions();
   const options = <EditOptionsButton phone={phone} />;
   const dialogs = (
     <>
@@ -226,6 +269,20 @@ export function EditToolbar({
               </Why>
             ))}
             {options}
+            {finish.map((a) => (
+              <Why key={a.key} reason={a.disabledReason}>
+                <CaptionButton
+                  icon={a.icon}
+                  caption={a.short}
+                  active={a.key === "apply" && a.disabledReason === null}
+                  color={a.color}
+                  onClick={a.onClick}
+                  disabled={a.disabledReason !== null}
+                  aria-label={a.label}
+                  data-testid={a.testId}
+                />
+              </Why>
+            ))}
           </Group>
         </Paper>
         {dialogs}
@@ -386,19 +443,23 @@ export function SaveState() {
 
 /**
  * Replaces the song header's actions in edit mode (SPEC §24.6): the mode, the save status, the
- * track selection (phones) and Cancel (confirmed when there are ops).
+ * track selection (phones), Apply and Bounce… (desktop; phones have them in the sheet) and
+ * Cancel (confirmed when there are ops). The Apply/Bounce dialogs live here.
  */
 export function EditHeaderBar({
   onCancel,
   trackNames,
+  songTitle,
 }: {
   onCancel: () => Promise<void>;
   trackNames: Readonly<Record<string, string>>;
+  songTitle: string;
 }) {
   const { t } = useTranslation();
   const phone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   const ops = useEdit((s) => s.ops.length);
   const dialog = useEdit((s) => s.dialog);
+  const finish = useFinishActions();
   const [busy, setBusy] = useState(false);
   const cancel = async () => {
     setBusy(true);
@@ -417,6 +478,22 @@ export function EditHeaderBar({
       </Text>
       <SaveState />
       {phone && <TrackSelectionSummary names={trackNames} />}
+      {!phone &&
+        finish.map((a) => (
+          <Why key={a.key} reason={a.disabledReason}>
+            <Button
+              variant={a.key === "apply" ? "filled" : "default"}
+              color={a.color}
+              h={44}
+              leftSection={a.icon}
+              onClick={a.onClick}
+              disabled={a.disabledReason !== null}
+              data-testid={a.testId}
+            >
+              {a.label}
+            </Button>
+          </Why>
+        ))}
       <Button
         variant="light"
         color="red"
@@ -464,6 +541,8 @@ export function EditHeaderBar({
           </Group>
         </Stack>
       </AppModal>
+      <ApplyDialog />
+      <BounceDialog songTitle={songTitle} trackNames={Object.values(trackNames)} />
     </Group>
   );
 }
