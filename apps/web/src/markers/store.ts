@@ -49,6 +49,8 @@ export interface TimelineUiState {
   picked: string | null;
   editor: EditorState;
   helpOpen: boolean;
+  /** The timeline items editor (markers, sections and comments as a list). */
+  itemsOpen: boolean;
   lastPlayStart: number | null;
   /** A selection or item drag is in progress: the loop is applied when it ends. */
   dragging: boolean;
@@ -74,6 +76,7 @@ export const useTimelineUi = create<TimelineUiState>(() => ({
   picked: null,
   editor: null,
   helpOpen: false,
+  itemsOpen: false,
   lastPlayStart: null,
   dragging: false,
 }));
@@ -108,6 +111,7 @@ export function openTimeline(songId: string): void {
     loopOn: false,
     picked: null,
     editor: null,
+    itemsOpen: false,
     lastPlayStart: null,
   });
 }
@@ -279,6 +283,10 @@ export function setHelpOpen(helpOpen: boolean): void {
   useTimelineUi.setState({ helpOpen });
 }
 
+export function setItemsOpen(itemsOpen: boolean): void {
+  useTimelineUi.setState({ itemsOpen });
+}
+
 /** For tests. */
 export function resetTimelineUiForTests(): void {
   player = null;
@@ -292,6 +300,7 @@ export function resetTimelineUiForTests(): void {
     picked: null,
     editor: null,
     helpOpen: false,
+    itemsOpen: false,
     lastPlayStart: null,
     dragging: false,
   });

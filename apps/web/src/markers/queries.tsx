@@ -1,6 +1,7 @@
 import {
   canActOn,
   lockedOut,
+  convertMarkers,
   createMarker,
   deleteMarker,
   listSongMarkers,
@@ -8,6 +9,7 @@ import {
   updateMarker,
   type CreateMarker,
   type Marker,
+  type MarkerType,
   type Song,
   type UpdateMarker,
   uuidv7,
@@ -255,5 +257,118 @@ export function useMarkerActions(songId: string) {
     [songId, patchCache, refresh, fail, t],
   );
 
-  return { create, update, remove };
+  /** Restores `restore` and deletes `drop` (the undo of a bulk change), then refreshes. */
+  const revert = useCallback(
+    async (restore: readonly string[], drop: readonly string[]) => {
+      try {
+        for (const id of drop) await api(deleteMarker, { params: { id } });
+        for (const id of restore) await api(restoreMarker, { params: { id } });
+      } catch (err) {
+        fail(err);
+        return;
+      }
+      refresh();
+    },
+    [fail, refresh],
+  );
+
+  const undoToast = useCallback(
+    (id: string, message: string, undo: () => Promise<void>) => {
+      notifications.show({
+        id,
+        autoClose: UNDO_MS,
+        message: (
+          <Group justify="space-between" wrap="nowrap" gap="sm">
+            <Text size="sm">{message}</Text>
+            <Button
+              size="sm"
+              variant="light"
+              h={44}
+              onClick={() => {
+                notifications.hide(id);
+                void undo();
+              }}
+              data-testid="marker-undo"
+            >
+              {t("markers.undo")}
+            </Button>
+          </Group>
+        ),
+      });
+    },
+    [t],
+  );
+
+  /** Deletes several items with one undo toast (timeline items editor). */
+  const removeMany = useCallback(
+    async (items: readonly Marker[]): Promise<void> => {
+      const ids = new Set(items.map((m) => m.id));
+      patchCache((list) => list.filter((x) => !ids.has(x.id)));
+      const deleted: string[] = [];
+      for (const m of items) {
+        try {
+          if (isPending(m.id)) throw new ApiError(0, { code: "NETWORK", message: "not sent yet" });
+          await api(deleteMarker, { params: { id: m.id } });
+          deleted.push(m.id);
+        } catch (err) {
+          if (offlineQueue(err)) await enqueue("marker.delete", songId, { markerId: m.id });
+          else {
+            fail(err);
+            break;
+          }
+        }
+      }
+      refresh();
+      if (deleted.length > 0)
+        undoToast(
+          `markers-undo-${deleted[0] ?? ""}`,
+          t("timelineItems.deleted", { count: deleted.length }),
+          () => revert(deleted, []),
+        );
+    },
+    [songId, patchCache, refresh, fail, undoToast, revert, t],
+  );
+
+  /**
+   * Converts markers to sections or back (server side, one step) with an undo toast that restores
+   * the sources and deletes the new items. Needs the network: no offline outbox.
+   */
+  const convert = useCallback(
+    async (items: readonly Marker[], to: MarkerType): Promise<void> => {
+      const ids = items.filter((m) => !isPending(m.id) && m.type !== to).map((m) => m.id);
+      if (ids.length === 0) {
+        notifications.show({ message: t("timelineItems.nothingToConvert") });
+        return;
+      }
+      try {
+        const res = await api(convertMarkers, {
+          params: { id: songId },
+          body: { ids, to, requestId: uuidv7() },
+        });
+        const gone = new Set(res.deletedIds);
+        patchCache((list) => [...list.filter((x) => !gone.has(x.id)), ...res.markers]);
+        refresh();
+        const skipped = res.skippedIds.filter((id) => ids.includes(id)).length;
+        if (res.markers.length === 0) {
+          notifications.show({ message: t("timelineItems.nothingToConvert") });
+          return;
+        }
+        const newIds = res.markers.map((m) => m.id);
+        const message = [
+          t("timelineItems.converted", { count: res.markers.length }),
+          skipped > 0 ? t("timelineItems.skipped", { count: skipped }) : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        undoToast(`markers-convert-${newIds[0] ?? ""}`, message, () =>
+          revert(res.deletedIds, newIds),
+        );
+      } catch (err) {
+        fail(err);
+      }
+    },
+    [songId, patchCache, refresh, fail, undoToast, revert, t],
+  );
+
+  return { create, update, remove, removeMany, convert };
 }

@@ -249,6 +249,26 @@ export function useCommentActions(songId: string) {
     [patch, replace, fail],
   );
 
+  /** Moves a top-level comment (null start: whole song; null end: a point). */
+  const move = useCallback(
+    async (c: Comment, startSec: number | null, endSec: number | null): Promise<boolean> => {
+      const end = startSec === null ? null : endSec;
+      patch((list) => mapComment(list, c.id, (x) => ({ ...x, startSec, endSec: end })));
+      try {
+        const { comment } = await api(updateComment, {
+          params: { id: c.id },
+          body: { startSec, endSec: end },
+        });
+        replace(comment);
+        return true;
+      } catch (err) {
+        fail(err);
+        return false;
+      }
+    },
+    [patch, replace, fail],
+  );
+
   const resolve = useCallback(
     async (c: Comment, resolved: boolean): Promise<void> => {
       patch((list) =>
@@ -367,5 +387,5 @@ export function useCommentActions(songId: string) {
     [patch, refresh, fail, t],
   );
 
-  return { create, edit, resolve, react, remove };
+  return { create, edit, move, resolve, react, remove };
 }

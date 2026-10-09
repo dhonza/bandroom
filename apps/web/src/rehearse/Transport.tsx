@@ -16,6 +16,7 @@ import {
   IconDots,
   IconFileMusic,
   IconKeyboard,
+  IconListDetails,
   IconPlayerPauseFilled,
   IconPlayerPlayFilled,
   IconPlayerSkipBackFilled,
@@ -44,7 +45,15 @@ import {
   LoopCountInOptions,
 } from "./ClickControls";
 import { LoopButton, SectionReadout } from "../markers/SongMarkers";
-import { goNext, goPrev, playPause, setHelpOpen, setSnap, useTimelineUi } from "../markers/store";
+import {
+  goNext,
+  goPrev,
+  playPause,
+  setHelpOpen,
+  setItemsOpen,
+  setSnap,
+  useTimelineUi,
+} from "../markers/store";
 import { positionSec, retryAudio, seekSec, setPrefs, skip, usePlayerView } from "./controller";
 import type { QualityPref } from "./model";
 
@@ -283,6 +292,17 @@ export function Transport({
             />
           </>
         )}
+        <Menu.Divider />
+        <Menu.Item
+          leftSection={<IconListDetails size={14} />}
+          closeMenuOnClick
+          onClick={() => {
+            setItemsOpen(true);
+          }}
+          data-testid="transport-timeline-items"
+        >
+          {t("timelineItems.open")}
+        </Menu.Item>
         <Menu.Divider />
         <Menu.Label>{t("markers.snapTitle")}</Menu.Label>
         {SNAP_MODES.map((m) => (
