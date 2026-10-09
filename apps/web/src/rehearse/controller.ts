@@ -1373,6 +1373,8 @@ function flushSave(store: SongStore = useRehearse) {
   // A song without tracks keeps its click and practice settings (SPEC §9); a mix not loaded yet
   // (a dormant queue) has none of them and is not saved over the stored one.
   if (!songId || (Object.keys(mix.tracks).length === 0 && !mix.click && !mix.practice)) return;
+  // A project-page recording plays on an empty song that does not exist on the server.
+  if (isRecordingSongId(songId)) return;
   if (isLinkMode()) saveLocalMix(songId, mix);
   else
     void api(putSongMixer, { params: { id: songId }, body: { state: mix } }).catch(
@@ -1700,4 +1702,66 @@ export function holdScreenForRecording(on: boolean): void {
 /** The count-in before a take, when it is on (the same as before Play). */
 export function countInForRecording(): CountInSpec | null {
   return countInForPlay();
+}
+
+// ——— project-page recording and version position (SPEC §9) ————————————————————————————
+
+/** Song id of the empty, open-ended song a project-page recording plays on. */
+const RECORDING_SONG = "record:";
+
+export function recordingSongId(projectId: string): string {
+  return `${RECORDING_SONG}${projectId}`;
+}
+
+/** The empty song of a project-page recording (never saved, never queued). */
+export function isRecordingSongId(songId: string | null): boolean {
+  return songId?.startsWith(RECORDING_SONG) ?? false;
+}
+
+/**
+ * Opens an empty, open-ended song in the engine for recording on the project page (SPEC §9): no
+ * tracks, no tempo, no click. Whatever played stops. Returns the cleanup for leaving the page.
+ */
+export function openRecordingSession(info: Omit<SongInfo, "songId">): () => void {
+  const songId = recordingSongId(info.projectId);
+  if (useRehearse.getState().open && useRehearse.getState().songId !== songId) stopPlayer();
+  forgetSavedQueue();
+  const detach = attachPage(songId);
+  void openSong(songId, [], null, {}, NO_INSTRUMENT, { ...info, songId });
+  return () => {
+    detach();
+    if (useRehearse.getState().songId === songId) closeSong();
+  };
+}
+
+/**
+ * Previews a version's timeline position (Adjust position, SPEC §9) when the engine plays its
+ * song: the track's clip moves at once, without reloading the song. True when it applied.
+ */
+export function previewVersionOffset(
+  songId: string,
+  trackId: string,
+  versionId: string,
+  offsetSamples: number,
+): boolean {
+  const s = useRehearse.getState();
+  if (previewing() || s.songId !== songId) return false;
+  const p = s.tracks.find((x) => x.track.id === trackId && x.version.id === versionId);
+  if (!p) return false;
+  if (p.version.offsetSamples === offsetSamples) return true;
+  const version = { ...p.version, offsetSamples };
+  engine?.switchSource(trackId, [clipFor(version, p.chosen)]);
+  const tracks = s.tracks.map((x) => (x === p ? { ...x, version } : x));
+  // The saved offset arrives with the next tracks fetch: the same audio, no reload.
+  loadKey = loadKeyOf(songId, tracks, s.mix);
+  useRehearse.setState({ tracks });
+  return true;
+}
+
+/**
+ * Record on a song page that shows a preview (another song plays on, SPEC §6.10): that song
+ * stops and the page's song moves into the engine, where the take is recorded.
+ */
+export function loadPageSongForRecording(): void {
+  if (previewing()) closeSong();
 }

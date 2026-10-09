@@ -17,6 +17,7 @@ import {
   IconFileMusic,
   IconKeyboard,
   IconListDetails,
+  IconMicrophone,
   IconPlayerPauseFilled,
   IconPlayerPlayFilled,
   IconPlayerSkipBackFilled,
@@ -105,6 +106,25 @@ export function PositionText({
   );
 }
 
+/** Opens the record sheet (SPEC §9): in the transport on desktop, the readout row on phones. */
+export function RecordButton({ onRecord }: { onRecord: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <Tooltip label={t("record.open")}>
+      <ActionIcon
+        size={44}
+        variant="subtle"
+        color="red"
+        aria-label={t("record.open")}
+        onClick={onRecord}
+        data-testid="record-open"
+      >
+        <IconMicrophone size={22} color="var(--mantine-color-red-filled)" />
+      </ActionIcon>
+    </Tooltip>
+  );
+}
+
 /** Loading/struggling badges (shown next to the readout). */
 export function TransportState() {
   const { t } = useTranslation();
@@ -144,10 +164,13 @@ export function TransportState() {
 export function Transport({
   phone,
   onBounce,
+  onRecord,
 }: {
   phone: boolean;
   /** Opens "Bounce to new song…" (SPEC §5.5); absent when the user may not bounce. */
   onBounce?: (() => void) | undefined;
+  /** Opens the record sheet (SPEC §9); absent when the user may not record here. */
+  onRecord?: (() => void) | undefined;
 }) {
   const { t } = useTranslation();
   const status = usePlayerView((s) => s.status);
@@ -430,6 +453,7 @@ export function Transport({
           {state}
         </Group>
         <Group gap={4} wrap="nowrap">
+          {onRecord && <RecordButton onRecord={onRecord} />}
           <PracticeButton />
           <ClickToggles />
           {options}

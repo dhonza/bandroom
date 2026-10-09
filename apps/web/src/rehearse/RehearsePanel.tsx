@@ -39,10 +39,12 @@ import {
   attachPage,
   dismissLockHint,
   durationSec,
+  loadPageSongForRecording,
   openSong,
   pageIsPlaying,
   pageState,
   positionSec,
+  prepareEngine,
   seekSec,
   selectTrack,
   songInfoOf,
@@ -65,7 +67,11 @@ import { TrackStrip } from "./TrackStrip";
 import { useTempoUi } from "../tempo/store";
 import type { Lane } from "../timeline/render";
 import { openPracticeSheet, PracticePhoneButton, practiceShortcut } from "./PracticeControls";
-import { Transport, TransportState } from "./Transport";
+import { RecordButton, Transport, TransportState } from "./Transport";
+import { RecordSheet } from "../record/RecordSheet";
+import { recordingSupported } from "../record/opfs";
+import { useOnline } from "../offline/online";
+import { offlineItemFor, useOffline } from "../offline/controller";
 import { TimelineItemsDialog } from "../markers/TimelineItemsDialog";
 
 const HEADER_W = 320;
@@ -168,6 +174,24 @@ export function RehearsePanel({
   const lockHint = usePlayerView((s) => s.lockHint);
   // Bounce (SPEC §5.5): offered when the user may create songs in the project.
   const [bounceOpen, setBounceOpen] = useState(false);
+  // Record (SPEC §9): `record` on the song, a browser that can, and the song online or saved
+  // offline on this device.
+  const online = useOnline();
+  const savedOffline = useOffline((st) => offlineItemFor(song.id, st.items) !== undefined);
+  const [recordOpen, setRecordOpen] = useState(false);
+  const mayRecord = song.access.capabilities.includes("record") && recordingSupported();
+  const onRecord =
+    mayRecord && (online || savedOffline)
+      ? () => {
+          // Inside the tap: the audio unlocks (iOS) and a previewed song moves into the engine.
+          prepareEngine();
+          loadPageSongForRecording();
+          setRecordOpen(true);
+        }
+      : undefined;
+  const closeRecord = useCallback(() => {
+    setRecordOpen(false);
+  }, []);
   const onBounce =
     song.canBounce && playing.length > 0
       ? () => {
@@ -254,7 +278,7 @@ export function RehearsePanel({
           <Text size="sm">{t("rehearse.lockHint")}</Text>
         </Alert>
       )}
-      <Transport phone={isPhone} onBounce={onBounce} />
+      <Transport phone={isPhone} onBounce={onBounce} onRecord={onRecord} />
       {isPhone && (
         // A fixed minimum height: the section name appearing must not move the page.
         <Group gap="sm" wrap="wrap" mih={30} data-testid="rehearse-readout" style={{ rowGap: 0 }}>
@@ -264,7 +288,8 @@ export function RehearsePanel({
           <SectionReadout />
           <TransportState />
           {/* Always there, at the right end (it wraps to its own line when needed). */}
-          <Group ml="auto">
+          <Group ml="auto" gap={4}>
+            {onRecord && <RecordButton onRecord={onRecord} />}
             <PracticePhoneButton onOpen={openPracticeSheet} />
           </Group>
         </Group>
@@ -324,6 +349,14 @@ export function RehearsePanel({
       <MarkerEditor song={song} />
       <TimelineItemsDialog song={song} />
       <ShortcutHelp />
+      {/* Stays while recording when the network goes (the take is kept for later). */}
+      {mayRecord && (
+        <RecordSheet
+          opened={recordOpen}
+          onClose={closeRecord}
+          scope={{ mode: "song", songId: song.id, projectId: song.project.id }}
+        />
+      )}
       {onBounce && (
         <BounceModal
           song={song}
