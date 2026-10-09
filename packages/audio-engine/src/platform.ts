@@ -3,14 +3,30 @@
  * lock. Both are best-effort; unsupported browsers simply skip them.
  */
 
-/** Plays through the ring/silent switch on iOS Safari (Audio Session API). */
-export function setPlaybackAudioSession(): void {
+/** While recording is armed the session records too (SPEC §9). */
+let recordSession = false;
+
+function setSessionType(type: "playback" | "play-and-record") {
   const nav = navigator as Navigator & { audioSession?: { type: string } };
   try {
-    if (nav.audioSession) nav.audioSession.type = "playback";
+    if (nav.audioSession && nav.audioSession.type !== type) nav.audioSession.type = type;
   } catch {
     // not supported
   }
+}
+
+/**
+ * Plays through the ring/silent switch on iOS Safari (Audio Session API); while recording is
+ * armed it stays `play-and-record`.
+ */
+export function setPlaybackAudioSession(): void {
+  setSessionType(recordSession ? "play-and-record" : "playback");
+}
+
+/** Recording armed (SPEC §9): `play-and-record` until disarmed, then `playback` again. */
+export function setRecordingAudioSession(on: boolean): void {
+  recordSession = on;
+  setPlaybackAudioSession();
 }
 
 export type WakeLockMode = "off" | "playing" | "songOpen";
@@ -22,6 +38,7 @@ export class WakeLockController {
   private requesting = false;
   private playing = false;
   private open = false;
+  private recording = false;
   private holdUntil = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private readonly onVisible = () => {
@@ -51,15 +68,23 @@ export class WakeLockController {
     void this.apply();
   }
 
+  /** Recording is armed (SPEC §9): the screen stays on whatever the mode. */
+  setRecording(recording: boolean): void {
+    this.recording = recording;
+    void this.apply();
+  }
+
   dispose(): void {
     document.removeEventListener("visibilitychange", this.onVisible);
     this.open = false;
     this.playing = false;
+    this.recording = false;
     this.holdUntil = 0;
     void this.apply();
   }
 
   private wanted(): boolean {
+    if (this.recording) return true;
     if (this.mode === "off") return false;
     if (this.mode === "songOpen") return this.open;
     return this.playing || Date.now() < this.holdUntil;

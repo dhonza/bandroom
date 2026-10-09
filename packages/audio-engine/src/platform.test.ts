@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WakeLockController } from "./platform";
+import { setPlaybackAudioSession, setRecordingAudioSession, WakeLockController } from "./platform";
 
 /** A wake lock API whose requests resolve when the test says so. */
 class FakeWakeLock {
@@ -88,5 +88,32 @@ describe("WakeLockController", () => {
     c.dispose();
     await flush();
     expect(lock.active).toBe(0);
+  });
+
+  it("holds the lock while recording is armed, whatever the mode", async () => {
+    const c = new WakeLockController("off");
+    c.setRecording(true);
+    expect(lock.requests).toHaveLength(1);
+    lock.requests[0]?.resolve();
+    await flush();
+    expect(lock.active).toBe(1);
+    c.setRecording(false);
+    await flush();
+    expect(lock.active).toBe(0);
+  });
+});
+
+describe("audio session", () => {
+  it("records while armed and plays back after (SPEC §9)", () => {
+    const audioSession = { type: "auto" };
+    vi.stubGlobal("navigator", { audioSession });
+    setPlaybackAudioSession();
+    expect(audioSession.type).toBe("playback");
+    setRecordingAudioSession(true);
+    expect(audioSession.type).toBe("play-and-record");
+    setPlaybackAudioSession(); // a tap on Play keeps it while armed
+    expect(audioSession.type).toBe("play-and-record");
+    setRecordingAudioSession(false);
+    expect(audioSession.type).toBe("playback");
   });
 });
