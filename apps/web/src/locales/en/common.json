@@ -869,7 +869,7 @@
     "strugglingTip": "Try a lower quality or mute tracks you don't need.",
     "interrupted": "Playback was interrupted. Tap play to continue.",
     "lockHint": "Playback stops when the screen locks or you switch apps. To keep the screen on while playing, use “Keep screen on” in the ⋯ menu.",
-    "noTracks": "No tracks are ready to play yet.",
+    "noTracks": "No tracks are ready to play yet. You can still set the tempo and play the click.",
     "startFailed": "Audio could not be started on this device.",
     "trackError": "{{track}} could not be played.",
     "mixer": "Mixer",

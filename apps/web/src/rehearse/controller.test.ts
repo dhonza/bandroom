@@ -15,6 +15,7 @@ const fake = vi.hoisted(() => {
     static instance: FakeEngine | null = null;
     state = "idle";
     lengthFrames = 0;
+    openEnd = false;
     failInit = 0;
     loads: {
       tracks: { id: string; clips: { variant: { hash: string } }[]; trimDb?: number }[];
@@ -58,7 +59,7 @@ const fake = vi.hoisted(() => {
       this.practices.push(p);
     }
     async loadSong(
-      song: FakeEngine["loads"][number] & { lengthFrames: number },
+      song: FakeEngine["loads"][number] & { lengthFrames: number; openEnd?: boolean },
       practice?: unknown,
     ) {
       await this.init();
@@ -66,6 +67,7 @@ const fake = vi.hoisted(() => {
       this.loads.push(song);
       this.loadPractices.push(practice);
       this.lengthFrames = song.lengthFrames;
+      this.openEnd = song.openEnd ?? false;
       this.setState("stopped");
       return true;
     }
@@ -84,8 +86,14 @@ const fake = vi.hoisted(() => {
     setLoop(range: unknown) {
       this.loops.push(range);
     }
-    setClick() {}
-    setClickTrack() {}
+    clicks: { enabled?: boolean }[] = [];
+    setClick(p: { enabled?: boolean }) {
+      this.clicks.push(p);
+    }
+    clickTracks: unknown[] = [];
+    setClickTrack(t: unknown) {
+      this.clickTracks.push(t);
+    }
     setRepeatCountIn() {}
     gains: { trackId: string; gainDb: number }[] = [];
     setTrackState(trackId: string, s: { trimDb?: number; gainDb?: number }) {
@@ -119,7 +127,7 @@ vi.mock("@bandroom/audio-engine", () => ({
     setSongOpen() {}
     setMode() {}
   },
-  clickTrackFor: () => null,
+  clickTrackFor: (_grid: unknown, lengthFrames: number) => ({ lengthFrames }),
   countInSpecAt: () => null,
 }));
 vi.mock("@bandroom/audio-engine/worker?worker&url", () => ({ default: "worker.js" }));
@@ -931,5 +939,96 @@ describe("another song's page while a song plays (SPEC §6.10)", () => {
     expect(useRehearse.getState().songId).toBe("l1");
     detach();
     expect(engine().loads).toHaveLength(0);
+  });
+});
+
+describe("a song without tracks (SPEC §9)", () => {
+  const tempo = {
+    map: { segments: [{ startBeat: 0, bpm: 110, meter: { num: 4, den: 4 }, barIndex: 0 }] },
+    bar1OffsetSec: 0,
+    source: "manual" as const,
+    midiFileName: null,
+    revisionId: "r110",
+    updatedByName: null,
+    updatedAt: 0,
+  };
+
+  it("loads open-ended with a click to the max take length, and saves click settings", async () => {
+    const { setSongTempo } = await import("../tempo/store");
+    const songId = nextSong();
+    setSongTempo(songId, tempo);
+    await openSong(songId, [], null, {}, NO_INSTRUMENT, info(songId));
+    const loaded = engine().loads.at(-1) as unknown as { tracks: unknown[]; openEnd: boolean };
+    expect(loaded).toMatchObject({ tracks: [], openEnd: true });
+    expect(useRehearse.getState()).toMatchObject({ openEnd: true, lengthSec: 0, timelineSec: 60 });
+    expect(engine().clickTracks.at(-1)).toEqual({ lengthFrames: 180 * 60 * 48_000 });
+    controller.setMaxTakeMinutes(30);
+    expect(engine().clickTracks.at(-1)).toEqual({ lengthFrames: 30 * 60 * 48_000 });
+    controller.setMaxTakeMinutes(180);
+
+    controller.setClickSettings({ enabled: true });
+    expect(engine().clicks.at(-1)).toMatchObject({ enabled: true });
+    apiMock.mockClear();
+    controller.closeSong();
+    const calls = apiMock.mock.calls as unknown as [unknown, { body: { state: unknown } }][];
+    expect(calls.at(-1)?.[1].body.state).toMatchObject({
+      tracks: {},
+      click: { enabled: true },
+    });
+  });
+
+  it("does not save an empty mix that was never loaded", async () => {
+    apiMock.mockClear();
+    const songId = nextSong();
+    await openSong(songId, [], null, {}, NO_INSTRUMENT, info(songId));
+    controller.closeSong();
+    const calls = apiMock.mock.calls as unknown as [unknown, { params: { id: string } }][];
+    expect(calls.filter((c) => c[1].params.id === songId)).toEqual([]);
+  });
+
+  it("seeks past the end while open-ended and grows the timeline", async () => {
+    const songId = nextSong();
+    await openSong(songId, [], null, {}, NO_INSTRUMENT, info(songId));
+    controller.seekSec(150);
+    expect(engine().seeks.at(-1)).toBe(150 * 48_000);
+    // A song with tracks clamps at its end as before.
+    controller.closeSong();
+    const other = nextSong();
+    await openSong(other, [track("a")], null, {}, NO_INSTRUMENT, info(other));
+    const { lengthSec, timelineSec, openEnd } = useRehearse.getState();
+    expect({ lengthSec, timelineSec, openEnd }).toEqual({
+      lengthSec: 10,
+      timelineSec: 10,
+      openEnd: false,
+    });
+    controller.seekSec(150);
+    expect(engine().seeks.at(-1)).toBe(10 * 48_000);
+  });
+
+  it("recording makes a song with tracks open-ended and defers reloads until the take ends", async () => {
+    const songId = nextSong();
+    await openSong(songId, [track("a")], null, {}, NO_INSTRUMENT, info(songId));
+    expect(controller.recordingEngine()).toBe(engine());
+    controller.setRecordingMode(true);
+    expect(useRehearse.getState().openEnd).toBe(true);
+    const loads = engine().loads.length;
+    // Another member's new track arrives while recording: no reload yet.
+    await openSong(songId, [track("a"), track("b")], null, {}, NO_INSTRUMENT, info(songId));
+    expect(engine().loads.length).toBe(loads);
+    controller.setRecordingMode(false);
+    await vi.waitFor(() => {
+      expect(engine().loads.length).toBe(loads + 1);
+    });
+    expect(useRehearse.getState().openEnd).toBe(false);
+  });
+
+  it("resets the practice setting before recording, once", async () => {
+    const songId = nextSong();
+    const saved = { tracks: {}, practice: { rate: 0.75, semitones: -2, cents: 8 } };
+    await openSong(songId, [track("a")], saved, {}, NO_INSTRUMENT, info(songId));
+    expect(controller.resetPracticeForRecording()).toBe(true);
+    expect(useRehearse.getState().mix.practice).toEqual({ rate: 1, semitones: 0, cents: 0 });
+    expect(engine().practices.at(-1)).toMatchObject({ rate: 1, semitones: 0 });
+    expect(controller.resetPracticeForRecording()).toBe(false);
   });
 });

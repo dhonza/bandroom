@@ -47,6 +47,9 @@ export function debugSnapshot(engine: Engine | null, s: RehearseState, hasTempo:
     repeatCountIn: engine?.repeatCountInSpec ?? null,
     practice: practiceOf(s.mix),
     enginePractice: engine?.practiceSetting ?? null,
+    openEnd: engine?.openEnd ?? false,
+    timelineSec: s.timelineSec,
+    recording: engine?.recordingState ?? "off",
   };
 }
 

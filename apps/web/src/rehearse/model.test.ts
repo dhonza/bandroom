@@ -4,6 +4,8 @@ import {
   abPartner,
   buildTimeline,
   chooseVariant,
+  clickLengthFrames,
+  timelineLengthSec,
   defaultMix,
   loudnessOffsetDb,
   clickSettingsOf,
@@ -435,5 +437,32 @@ describe("practice (SPEC §30.3)", () => {
     const a = loadKeyOf("s", playable(track("gtr")));
     expect(loadKeyOf("s", playable(track("gtr")))).toBe(a);
     expect(loadKeyOf("s", playable(track("gtr", { transpose: false })))).not.toBe(a);
+  });
+});
+
+describe("open end (SPEC §9)", () => {
+  it("makes a song without playable tracks open-ended", () => {
+    expect(buildTimeline([], defaultMix([]))).toEqual({
+      tracks: [],
+      lengthFrames: 0,
+      openEnd: true,
+    });
+  });
+
+  it("generates the click up to the max take length while open-ended", () => {
+    const horizon = 180 * 60 * 48_000;
+    expect(clickLengthFrames(0, true, horizon)).toBe(horizon);
+    expect(clickLengthFrames(480_000, false, horizon)).toBe(480_000);
+    // Recording along a song longer than the horizon keeps its whole click.
+    expect(clickLengthFrames(horizon + 1, true, horizon)).toBe(horizon + 1);
+  });
+
+  it("grows the timeline a minute at a time ahead of the playhead", () => {
+    expect(timelineLengthSec(0, 0, true)).toBe(60);
+    expect(timelineLengthSec(0, 44, true)).toBe(60);
+    expect(timelineLengthSec(0, 46, true)).toBe(120);
+    expect(timelineLengthSec(200, 10, true)).toBe(200);
+    expect(timelineLengthSec(200, 190, true)).toBe(240);
+    expect(timelineLengthSec(200, 500, false)).toBe(200);
   });
 });

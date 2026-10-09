@@ -70,8 +70,10 @@ import {
   buildTimeline,
   changedTrims,
   chooseVariant,
+  clickLengthFrames,
   clickSettingsOf,
   clipFor,
+  DEFAULT_MAX_TAKE_MINUTES,
   enginePracticeOf,
   loadKeyOf,
   loudnessOffsetDb,
@@ -87,6 +89,7 @@ import {
   type MyInstrument,
   type PlayableTrack,
   type Quality,
+  timelineLengthSec,
 } from "./model";
 import {
   cacheBytes,
@@ -172,6 +175,13 @@ export interface RehearseState {
   /** Song end reached. */
   ended: boolean;
   lengthSec: number;
+  /**
+   * The transport runs until Stop (SPEC §9): no playable tracks, or a take being recorded. The
+   * timeline then has a virtual length, `timelineSec`, that grows ahead of the playhead.
+   */
+  openEnd: boolean;
+  /** The timeline's length: `lengthSec`, or longer while open-ended. */
+  timelineSec: number;
   /** Track picked with 1–9 (SPEC §11.4): `V` flips its A/B pair. */
   selectedTrackId: string | null;
 }
@@ -197,6 +207,8 @@ const initialState = (): RehearseState => ({
   lockHint: false,
   ended: false,
   lengthSec: 0,
+  openEnd: false,
+  timelineSec: 0,
   selectedTrackId: null,
 });
 
@@ -269,6 +281,13 @@ let previewLoop: { start: number; end: number } | null = null;
  * click and count-in follow the song that plays.
  */
 let engineTempo: { songId: string; grid: TempoGrid | null } | null = null;
+/** A take is being recorded (SPEC §9): the transport is open-ended and reloads wait. */
+let recordingOn = false;
+/** A reload of the song's audio waited for the take to end. */
+let reloadAfterTake = false;
+/** The click runs this far ahead while open-ended (the admin's max take length). */
+let maxTakeMinutes = DEFAULT_MAX_TAKE_MINUTES;
+let timelineTimer: ReturnType<typeof setInterval> | null = null;
 
 type OpenArgs = [
   songId: string,
@@ -335,6 +354,7 @@ exposeDebug(() => ({
 
 function onEngineState(s: EngineState) {
   useRehearse.setState({ status: s, ...(s === "playing" ? { ended: false } : {}) });
+  syncTimelineTicker();
   const playing = s === "playing" || s === "buffering";
   wake?.setPlaying(playing);
   if (useRehearse.getState().open) setMediaPlaying(playing);
@@ -424,8 +444,9 @@ export function playingPositionSec(): number {
   return engine ? engine.getPositionFrames() / SAMPLE_RATE : 0;
 }
 
+/** The engine song's timeline length (open-ended: the virtual length, SPEC §9). */
 export function playingDurationSec(): number {
-  return engine ? engine.lengthFrames / SAMPLE_RATE : 0;
+  return engine ? useRehearse.getState().timelineSec : 0;
 }
 
 /** The song page's position: the engine's, or where Play will start a preview. */
@@ -434,7 +455,31 @@ export function positionSec(): number {
 }
 
 export function durationSec(): number {
-  return previewing() ? usePreview.getState().lengthSec : playingDurationSec();
+  return previewing() ? usePreview.getState().timelineSec : playingDurationSec();
+}
+
+/**
+ * The open-ended timeline grows ahead of the playhead (never shrinks while the song is loaded);
+ * otherwise it is the song.
+ */
+function refreshTimeline(): void {
+  const s = useRehearse.getState();
+  const sec = s.openEnd
+    ? Math.max(s.timelineSec, timelineLengthSec(s.lengthSec, playingPositionSec(), true))
+    : s.lengthSec;
+  if (sec !== s.timelineSec) useRehearse.setState({ timelineSec: sec });
+}
+
+/** While open-ended and playing, the timeline is checked every second. */
+function syncTimelineTicker(): void {
+  const s = useRehearse.getState();
+  const run = s.openEnd && (s.status === "playing" || s.status === "buffering");
+  if (run && !timelineTimer) timelineTimer = setInterval(refreshTimeline, 1000);
+  else if (!run && timelineTimer) {
+    clearInterval(timelineTimer);
+    timelineTimer = null;
+  }
+  refreshTimeline();
 }
 
 function currentQuality(songId: string | null, tracks: readonly Track[], mix: MixerState): Quality {
@@ -511,6 +556,9 @@ function showPreview(args: OpenArgs): void {
   previewInstrument = me;
   const v = songView(args, same ? p : null);
   const engineState = useRehearse.getState();
+  const tl = buildTimeline(v.playable, v.mix);
+  const lengthSec = tl.lengthFrames / SAMPLE_RATE;
+  const openEnd = tl.openEnd ?? false;
   usePreview.setState({
     songId,
     info,
@@ -521,7 +569,9 @@ function showPreview(args: OpenArgs): void {
     tracks: v.playable,
     quality: v.quality,
     prefs: engineState.prefs,
-    lengthSec: buildTimeline(v.playable, v.mix).lengthFrames / SAMPLE_RATE,
+    lengthSec,
+    openEnd,
+    timelineSec: timelineLengthSec(lengthSec, previewPos, openEnd),
     ...(same
       ? {}
       : {
@@ -623,12 +673,27 @@ async function loadIntoEngine(args: OpenArgs, carry: Carry | null = null): Promi
     syncPractice();
     return;
   }
+  if (recordingOn && sameSong) {
+    // A reload would end the take (another member's upload, a version change): after it.
+    reloadAfterTake = true;
+    return;
+  }
   loadKey = key;
   songLoads++;
   const wasPlaying = sameSong && (e.state === "playing" || e.state === "buffering");
   const kept = sameSong ? e.getPositionFrames() : Math.round((carry?.startSec ?? 0) * SAMPLE_RATE);
   const timeline = buildTimeline(playable, mix);
-  useRehearse.setState({ lengthSec: timeline.lengthFrames / SAMPLE_RATE });
+  const lengthSec = timeline.lengthFrames / SAMPLE_RATE;
+  const openEnd = (timeline.openEnd ?? false) || recordingOn;
+  useRehearse.setState({
+    lengthSec,
+    openEnd,
+    timelineSec: Math.max(
+      sameSong ? useRehearse.getState().timelineSec : 0,
+      timelineLengthSec(lengthSec, kept / SAMPLE_RATE, openEnd),
+    ),
+  });
+  syncTimelineTicker();
   try {
     // Superseded by another song (or a dispose): that load continues from here.
     if (!(await e.loadSong(timeline, enginePractice(mix)))) return;
@@ -974,6 +1039,8 @@ function showDormant(q: PlayQueue, repeat: RepeatMode, loader: QueueLoader): boo
     ended: false,
     lockHint: false,
     lengthSec: 0,
+    openEnd: false,
+    timelineSec: 0,
     selectedTrackId: null,
   });
   return true;
@@ -1104,14 +1171,23 @@ export function seekPlayingSec(sec: number): void {
 function engineSeek(sec: number): void {
   const e = engine;
   if (!e) return;
-  e.seek(Math.max(0, Math.min(sec, playingDurationSec())) * SAMPLE_RATE);
+  // Open-ended: past the end too (the timeline grows with the playhead).
+  const to = useRehearse.getState().openEnd ? sec : Math.min(sec, playingDurationSec());
+  e.seek(Math.max(0, to) * SAMPLE_RATE);
   useRehearse.setState({ ended: false });
+  refreshTimeline();
 }
 
 /** Seeks the page's song; on a preview it sets where Play starts. */
 export function seekSec(sec: number): void {
   if (previewing()) {
-    previewPos = Math.max(0, Math.min(sec, usePreview.getState().lengthSec));
+    const p = usePreview.getState();
+    previewPos = Math.max(0, p.openEnd ? sec : Math.min(sec, p.lengthSec));
+    const timelineSec = Math.max(
+      p.timelineSec,
+      timelineLengthSec(p.lengthSec, previewPos, p.openEnd),
+    );
+    if (timelineSec !== p.timelineSec) usePreview.setState({ timelineSec });
     return;
   }
   engineSeek(sec);
@@ -1164,10 +1240,19 @@ export function hasTempo(): boolean {
 let clickKey: { grid: TempoGrid | null; length: number; sub: number; eighths: boolean } | null =
   null;
 
-/** Pushes the click settings, the click track and the repeat count-in to the engine. */
+/**
+ * Pushes the click settings, the click track and the repeat count-in to the engine. While
+ * open-ended the click track runs to the max take length (SPEC §9).
+ */
 function syncClick() {
   const e = engine;
-  if (!e || e.lengthFrames <= 0) return;
+  const open = openEndNow();
+  if (!e || (e.lengthFrames <= 0 && !open)) return;
+  const length = clickLengthFrames(
+    e.lengthFrames,
+    open,
+    Math.round(maxTakeMinutes * 60 * SAMPLE_RATE),
+  );
   const c = clickSettingsOf(useRehearse.getState().mix);
   const grid = songGrid();
   e.setClick({
@@ -1182,19 +1267,19 @@ function syncClick() {
   if (
     !k ||
     k.grid !== grid ||
-    k.length !== e.lengthFrames ||
+    k.length !== length ||
     k.sub !== c.subdivision ||
     k.eighths !== c.compoundEighths
   ) {
     clickKey = {
       grid,
-      length: e.lengthFrames,
+      length,
       sub: c.subdivision,
       eighths: c.compoundEighths,
     };
     e.setClickTrack(
       grid
-        ? clickTrackFor(grid, e.lengthFrames, {
+        ? clickTrackFor(grid, length, {
             subdivision: c.subdivision,
             compoundEighths: c.compoundEighths,
           })
@@ -1285,7 +1370,9 @@ function flushSave(store: SongStore = useRehearse) {
   // A preview saves only changes; the engine's song is saved whenever it is left or closed.
   if (!timer && store !== useRehearse) return;
   const { songId, mix } = store.getState();
-  if (!songId || Object.keys(mix.tracks).length === 0) return;
+  // A song without tracks keeps its click and practice settings (SPEC §9); a mix not loaded yet
+  // (a dormant queue) has none of them and is not saved over the stored one.
+  if (!songId || (Object.keys(mix.tracks).length === 0 && !mix.click && !mix.practice)) return;
   if (isLinkMode()) saveLocalMix(songId, mix);
   else
     void api(putSongMixer, { params: { id: songId }, body: { state: mix } }).catch(
@@ -1546,4 +1633,66 @@ function applyQuality() {
 
 export function dismissLockHint(): void {
   useRehearse.setState({ lockHint: false });
+}
+
+// ——— recording (SPEC §9) ——————————————————————————————————————————————————————————
+
+/** The engine runs until Stop: no playable tracks, or a take (also just before it starts). */
+function openEndNow(): boolean {
+  return recordingOn || (engine?.openEnd ?? false);
+}
+
+/**
+ * The engine to record on: it must hold the page's song (not a preview, SPEC §6.10). Null when
+ * it does not.
+ */
+export function recordingEngine(): Engine | null {
+  const s = useRehearse.getState();
+  if (previewing() || !s.open || s.dormant || s.songId === null) return null;
+  return getEngine();
+}
+
+/** The admin's max take length (SPEC §9); the click runs that far while open-ended. */
+export function setMaxTakeMinutes(minutes: number): void {
+  maxTakeMinutes = minutes > 0 ? minutes : DEFAULT_MAX_TAKE_MINUTES;
+  syncClick();
+}
+
+export function maxTakeFrames(): number {
+  return Math.round(maxTakeMinutes * 60 * SAMPLE_RATE);
+}
+
+/**
+ * Arming resets the engine song's practice setting to neutral (SPEC §9, §30.5) and saves it.
+ * True when it was not neutral (the record sheet shows a notice).
+ */
+export function resetPracticeForRecording(): boolean {
+  const { mix } = useRehearse.getState();
+  const p = practiceOf(mix);
+  if (p.rate === 1 && p.semitones === 0 && p.cents === 0) return false;
+  useRehearse.setState({ mix: { ...mix, practice: { ...p, rate: 1, semitones: 0, cents: 0 } } });
+  syncPractice();
+  scheduleSave();
+  return true;
+}
+
+/**
+ * A take starts (call before `Engine.startRecording`) or ended (after its `take` event): the
+ * transport is open-ended meanwhile, the click runs to the max take length, and a reload of the
+ * song that waited for the take happens now.
+ */
+export function setRecordingMode(on: boolean): void {
+  recordingOn = on;
+  useRehearse.setState({ openEnd: openEndNow() });
+  syncClick();
+  syncTimelineTicker();
+  if (!on && reloadAfterTake) {
+    reloadAfterTake = false;
+    if (lastOpen) void loadIntoEngine(lastOpen);
+  }
+}
+
+/** The count-in before a take, when it is on (the same as before Play). */
+export function countInForRecording(): CountInSpec | null {
+  return countInForPlay();
 }

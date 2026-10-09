@@ -163,15 +163,17 @@ export function RehearsePanel({
   // waveforms).
   const dimmedKey = usePlayerView((s) => dimmedTrackIds(s.mix).join("\n"));
   const status = usePlayerView((s) => s.status);
-  const lengthSec = usePlayerView((s) => s.lengthSec);
+  // Open-ended (no tracks, recording): a virtual length that grows with the playhead (SPEC §9).
+  const timelineSec = usePlayerView((s) => s.timelineSec);
   const lockHint = usePlayerView((s) => s.lockHint);
   // Bounce (SPEC §5.5): offered when the user may create songs in the project.
   const [bounceOpen, setBounceOpen] = useState(false);
-  const onBounce = song.canBounce
-    ? () => {
-        setBounceOpen(true);
-      }
-    : undefined;
+  const onBounce =
+    song.canBounce && playing.length > 0
+      ? () => {
+          setBounceOpen(true);
+        }
+      : undefined;
 
   const hashes = playing.map((p) => p.version.variants.peaks?.hash ?? null);
   const pyramids = usePeaks(hashes);
@@ -229,7 +231,7 @@ export function RehearsePanel({
   const laneHeight = mixerOpen ? trackLaneHeight : overviewHeight;
   const timelineMarkers = useTimelineMarkers(
     song,
-    lengthSec,
+    timelineSec,
     mixerOpen ? lanes.length : 0,
     trackLaneHeight,
   );
@@ -252,92 +254,84 @@ export function RehearsePanel({
           <Text size="sm">{t("rehearse.lockHint")}</Text>
         </Alert>
       )}
-      {playing.length === 0 ? (
-        <Text c="dimmed">{t("rehearse.noTracks")}</Text>
-      ) : (
-        <>
-          <Transport phone={isPhone} onBounce={onBounce} />
-          {isPhone && (
-            // A fixed minimum height: the section name appearing must not move the page.
-            <Group
-              gap="sm"
-              wrap="wrap"
-              mih={30}
-              data-testid="rehearse-readout"
-              style={{ rowGap: 0 }}
-            >
-              <CountInCountdown />
-              <BarBeatText size="lg" c="dimmed" />
-              <MeterText size="sm" c="dimmed" />
-              <SectionReadout />
-              <TransportState />
-              {/* Always there, at the right end (it wraps to its own line when needed). */}
-              <Group ml="auto">
-                <PracticePhoneButton onOpen={openPracticeSheet} />
-              </Group>
-            </Group>
-          )}
-          {lengthSec > 0 && (
-            <Timeline
-              lanes={lanes}
-              durationSec={lengthSec}
-              getPosition={getPosition}
-              playing={status === "playing"}
-              onSeek={seekSec}
-              hideLanes={!mixerOpen}
-              labelWidth={isPhone ? LABEL_W_PHONE : LABEL_W}
-              overviewHeight={overviewHeight}
-              laneHeight={laneHeight}
-              onLaneHeight={mixerOpen ? setTrackLaneHeight : setOverviewHeight}
-              minLaneHeight={mixerOpen ? minLaneHeight : MIN_LANE_H}
-              {...timelineMarkers.props}
-              {...(mixerOpen && {
-                belowOverview: (
-                  <MixerTools
-                    songId={song.id}
-                    snapshots={snapshots}
-                    canSetDefaults={canSetDefaults}
-                    defaultsLocked={song.locked !== null}
-                    onBounce={onBounce}
-                  />
-                ),
-                headerWidth: isPhone ? HEADER_W_NARROW : HEADER_W,
-                renderHeader: (i: number) => {
-                  const p = playing[i];
-                  if (p)
-                    return (
-                      <TrackStrip playable={p} song={song} height={laneHeight} compact={isPhone} />
-                    );
-                  return lanes[i]?.click ? (
-                    <ClickStrip height={laneHeight} compact={isPhone} />
-                  ) : null;
-                },
-              })}
-            />
-          )}
-          <SelectionBar song={song} />
-          <SectionChips />
-          <MarkerToolbar song={song} />
-          <SongComments song={song} />
-          <TimelineMenu
-            song={song}
-            menu={timelineMarkers.menu}
-            onClose={timelineMarkers.closeMenu}
-            durationSec={lengthSec}
-          />
-          <MarkerEditor song={song} />
-          <TimelineItemsDialog song={song} />
-          <ShortcutHelp />
-          {onBounce && (
-            <BounceModal
-              song={song}
-              opened={bounceOpen}
-              onClose={() => {
-                setBounceOpen(false);
-              }}
-            />
-          )}
-        </>
+      <Transport phone={isPhone} onBounce={onBounce} />
+      {isPhone && (
+        // A fixed minimum height: the section name appearing must not move the page.
+        <Group gap="sm" wrap="wrap" mih={30} data-testid="rehearse-readout" style={{ rowGap: 0 }}>
+          <CountInCountdown />
+          <BarBeatText size="lg" c="dimmed" />
+          <MeterText size="sm" c="dimmed" />
+          <SectionReadout />
+          <TransportState />
+          {/* Always there, at the right end (it wraps to its own line when needed). */}
+          <Group ml="auto">
+            <PracticePhoneButton onOpen={openPracticeSheet} />
+          </Group>
+        </Group>
+      )}
+      {timelineSec > 0 && (
+        <Timeline
+          lanes={lanes}
+          durationSec={timelineSec}
+          getPosition={getPosition}
+          playing={status === "playing"}
+          onSeek={seekSec}
+          hideLanes={!mixerOpen}
+          labelWidth={isPhone ? LABEL_W_PHONE : LABEL_W}
+          overviewHeight={overviewHeight}
+          laneHeight={laneHeight}
+          onLaneHeight={mixerOpen ? setTrackLaneHeight : setOverviewHeight}
+          minLaneHeight={mixerOpen ? minLaneHeight : MIN_LANE_H}
+          {...timelineMarkers.props}
+          {...(mixerOpen && {
+            belowOverview: (
+              <MixerTools
+                songId={song.id}
+                snapshots={snapshots}
+                canSetDefaults={canSetDefaults}
+                defaultsLocked={song.locked !== null}
+                onBounce={onBounce}
+              />
+            ),
+            headerWidth: isPhone ? HEADER_W_NARROW : HEADER_W,
+            renderHeader: (i: number) => {
+              const p = playing[i];
+              if (p)
+                return (
+                  <TrackStrip playable={p} song={song} height={laneHeight} compact={isPhone} />
+                );
+              return lanes[i]?.click ? <ClickStrip height={laneHeight} compact={isPhone} /> : null;
+            },
+          })}
+        />
+      )}
+      {playing.length === 0 && (
+        // Nothing to play yet: the click still runs (SPEC §9).
+        <Text size="sm" c="dimmed" data-testid="rehearse-no-tracks">
+          {t("rehearse.noTracks")}
+        </Text>
+      )}
+      <SelectionBar song={song} />
+      <SectionChips />
+      <MarkerToolbar song={song} />
+      <SongComments song={song} />
+      <TimelineMenu
+        song={song}
+        menu={timelineMarkers.menu}
+        onClose={timelineMarkers.closeMenu}
+        durationSec={timelineSec}
+      />
+      <MarkerEditor song={song} />
+      <TimelineItemsDialog song={song} />
+      <ShortcutHelp />
+      {onBounce && (
+        <BounceModal
+          song={song}
+          opened={bounceOpen}
+          onClose={() => {
+            setBounceOpen(false);
+          }}
+        />
       )}
     </Section>
   );

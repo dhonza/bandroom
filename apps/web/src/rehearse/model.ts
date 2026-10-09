@@ -150,7 +150,38 @@ export function buildTimeline(tracks: readonly PlayableTrack[], mix: MixerState)
     0,
     ...engineTracks.flatMap((t) => t.clips.map((c) => c.startFrame + c.lengthFrames)),
   );
-  return { tracks: engineTracks, lengthFrames };
+  // Nothing to play: the transport and the click run until Stop (SPEC §9).
+  return { tracks: engineTracks, lengthFrames, openEnd: engineTracks.length === 0 };
+}
+
+/** Default max take length (SPEC §9: the admin setting `recording.maxTakeMinutes`). */
+export const DEFAULT_MAX_TAKE_MINUTES = 180;
+
+/**
+ * How far the click is generated: the song, or while open-ended (no playable tracks, or
+ * recording) at least `horizonFrames` (the max take length), since the transport runs on.
+ */
+export function clickLengthFrames(
+  lengthFrames: number,
+  openEnd: boolean,
+  horizonFrames: number,
+): number {
+  return openEnd ? Math.max(lengthFrames, horizonFrames) : lengthFrames;
+}
+
+/** Shortest open-ended timeline, and the steps it grows in ahead of the playhead. */
+const OPEN_END_MIN_SEC = 60;
+const OPEN_END_STEP_SEC = 60;
+const OPEN_END_AHEAD_SEC = 15;
+
+/**
+ * The timeline's length (SPEC §9): the song's, or while open-ended a virtual length that stays
+ * at least 15 s ahead of the playhead, growing a minute at a time.
+ */
+export function timelineLengthSec(lengthSec: number, positionSec: number, openEnd: boolean) {
+  if (!openEnd) return lengthSec;
+  const want = Math.max(OPEN_END_MIN_SEC, positionSec + OPEN_END_AHEAD_SEC);
+  return Math.max(lengthSec, Math.ceil(want / OPEN_END_STEP_SEC) * OPEN_END_STEP_SEC);
 }
 
 /**

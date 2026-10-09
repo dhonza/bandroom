@@ -156,6 +156,8 @@ export function Transport({
   );
   const playing = status === "playing" || status === "buffering";
   const duration = usePlayerView((s) => s.lengthSec);
+  // An empty song runs until Stop (SPEC §9): no song length to show.
+  const noEnd = usePlayerView((s) => s.openEnd && s.lengthSec === 0);
 
   const snap = useTimelineUi((s) => s.snap);
   const hasTempo = useTempoUi((s) => s.grid !== null);
@@ -417,9 +419,11 @@ export function Transport({
               <BarBeatText size="xl" c="dimmed" />
               <MeterText size="md" c="dimmed" />
             </Group>
-            <Text size="xs" c="dimmed" className="tabular-nums">
-              {formatClock(duration, false)}
-            </Text>
+            {!noEnd && (
+              <Text size="xs" c="dimmed" className="tabular-nums">
+                {formatClock(duration, false)}
+              </Text>
+            )}
           </Stack>
           <SectionReadout />
           {state}

@@ -6,6 +6,7 @@ import {
   SongTitleSchema,
   updateSong,
   type Song,
+  type Track,
 } from "@bandroom/shared";
 import {
   Alert,
@@ -39,6 +40,7 @@ import { MixerButton } from "./MixerButton";
 import { RehearsePanel } from "../../rehearse/RehearsePanel";
 import { WhatsNewBanner } from "../../markers/WhatsNewBanner";
 import { SongTempoSummary } from "../../tempo/TempoDialog";
+import { useTempoUi } from "../../tempo/store";
 import { TracksSection } from "./TracksSection";
 import { NotFoundPage } from "../../pages/NotFoundPage";
 import { songKeys, useInvalidateContent, useSong, useSongTracks } from "../library/queries";
@@ -59,6 +61,8 @@ export function SongPage() {
   const query = useSong(songId);
   const tracks = useSongTracks(songId);
   const mixer = useMixerToggle(true, songId);
+  // Without tracks the Mixer still has the click lane once the song has a tempo (SPEC §9).
+  const hasTempo = useTempoUi((s) => s.songId === songId && s.grid !== null);
   const [editOpen, edit] = useDisclosure(false);
 
   if (query.isPending) {
@@ -99,7 +103,7 @@ export function SongPage() {
           <SongTempoSummary songId={song.id} />
         </Stack>
         <Group gap="xs" wrap="wrap" justify="flex-end" style={{ flex: "0 1 auto" }}>
-          <MixerButton mixer={mixer} disabled={tracks.data?.tracks.length === 0} />
+          <MixerButton mixer={mixer} disabled={tracks.data?.tracks.length === 0 && !hasTempo} />
           <OfflineButton kind="song" id={song.id} title={song.title} projectId={song.project.id} />
           <FollowButton target="song" id={song.id} />
           <SongLockButton song={song} />
@@ -288,14 +292,16 @@ function DeleteSongSection({ song }: { song: Song }) {
 
 /**
  * The song Player (SPEC §11.3, §27.4): the engine with the personal mix; the header's Mixer
- * button shows or hides the mixer tools and the track lanes while the engine plays on.
+ * button shows or hides the mixer tools and the track lanes while the engine plays on. A song
+ * without tracks has it too: tempo, click and the transport, running until Stop (SPEC §9).
  */
 function SongPlayer({ song, mixer }: { song: Song; mixer: MixerToggle }) {
   const tracks = useSongTracks(song.id);
   if (tracks.isPending) return <Loader size="sm" />;
-  const list = tracks.data?.tracks ?? [];
-  if (list.length === 0) return null;
+  const list = tracks.data?.tracks ?? NO_TRACKS;
   return <RehearsePanel song={song} tracks={list} mixerOpen={mixer.open} songPath={appSongPath} />;
 }
 
 const appSongPath = (id: string) => `/songs/${id}`;
+/** Stable while the tracks query has no data (the Player re-opens the song on a new array). */
+const NO_TRACKS: Track[] = [];

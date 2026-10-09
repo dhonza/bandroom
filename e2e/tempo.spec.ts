@@ -25,6 +25,8 @@ interface DebugState {
   countIn: { beat: number; clicks: number } | null;
   lastCountIn: CountIn | null;
   repeatCountIn: CountIn | null;
+  openEnd: boolean;
+  timelineSec: number;
 }
 
 /** Engine state exposed by the Rehearse controller (SPEC §20: debug state for e2e). */
@@ -345,4 +347,79 @@ test("Tempo: MIDI import with markers, manual tempo, grid snapping, click and co
     await page.keyboard.press("k");
     await expect.poll(async () => (await debug(page))?.clickSettings.countIn).toBe(false);
   }
+});
+
+test("Empty song: set the tempo, play the click until Stop, change the tempo (SPEC §9)", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(180_000);
+  const phone = isMobile(testInfo);
+  await loginAsNewUser(page, request, testInfo, "member");
+  await page.goto("library");
+  await page.getByTestId("new-project").click();
+  await page.getByLabel("Name").fill(`Click ${uniqueUsername(testInfo)}`);
+  await page.getByTestId("create-project-submit").click();
+  await page.getByTestId("project-settings-tab").waitFor();
+  await page.getByTestId("new-song").click();
+  await page.getByLabel("Title", { exact: true }).fill("Just the click");
+  await page.getByTestId("create-song-submit").click();
+  await page
+    .getByTestId("song-row")
+    .filter({ hasText: "Just the click" })
+    .getByRole("link")
+    .click();
+
+  // No tracks: the Player is there with its transport, the tempo button and a hint.
+  await expect(page.getByTestId("rehearse-transport")).toBeVisible();
+  await expect(page.getByTestId("rehearse-no-tracks")).toBeVisible();
+  await expect(page.getByTestId("mixer-toggle")).toBeDisabled();
+  await expect.poll(async () => (await debug(page))?.openEnd).toBe(true);
+
+  const setBpm = async (bpm: string) => {
+    await page.getByTestId("tempo-button").click();
+    const dialog = page.getByTestId("tempo-dialog");
+    await dialog.getByTestId("tempo-tab-manual").click();
+    await dialog.getByTestId("tempo-bpm").fill(bpm);
+    await fillMeter(dialog.getByTestId("tempo-meter"), "4/4");
+    await dialog.getByTestId("tempo-save").click();
+    await expect(page.getByTestId("song-tempo")).toContainText(`${bpm} BPM`);
+  };
+  await setBpm("110");
+  await expect.poll(async () => (await debug(page))?.hasTempo).toBe(true);
+  // With a tempo the Mixer has the click lane.
+  await expect(page.getByTestId("mixer-toggle")).toBeEnabled();
+  if (phone) await phoneMenu(page, "menu-click");
+  else await page.getByTestId("click-toggle").click();
+  await expect.poll(async () => (await debug(page))?.click?.enabled).toBe(true);
+
+  await page.getByTestId("rehearse-play").click();
+  await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("playing");
+  // The click runs past the (empty) song's end until Stop.
+  await expect
+    .poll(async () => (await debug(page))?.position ?? 0, { timeout: 30_000 })
+    .toBeGreaterThan(2 * 48_000);
+  expect((await debug(page))?.clicks).toBeGreaterThan(3);
+  expect((await debug(page))?.status).toBe("playing");
+
+  // A new tempo while playing: the click follows and keeps running.
+  await setBpm("112");
+  const before = (await debug(page))?.clicks ?? 0;
+  await expect
+    .poll(async () => (await debug(page))?.clicks ?? 0, { timeout: 30_000 })
+    .toBeGreaterThan(before + 2);
+  expect((await debug(page))?.status).toBe("playing");
+
+  await page.getByTestId("rehearse-play").click();
+  await expect.poll(async () => (await debug(page))?.status).toBe("stopped");
+  await page.getByTestId("rehearse-play").click();
+  await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("playing");
+  await page.getByTestId("rehearse-play").click();
+  await expect.poll(async () => (await debug(page))?.status).toBe("stopped");
+
+  // The click setting is saved for the song without tracks.
+  await page.reload();
+  await expect
+    .poll(async () => (await debug(page))?.clickSettings.enabled, { timeout: 30_000 })
+    .toBe(true);
 });
