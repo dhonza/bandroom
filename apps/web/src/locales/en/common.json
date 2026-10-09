@@ -107,7 +107,12 @@
     "UPDATE_CHECK_FAILED": "Could not check for updates.",
     "UPDATE_TAG_UNKNOWN": "This version is not available.",
     "UPDATE_CONFIRM_MISMATCH": "The confirmed version is not the one running.",
-    "JOB_STATE": "The job cannot do that in its current state."
+    "JOB_STATE": "The job cannot do that in its current state.",
+    "EDIT_SESSION_OPEN": "Someone else is already editing this song. You can take the session over.",
+    "EDIT_SESSION_STATE": "The edit session has already ended. Reload the page.",
+    "NOT_SESSION_OWNER": "Someone else has taken over this edit session. Your latest changes were not saved.",
+    "SONG_EDITING": "Someone is editing this song, so this cannot be changed until the session ends.",
+    "PROCESSING_SOURCE": "A track of the song is still being processed. Try again when it is ready."
   },
   "footer": {
     "version": "Version {{version}}"

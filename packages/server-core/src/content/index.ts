@@ -20,3 +20,4 @@ export * from "./bounce";
 export * from "./songStats";
 export * from "./storageBytes";
 export * from "./projectUserState";
+export * from "./editSessions";

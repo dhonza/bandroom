@@ -44,6 +44,8 @@ export const CAPABILITIES = [
   "trash.purge",
   /** Remove the full-quality files of anyone's versions (SPEC §26.4). */
   "lossless.remove",
+  /** Edit mode: start, save, take over and cancel edit sessions (SPEC §24.12). */
+  "audio.edit",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 export const CapabilitySchema = z.enum(CAPABILITIES);
@@ -66,6 +68,7 @@ const MIN_ROLE: Record<Capability, ContentRole> = {
   "version.setCurrent": "editor",
   "song.create": "editor",
   "link.manage": "editor",
+  "audio.edit": "editor",
   "grants.manage": "manager",
   "settings.manage": "manager",
   "project.delete": "manager",
@@ -301,18 +304,45 @@ export function canBounce(songRole: EffectiveRole, projectRole: EffectiveRole): 
   );
 }
 
-// --- Song lock (SPEC §25.12) --------------------------------------------------------------------
+// --- Song lock and edit lock (SPEC §25.12, §24.7) ----------------------------------------------
 
 /**
  * Capabilities whose changes a locked song refuses, for everyone (admins included): markers and
- * sections, comments (incl. replies, reactions, resolve, edit, delete) and the tempo map.
- * Reading (GET) stays allowed.
+ * sections, comments (incl. replies, reactions, resolve, edit, delete), the tempo map, and
+ * starting an edit session. Reading (GET) stays allowed.
  */
 export const LOCK_FROZEN_CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>([
   "comment",
   "annotate.own",
   "annotate.any",
   "tempo.edit",
+  "audio.edit",
+]);
+
+/**
+ * Capabilities whose changes an edit session freezes (SPEC §24.7), for every role, admins
+ * included: uploads and takes, tracks and versions (create, delete, reorder, edit, set current,
+ * offset, gain, retry), markers and sections, the tempo map, comments and reactions, song edits,
+ * the song lock, deleting the song and removing full quality. Personal mixer state, playback,
+ * visits, follows, links, grants and bounces of the mix (`view`, `stream`, `download`,
+ * `link.manage`, `grants.manage`, `song.create`, `settings.manage`) stay free, and so do the
+ * session's own endpoints (`audio.edit`).
+ */
+export const EDIT_FROZEN_CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>([
+  "comment",
+  "upload",
+  "record",
+  "annotate.own",
+  "annotate.any",
+  "edit.own",
+  "edit.any",
+  "delete.own",
+  "delete.any",
+  "tempo.edit",
+  "version.setCurrent",
+  "song.delete",
+  "trash.purge",
+  "lossless.remove",
 ]);
 
 /** Track fields that make up the default mix (SPEC §5.5): frozen while the song is locked. */
@@ -330,26 +360,58 @@ export const TRACK_LOCK_FIELDS = [...DEFAULT_MIX_FIELDS, ...TRACK_PLAYBACK_FIELD
 /** Version fields frozen while the song is locked: the version gain (SPEC §25.6). */
 export const VERSION_GAIN_FIELDS = ["gainDb"] as const;
 
-/** What a request does, as far as the song lock is concerned. */
+/**
+ * The kinds of song lock: `locked` (SPEC §25.12, an editor froze the timeline) and `editing` (an
+ * edit session is open or applying, SPEC §24.7).
+ */
+export const SONG_LOCK_KINDS = ["locked", "editing"] as const;
+export type SongLockKind = (typeof SONG_LOCK_KINDS)[number];
+
+/** What a request does, as far as the song locks are concerned. */
 export interface LockCheck {
   method: string;
   capability: Capability;
-  /** Body fields frozen by the lock on routes whose other fields stay editable. */
+  /** The route's scope: link management and the edit session's own routes ignore the edit lock. */
+  scope?: string | undefined;
+  /** Body fields frozen by the song lock on routes whose other fields stay editable. */
   lockFields?: readonly string[] | undefined;
   body?: unknown;
 }
 
+const reads = (method: string) => method === "GET" || method === "HEAD";
+
 /**
- * Whether a song lock refuses this request (SPEC §25.12): a change with a frozen capability, or a
- * body that sets one of the route's frozen fields. Personal mixer state, uploads, other track
- * edits and documents stay allowed.
+ * Whether a lock of this kind refuses the request (null = no lock).
+ * - `locked` (SPEC §25.12): a change with a frozen capability, or a body that sets one of the
+ *   route's frozen fields. Personal mixer state, uploads, other track edits and documents stay
+ *   allowed.
+ * - `editing` (SPEC §24.7): every change with an {@link EDIT_FROZEN_CAPABILITIES} capability,
+ *   whatever the body, except on link-scoped routes (link settings, a visitor's name) and the
+ *   edit session's own routes.
  */
-export function blockedBySongLock(locked: boolean, check: LockCheck): boolean {
-  if (!locked || check.method === "GET" || check.method === "HEAD") return false;
+export function blockedBySongLock(kind: SongLockKind | null, check: LockCheck): boolean {
+  if (kind === null || reads(check.method)) return false;
+  if (kind === "editing") {
+    if (check.scope === "link" || check.scope === "editSession") return false;
+    return EDIT_FROZEN_CAPABILITIES.has(check.capability);
+  }
   if (LOCK_FROZEN_CAPABILITIES.has(check.capability)) return true;
   const { lockFields, body } = check;
   if (!lockFields || typeof body !== "object" || body === null) return false;
   return lockFields.some((f) => (body as Record<string, unknown>)[f] !== undefined);
+}
+
+/**
+ * Which lock refuses the request, if any: the edit lock wins (`SONG_EDITING`), then the song lock
+ * (`SONG_LOCKED`).
+ */
+export function songLockRefusal(
+  state: { locked: boolean; editing: boolean },
+  check: LockCheck,
+): "SONG_EDITING" | "SONG_LOCKED" | null {
+  if (state.editing && blockedBySongLock("editing", check)) return "SONG_EDITING";
+  if (state.locked && blockedBySongLock("locked", check)) return "SONG_LOCKED";
+  return null;
 }
 
 /**
@@ -358,4 +420,12 @@ export function blockedBySongLock(locked: boolean, check: LockCheck): boolean {
  */
 export function lockedOut(locked: boolean, capability: Capability): boolean {
   return locked && LOCK_FROZEN_CAPABILITIES.has(capability);
+}
+
+/**
+ * Whether a control needing `capability` is disabled because someone is editing the song (SPEC
+ * §24.7; the banner says who). The session's own controls (`audio.edit`) stay enabled.
+ */
+export function editLockedOut(editing: boolean, capability: Capability): boolean {
+  return editing && EDIT_FROZEN_CAPABILITIES.has(capability);
 }

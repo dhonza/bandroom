@@ -20,3 +20,4 @@ export * from "./links";
 export * from "./offline";
 export * from "./processing";
 export * from "./ops";
+export * from "./edit";

@@ -55,6 +55,11 @@ export const ERROR_CODES = [
   "UPDATE_TAG_UNKNOWN",
   "UPDATE_CONFIRM_MISMATCH",
   "JOB_STATE",
+  "EDIT_SESSION_OPEN",
+  "EDIT_SESSION_STATE",
+  "NOT_SESSION_OWNER",
+  "SONG_EDITING",
+  "PROCESSING_SOURCE",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -148,6 +153,16 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
   UPDATE_CONFIRM_MISMATCH: 409,
   /** The job is not in a state that allows this action (retry/cancel). */
   JOB_STATE: 409,
+  /** Another edit session is open on the song (SPEC §24.7); the client offers a takeover. */
+  EDIT_SESSION_OPEN: 409,
+  /** The edit session is not in a state that allows this action (e.g. already cancelled). */
+  EDIT_SESSION_STATE: 409,
+  /** Only the session's owner saves it (SPEC §24.12); the client offers a takeover. */
+  NOT_SESSION_OWNER: 409,
+  /** Someone is editing the song: its tracks, timeline and comments are frozen (SPEC §24.7). */
+  SONG_EDITING: 409,
+  /** A current version of the song is still being processed (SPEC §24.7). */
+  PROCESSING_SOURCE: 409,
 };
 
 export const FieldErrorSchema = z.object({

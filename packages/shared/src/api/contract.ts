@@ -30,7 +30,9 @@ export type ContentScope =
   | "document"
   | "documentVersion"
   /** A public link: its song for song/versions links, else its project (SPEC §3.5). */
-  | "link";
+  | "link"
+  /** An edit session: its song (SPEC §24.12). */
+  | "editSession";
 
 /**
  * Batch actions (SPEC §26.2): every item in the body is resolved and checked centrally; for copy

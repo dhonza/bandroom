@@ -169,6 +169,13 @@
       "when": 1791526263626,
       "tag": "0023_project_user_state",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1791578295770,
+      "tag": "0024_edit_sessions",
+      "breakpoints": true
     }
   ]
 }

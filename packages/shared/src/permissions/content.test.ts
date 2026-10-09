@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   blockedBySongLock,
+  editLockedOut,
+  songLockRefusal,
   canActOn,
   canDeleteContent,
   canPurgeContent,
@@ -75,6 +77,7 @@ const MATRIX: Record<EffectiveRole, readonly Capability[]> = {
     "version.setCurrent",
     "song.create",
     "link.manage",
+    "audio.edit",
   ],
   manager: [...CAPABILITIES],
   admin: [...CAPABILITIES],
@@ -216,29 +219,35 @@ describe("canActOnComment (SPEC §3.2, §8)", () => {
 });
 
 describe("song lock (SPEC §25.12)", () => {
-  const frozen: Capability[] = ["comment", "annotate.own", "annotate.any", "tempo.edit"];
+  const frozen: Capability[] = [
+    "comment",
+    "annotate.own",
+    "annotate.any",
+    "tempo.edit",
+    "audio.edit",
+  ];
   const open = CAPABILITIES.filter((c) => !frozen.includes(c));
 
   it.each(frozen)("refuses changes needing %s while locked", (capability) => {
     for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
-      expect(blockedBySongLock(true, { method, capability })).toBe(true);
-      expect(blockedBySongLock(false, { method, capability })).toBe(false);
+      expect(blockedBySongLock("locked", { method, capability })).toBe(true);
+      expect(blockedBySongLock(null, { method, capability })).toBe(false);
     }
   });
 
   it.each(frozen)("still reads with %s while locked", (capability) => {
-    expect(blockedBySongLock(true, { method: "GET", capability })).toBe(false);
-    expect(blockedBySongLock(true, { method: "HEAD", capability })).toBe(false);
+    expect(blockedBySongLock("locked", { method: "GET", capability })).toBe(false);
+    expect(blockedBySongLock("locked", { method: "HEAD", capability })).toBe(false);
   });
 
   it.each(open)("leaves %s alone without frozen fields", (capability) => {
-    expect(blockedBySongLock(true, { method: "POST", capability })).toBe(false);
+    expect(blockedBySongLock("locked", { method: "POST", capability })).toBe(false);
     expect(lockedOut(true, capability)).toBe(false);
   });
 
   it("freezes only the named fields of mixed routes", () => {
     const track = (body: unknown) =>
-      blockedBySongLock(true, {
+      blockedBySongLock("locked", {
         method: "PATCH",
         capability: "edit.own",
         lockFields: DEFAULT_MIX_FIELDS,
@@ -250,7 +259,7 @@ describe("song lock (SPEC §25.12)", () => {
     expect(track({ defaultPan: undefined })).toBe(false);
     expect(track(null)).toBe(false);
     const full = (body: unknown) =>
-      blockedBySongLock(true, {
+      blockedBySongLock("locked", {
         method: "PATCH",
         capability: "edit.own",
         lockFields: TRACK_LOCK_FIELDS,
@@ -264,17 +273,21 @@ describe("song lock (SPEC §25.12)", () => {
     expect(track(undefined)).toBe(false);
     const version = { method: "PATCH", capability: "edit.own" as const };
     expect(
-      blockedBySongLock(true, { ...version, lockFields: VERSION_GAIN_FIELDS, body: { gainDb: 0 } }),
+      blockedBySongLock("locked", {
+        ...version,
+        lockFields: VERSION_GAIN_FIELDS,
+        body: { gainDb: 0 },
+      }),
     ).toBe(true);
     expect(
-      blockedBySongLock(true, {
+      blockedBySongLock("locked", {
         ...version,
         lockFields: VERSION_GAIN_FIELDS,
         body: { label: "x" },
       }),
     ).toBe(false);
     expect(
-      blockedBySongLock(false, {
+      blockedBySongLock(null, {
         ...version,
         lockFields: VERSION_GAIN_FIELDS,
         body: { gainDb: 1 },
@@ -435,5 +448,68 @@ describe("canBounce (SPEC §5.5)", () => {
         expect(canBounce(song, project), `${song}/${project}`).toBe(want);
       }
     }
+  });
+});
+
+describe("edit lock (SPEC §24.7)", () => {
+  /** Written out by hand: what an open edit session freezes. */
+  const frozen: Capability[] = [
+    "comment",
+    "upload",
+    "record",
+    "annotate.own",
+    "annotate.any",
+    "edit.own",
+    "edit.any",
+    "delete.own",
+    "delete.any",
+    "tempo.edit",
+    "version.setCurrent",
+    "song.delete",
+    "trash.purge",
+    "lossless.remove",
+  ];
+  const free = CAPABILITIES.filter((c) => !frozen.includes(c));
+
+  it.each(frozen)("refuses changes needing %s, whatever the body", (capability) => {
+    for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+      expect(blockedBySongLock("editing", { method, capability, scope: "song" })).toBe(true);
+      expect(blockedBySongLock("editing", { method, capability, body: { label: "x" } })).toBe(true);
+      expect(blockedBySongLock(null, { method, capability })).toBe(false);
+    }
+    expect(editLockedOut(true, capability)).toBe(true);
+    expect(editLockedOut(false, capability)).toBe(false);
+  });
+
+  it.each(frozen)("still reads with %s", (capability) => {
+    expect(blockedBySongLock("editing", { method: "GET", capability })).toBe(false);
+    expect(blockedBySongLock("editing", { method: "HEAD", capability })).toBe(false);
+  });
+
+  it.each(free)("leaves %s alone (mixer, playback, links, grants, the session)", (capability) => {
+    expect(blockedBySongLock("editing", { method: "PUT", capability, scope: "song" })).toBe(false);
+    expect(editLockedOut(true, capability)).toBe(false);
+  });
+
+  it("leaves link-scoped routes and the session's own routes alone", () => {
+    for (const scope of ["link", "editSession"]) {
+      expect(blockedBySongLock("editing", { method: "PUT", capability: "comment", scope })).toBe(
+        false,
+      );
+    }
+  });
+
+  it("answers SONG_EDITING before SONG_LOCKED", () => {
+    const comment = { method: "POST", capability: "comment" as const };
+    const upload = { method: "POST", capability: "upload" as const };
+    const start = { method: "POST", capability: "audio.edit" as const };
+    expect(songLockRefusal({ locked: true, editing: true }, comment)).toBe("SONG_EDITING");
+    expect(songLockRefusal({ locked: true, editing: false }, comment)).toBe("SONG_LOCKED");
+    expect(songLockRefusal({ locked: false, editing: true }, upload)).toBe("SONG_EDITING");
+    expect(songLockRefusal({ locked: true, editing: false }, upload)).toBe(null);
+    expect(songLockRefusal({ locked: false, editing: false }, comment)).toBe(null);
+    // A locked song cannot be edited; an open session answers EDIT_SESSION_OPEN in the handler.
+    expect(songLockRefusal({ locked: true, editing: false }, start)).toBe("SONG_LOCKED");
+    expect(songLockRefusal({ locked: false, editing: true }, start)).toBe(null);
   });
 });

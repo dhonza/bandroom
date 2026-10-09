@@ -22,6 +22,7 @@ import {
   signLinkSession,
   songTempo,
   songTimelineRev,
+  songEditingOf,
   songLockOf,
   toSong,
   toSongSummary,
@@ -303,6 +304,8 @@ export function registerLinkVisitorRoutes(app: FastifyInstance, ctx: AppContext)
           songLockOf(db, song, false),
         ),
         notes: "",
+        // An edit session holds the song (SPEC §24.7): visitors see that, not who.
+        editing: songEditingOf(db, song.id, false),
         access: accessIn(access, song),
       },
     };

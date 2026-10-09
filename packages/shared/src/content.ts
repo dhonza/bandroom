@@ -146,10 +146,24 @@ export const SongLockSchema = z.object({
 });
 export type SongLock = z.infer<typeof SongLockSchema>;
 
+/**
+ * An edit session holds the song (SPEC §24.7): since when and by whom. Link visitors get neither
+ * the id nor the name.
+ */
+export const SongEditingSchema = z.object({
+  sessionId: z.string().nullable(),
+  status: z.enum(["open", "applying"]),
+  since: z.number(),
+  by: z.object({ id: z.string().nullable(), name: z.string().nullable() }),
+});
+export type SongEditing = z.infer<typeof SongEditingSchema>;
+
 export const SongSchema = SongSummarySchema.extend({
   notes: z.string(),
   /** Null when the song is not locked. */
   locked: SongLockSchema.nullable(),
+  /** The edit lock (SPEC §24.7); null or absent when nobody is editing the song. */
+  editing: SongEditingSchema.nullable().optional(),
   downloadPolicy: SongDownloadPolicySchema,
   createdAt: z.number(),
   /**

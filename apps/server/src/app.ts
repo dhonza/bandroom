@@ -36,6 +36,7 @@ import { registerOfflineRoutes } from "./routes/offline";
 import { registerOpsRoutes } from "./routes/ops";
 import { registerUpdateRoutes, type UpdateOptions } from "./routes/updates";
 import { registerMarkerRoutes } from "./routes/markers";
+import { registerEditSessionRoutes } from "./routes/editSessions";
 import { registerCommentRoutes } from "./routes/comments";
 import { registerNotificationRoutes } from "./routes/notifications";
 import { registerTempoRoutes } from "./routes/tempo";
@@ -156,6 +157,7 @@ export async function buildApp({
       registerProjectRoutes(api, ctx);
       registerProjectImageRoutes(api, ctx);
       registerSongRoutes(api, ctx);
+      registerEditSessionRoutes(api, ctx);
       registerTrackRoutes(api, ctx);
       registerBatchRoutes(api, ctx);
       registerBatchTransferRoutes(api, ctx);

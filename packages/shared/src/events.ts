@@ -93,6 +93,15 @@ export const EVENT_ACTIONS = [
   /** The worker swapped in the re-encoded Opus (details: quality, kbps, previous kbps). */
   "version.reencoded",
   "asset.downloaded",
+  // edit mode (SPEC §24.13)
+  /** An editor started an edit session on the song (target: the session). */
+  "edit.session_started",
+  /** Autosaves, at most one per minute per session (details: ops, cursor, rev). */
+  "edit.session_saved",
+  /** Another editor took the session over (details: from, to). */
+  "edit.session_taken_over",
+  /** The session ended without changes (details: ops, by the owner or not). */
+  "edit.session_cancelled",
   // documents (SPEC §10, §14.1)
   "document.created",
   "document.updated",

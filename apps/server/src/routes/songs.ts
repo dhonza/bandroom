@@ -10,6 +10,7 @@ import {
   removeSongGrantRow,
   setSongGrantRow,
   setSongLockRow,
+  songEditingOf,
   songLockOf,
   softDeleteSong,
   songGrantRows,
@@ -40,14 +41,16 @@ import { checkQuotaAndDisk } from "../quota";
 
 export function registerSongRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { db } = ctx;
-  const dto = (access: SongScopeAccess, row = access.song) =>
-    toSong(
+  const dto = (access: SongScopeAccess, row = access.song) => ({
+    ...toSong(
       row,
       access.project,
       access.role,
       projectImageHash(db, access.project),
       songLockOf(db, row),
-    );
+    ),
+    editing: songEditingOf(db, row.id),
+  });
   // Open song pages refetch the song (lock state, title) when it changes.
   const published = (access: SongScopeAccess, data: Record<string, unknown>) => {
     ctx.hub.publish({

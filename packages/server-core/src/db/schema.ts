@@ -14,3 +14,4 @@ export * from "./tables/storage";
 export * from "./tables/personal";
 export * from "./tables/timeline";
 export * from "./tables/links";
+export * from "./tables/edit";

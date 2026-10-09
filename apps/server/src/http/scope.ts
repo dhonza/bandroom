@@ -9,7 +9,10 @@ import type {
 import {
   documentLocation,
   documentLocationOfVersion,
+  getEditSessionRow,
   getLinkRow,
+  songIsEditing,
+  type EditSessionRow,
   type LinkRow,
   resolveProjectAccess,
   resolveSongAccess,
@@ -19,11 +22,11 @@ import {
   songIdOfTrackVersion,
 } from "@bandroom/server-core";
 import {
-  blockedBySongLock,
   canDownload,
   effectiveDownloadPolicy,
   hasCapability,
   roleAtLeast,
+  songLockRefusal,
   type Capability,
   type ContentScope,
   type EffectiveRole,
@@ -39,6 +42,12 @@ export type ProjectScopeAccess = { scope: "project" } & Omit<ProjectAccess, "vis
 export type SongScopeAccess = {
   scope: "song" | "track" | "trackVersion" | "marker" | "comment";
   targetId: string;
+} & SongAccess;
+/** An edit session's access: its song's (SPEC §24.12), with the session row. */
+export type EditSessionScopeAccess = {
+  scope: "editSession";
+  targetId: string;
+  session: EditSessionRow;
 } & SongAccess;
 /**
  * Document-level access (SPEC §10, §28.4): documents belong to projects, so the project's role.
@@ -61,7 +70,11 @@ export interface LinkScopeAccess {
   role: EffectiveRole;
 }
 export type ScopeAccess =
-  ProjectScopeAccess | SongScopeAccess | DocumentScopeAccess | LinkScopeAccess;
+  | ProjectScopeAccess
+  | SongScopeAccess
+  | EditSessionScopeAccess
+  | DocumentScopeAccess
+  | LinkScopeAccess;
 
 /** Whether the user may download this document's files (SPEC §3.4, §10). */
 export function documentDownloadAllowed(access: {
@@ -145,6 +158,13 @@ function checkOneScope(
     return { scope, targetId: id, link, project: a.project, song: null, role: a.role };
   }
 
+  if (scope === "editSession") {
+    const session = getEditSessionRow(db, id);
+    const access = session && checkSongAccess(db, user, session.songId, capability);
+    if (!session || !access) throw new AppError("NOT_FOUND", "Not found");
+    return { scope, targetId: id, session, ...access };
+  }
+
   const songId =
     scope === "song"
       ? id
@@ -155,17 +175,27 @@ function checkOneScope(
           : scope === "comment"
             ? songIdOfComment(db, id)
             : songIdOfTrackVersion(db, id);
-  const access = songId === undefined ? undefined : resolveSongAccess(db, user, songId);
-  if (!access || !roleAtLeast(access.role, "viewer")) {
-    throw new AppError("NOT_FOUND", "Not found");
-  }
+  const access = songId === undefined ? undefined : checkSongAccess(db, user, songId, capability);
+  if (!access) throw new AppError("NOT_FOUND", "Not found");
+  return { scope, targetId: id, ...access };
+}
+
+/** Song access: undefined when invisible (NOT_FOUND), FORBIDDEN without the capability. */
+function checkSongAccess(
+  db: Db,
+  user: UserRow,
+  songId: string,
+  capability: Capability,
+): SongAccess | undefined {
+  const access = resolveSongAccess(db, user, songId);
+  if (!access || !roleAtLeast(access.role, "viewer")) return undefined;
   if (
     !hasCapability(access.role, capability) ||
     (capability === "download" && !downloadAllowed(access))
   ) {
     throw new AppError("FORBIDDEN", `Missing capability ${capability}`);
   }
-  return { scope, targetId: id, ...access };
+  return access;
 }
 
 /**
@@ -194,21 +224,42 @@ function checkDocumentScope(
 }
 
 /**
- * The song lock (SPEC §25.12), checked centrally after authorization and body validation: a
- * request inside a locked song that changes frozen content answers SONG_LOCKED, for every role
- * (admins included). The rule itself lives in the shared permissions module.
+ * The song locks, checked centrally after authorization and body validation, for every role
+ * (admins included); the rules live in the shared permissions module:
+ * - the edit lock (SPEC §24.7): while an edit session is open or applying, every change to the
+ *   song's tracks, versions, timeline and comments answers SONG_EDITING, except the session's
+ *   own routes;
+ * - the song lock (SPEC §25.12): a request inside a locked song that changes frozen content
+ *   answers SONG_LOCKED.
  */
 export function checkSongLock(
+  db: Db,
   auth: RouteAuth | undefined,
-  song: Pick<SongRow, "lockedAt"> | null | undefined,
+  song: Pick<SongRow, "id" | "lockedAt"> | null | undefined,
   method: string,
   body: unknown,
 ): void {
   if (auth === undefined || !("scope" in auth) || !song) return;
-  const check = { method, capability: auth.capability, lockFields: auth.lockFields, body };
-  if (blockedBySongLock(song.lockedAt !== null, check)) {
-    throw new AppError("SONG_LOCKED", "The song is locked");
-  }
+  if (method === "GET" || method === "HEAD") return;
+  const check = {
+    method,
+    capability: auth.capability,
+    scope: auth.scope,
+    lockFields: auth.lockFields,
+    body,
+  };
+  const state = { locked: song.lockedAt !== null, editing: songIsEditing(db, song.id) };
+  const refusal = songLockRefusal(state, check);
+  if (refusal === "SONG_EDITING") throw new AppError(refusal, "Someone is editing the song");
+  if (refusal === "SONG_LOCKED") throw new AppError(refusal, "The song is locked");
+}
+
+/**
+ * The edit lock for writes that do not go through a scoped route (uploads to a song, batch
+ * actions, the importer): SONG_EDITING while an edit session holds the song (SPEC §24.7).
+ */
+export function checkNotEditing(db: Db, songId: string): void {
+  if (songIsEditing(db, songId)) throw new AppError("SONG_EDITING", "Someone is editing the song");
 }
 
 /** The song a resolved scope belongs to, if any (batch scopes have many: none). */

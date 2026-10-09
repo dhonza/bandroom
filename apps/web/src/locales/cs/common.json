@@ -109,7 +109,12 @@
     "UPDATE_CHECK_FAILED": "Aktualizace se nepodařilo zkontrolovat.",
     "UPDATE_TAG_UNKNOWN": "Tato verze není k dispozici.",
     "UPDATE_CONFIRM_MISMATCH": "Potvrzená verze není ta, která běží.",
-    "JOB_STATE": "Úloha to ve svém současném stavu neumí."
+    "JOB_STATE": "Úloha to ve svém současném stavu neumí.",
+    "EDIT_SESSION_OPEN": "Tuto píseň už upravuje někdo jiný. Úpravy můžete převzít.",
+    "EDIT_SESSION_STATE": "Úpravy už skončily. Obnovte stránku.",
+    "NOT_SESSION_OWNER": "Úpravy převzal někdo jiný. Vaše poslední změny se neuložily.",
+    "SONG_EDITING": "Píseň právě někdo upravuje, proto to do konce úprav nelze změnit.",
+    "PROCESSING_SOURCE": "Stopa písně se ještě zpracovává. Zkuste to znovu, až bude hotová."
   },
   "footer": {
     "version": "Verze {{version}}"

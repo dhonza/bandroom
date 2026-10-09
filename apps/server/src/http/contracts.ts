@@ -19,6 +19,7 @@ import {
   checkSongLock,
   songOfAccess,
   type DocumentScopeAccess,
+  type EditSessionScopeAccess,
   type LinkScopeAccess,
   type ScopeAccess,
   type SongScopeAccess,
@@ -46,11 +47,13 @@ type AccessFor<C extends ContractDef> = C["auth"] extends { scope: "project" }
     ? SongScopeAccess
     : C["auth"] extends { scope: "document" | "documentVersion" }
       ? DocumentScopeAccess
-      : C["auth"] extends { scope: "link" }
-        ? LinkScopeAccess
-        : C["auth"] extends { batch: string }
-          ? BatchScopeAccess
-          : null;
+      : C["auth"] extends { scope: "editSession" }
+        ? EditSessionScopeAccess
+        : C["auth"] extends { scope: "link" }
+          ? LinkScopeAccess
+          : C["auth"] extends { batch: string }
+            ? BatchScopeAccess
+            : null;
 
 export interface HandlerInput<C extends ContractDef> {
   params: Out<C["params"]>;
@@ -162,7 +165,7 @@ export function registerContract<C extends ContractDef>(
             request.body as Parameters<typeof checkBatch>[3],
           );
         }
-        checkSongLock(auth, songOfAccess(request.access), request.method, request.body);
+        checkSongLock(app.authDb, auth, songOfAccess(request.access), request.method, request.body);
         done();
       } catch (err) {
         done(err as Error);
@@ -210,7 +213,13 @@ export function registerAuthorizedRoute(
     onRequest: (request, _reply, done) => {
       try {
         request.access = authorize(route.auth, request, app.authDb, route.apiKey);
-        checkSongLock(route.auth, songOfAccess(request.access), request.method, undefined);
+        checkSongLock(
+          app.authDb,
+          route.auth,
+          songOfAccess(request.access),
+          request.method,
+          undefined,
+        );
         done();
       } catch (err) {
         done(err as Error);

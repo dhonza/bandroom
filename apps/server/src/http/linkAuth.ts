@@ -220,10 +220,16 @@ export function registerLinkContract<C extends ContractDef>(
         done(err as Error);
       }
     },
-    // Visitors' comments are frozen too while the song is locked (SPEC §25.12).
+    // Visitors' comments are frozen too while the song is locked or edited (SPEC §25.12, §24.7).
     preHandler: (request, _reply, done) => {
       try {
-        checkSongLock(contract.auth, request.linkAccess?.song, request.method, request.body);
+        checkSongLock(
+          ctx.db,
+          contract.auth,
+          request.linkAccess?.song,
+          request.method,
+          request.body,
+        );
         done();
       } catch (err) {
         done(err as Error);
