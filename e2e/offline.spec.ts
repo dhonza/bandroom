@@ -1,6 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 import { generateFixtures, TONE_FILE } from "@bandroom/fixtures";
-import { closeMixer, isMobile, loginAsNewUser, openMixer, uniqueUsername } from "./helpers";
+import {
+  closeMixer,
+  isMobile,
+  loginAsNewUser,
+  miniControl,
+  openMixer,
+  uniqueUsername,
+} from "./helpers";
 
 test.use({ serviceWorkers: "allow" });
 
@@ -234,7 +241,7 @@ test("Offline project, Range answers from the cache, Offline page, logout cleanu
       .poll(async () => (await debug(page))?.position ?? 0, { timeout: 20_000 })
       .toBeGreaterThan(p0 + 12_000);
     expect((await debug(page))?.errors).toEqual({});
-    await mini.getByTestId("mini-close").click();
+    await (await miniControl(page, testInfo, "mini-close")).click();
     await expect(mini).toBeHidden();
     await context.setOffline(false);
   }

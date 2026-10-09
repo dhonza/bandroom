@@ -1,7 +1,7 @@
 import path from "node:path";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { FIXTURES_DIR, generateFixtures } from "@bandroom/fixtures";
-import { isMobile, loginAsNewUser, uniqueUsername } from "./helpers";
+import { isMobile, loginAsNewUser, miniControl, openQueue, uniqueUsername } from "./helpers";
 
 /**
  * The engine queue and the mini-player (SPEC §6.10, §27.4): "Play all" moves on to the next song
@@ -22,8 +22,10 @@ const FILES = ["imp_48000_s16_stereo", "imp_44100_s16_stereo"];
 interface DebugState {
   songId: string | null;
   open: boolean;
+  dormant: boolean;
+  repeat: string;
   previewSongId: string | null;
-  queue: { songIds: string[]; index: number } | null;
+  queue: { songIds: string[]; index: number; kind: string } | null;
   status: string;
   position: number;
   length: number;
@@ -118,7 +120,7 @@ test("Play all advances, the mini-player plays on across pages, the song page re
   await expect(mini.getByTestId("mini-play")).toHaveAccessibleName("Pause");
 
   // Its page reattaches without a reload or a stop; the mini-player hides there.
-  await mini.getByTestId("mini-open").click();
+  await (await miniControl(page, testInfo, "mini-open")).click();
   await expect(page.getByTestId("song-title")).toHaveText(second.title);
   await expect(mini).toBeHidden();
   await expect(page.getByTestId("rehearse-play")).toHaveAccessibleName("Pause");
@@ -149,7 +151,7 @@ test("Play all advances, the mini-player plays on across pages, the song page re
   await expect(mini.getByTestId("mini-title")).toHaveText(first.title);
   await mini.getByTestId("mini-play").click();
   await expect(mini.getByTestId("mini-play")).toHaveAccessibleName("Play");
-  await mini.getByTestId("mini-close").click();
+  await (await miniControl(page, testInfo, "mini-close")).click();
   await expect(mini).toBeHidden();
   expect((await debug(page))?.open).toBe(false);
 
@@ -313,10 +315,148 @@ test("Project link: a song row plays from there and Play all from the top", asyn
   await expect(mini.getByTestId("mini-title")).toHaveText(first.title);
 
   // Opening the playing song keeps it playing.
-  await mini.getByTestId("mini-open").click();
+  await (await miniControl(visitor, testInfo, "mini-open")).click();
   await expect(visitor.getByTestId("link-song-title")).toHaveText(first.title);
   await expect(visitor.getByTestId("rehearse-play")).toHaveAccessibleName("Pause", {
     timeout: 30_000,
   });
   await ctx.close();
+});
+
+test("Player bar: repeat one, seeking, editing the queue, and the queue after a reload", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(600_000);
+  await loginAsNewUser(page, request, testInfo, "member");
+  const { items } = await projectWithTwoSongs(page, `Bar ${uniqueUsername(testInfo)}`, [
+    "long_44100_s24_stereo",
+    "imp_48000_s16_stereo",
+  ]);
+  const long = items.find((i) => /^long/i.test(i.title));
+  const short = items.find((i) => /^imp/i.test(i.title));
+  if (!long || !short) throw new Error("two songs expected");
+  const SR = 48_000;
+  await page.getByRole("tab", { name: "Songs" }).click();
+  const rows = page.getByTestId("song-row");
+  const shortPlay = rows.filter({ hasText: short.title }).getByTestId("song-row-play");
+  await expect(shortPlay).toBeEnabled({ timeout: 30_000 });
+
+  // The short song plays; elsewhere the bar shows the project above the title.
+  await shortPlay.click();
+  await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("playing");
+  await goLibrary(page, testInfo);
+  const mini = page.getByTestId("mini-player");
+  await expect(mini.getByTestId("mini-title")).toHaveText(short.title);
+  await expect(mini.getByTestId("mini-project")).toContainText("Bar ");
+  if (isMobile(testInfo)) await noHorizontalOverflow(page);
+
+  // Repeat: off → queue → song. With repeat one the 6 s song starts again at its end.
+  const repeat = await miniControl(page, testInfo, "mini-repeat");
+  await expect(repeat).toHaveAttribute("data-mode", "off");
+  await repeat.click();
+  await expect(repeat).toHaveAttribute("data-mode", "all");
+  await repeat.click();
+  await expect(repeat).toHaveAttribute("data-mode", "one");
+  await expect
+    .poll(async () => (await debug(page))?.position ?? 0, { timeout: 20_000 })
+    .toBeGreaterThan(4 * SR);
+  await expect
+    .poll(async () => (await debug(page))?.position ?? Infinity, { timeout: 20_000 })
+    .toBeLessThan(3 * SR);
+  let d = await debug(page);
+  expect(d?.songId).toBe(short.songId);
+  expect(d?.queue?.index).toBe(items.indexOf(short));
+  expect(d?.status).toBe("playing");
+  await repeat.click();
+  await expect(repeat).toHaveAttribute("data-mode", "off");
+  await repeat.click();
+  await expect(repeat).toHaveAttribute("data-mode", "all");
+  if (isMobile(testInfo)) await page.keyboard.press("Escape");
+
+  // Next goes to the long song (repeat all wraps); the slider seeks in it.
+  await mini.getByTestId("mini-next").click();
+  await expect.poll(async () => (await debug(page))?.songId, { timeout: 30_000 }).toBe(long.songId);
+  await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("playing");
+  const seek = mini.getByTestId("mini-seek");
+  // The slider knows the song's length (61 s) once it is loaded.
+  await expect
+    .poll(async () => Number(await seek.getByRole("slider").getAttribute("aria-valuemax")), {
+      timeout: 10_000,
+    })
+    .toBeGreaterThan(30);
+  const box = await seek.boundingBox();
+  if (!box) throw new Error("no slider");
+  const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+  if (isMobile(testInfo)) await page.touchscreen.tap(x, y);
+  else await page.mouse.click(x, y);
+  await expect
+    .poll(async () => (await debug(page))?.position ?? 0, { timeout: 10_000 })
+    .toBeGreaterThan(25 * SR);
+  expect((await debug(page))?.position ?? 0).toBeLessThan(45 * SR);
+  if (!isMobile(testInfo)) await expect(mini.getByTestId("mini-elapsed")).toHaveText(/^0:[2-4]\d$/);
+
+  // The queue: move the playing song up, take the other one out, add it back from the song
+  // menu, clear.
+  let list = await openQueue(page, testInfo);
+  const order = () => list.getByTestId("queue-row-title").allTextContents();
+  await expect.poll(order).toEqual(items.map((i) => i.title));
+  const longRow = list.getByTestId("queue-row").filter({ hasText: long.title });
+  await expect(longRow).toHaveAttribute("data-current", "true");
+  if (items.indexOf(long) > 0) await longRow.getByTestId("queue-row-up").click();
+  await expect.poll(order).toEqual([long.title, short.title]);
+  expect((await debug(page))?.queue?.index).toBe(0);
+  await list
+    .getByTestId("queue-row")
+    .filter({ hasText: short.title })
+    .getByTestId("queue-row-remove")
+    .click();
+  await expect.poll(order).toEqual([long.title]);
+  await expect(longRow.getByTestId("queue-row-remove")).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(list).toBeHidden();
+
+  await page.goBack();
+  await rows.filter({ hasText: short.title }).getByTestId("song-row-menu").click();
+  await page.getByTestId("song-add-to-queue").click();
+  await expect
+    .poll(async () => (await debug(page))?.queue?.songIds)
+    .toEqual([long.songId, short.songId]);
+  // The toast goes (it covers the bar's right end on desktop while the pointer rests on it).
+  await page.mouse.move(0, 0);
+  await expect(page.getByText(`${short.title} was added to the queue.`)).toBeHidden({
+    timeout: 15_000,
+  });
+  list = await openQueue(page, testInfo);
+  await expect.poll(order).toEqual([long.title, short.title]);
+  await expect(list.getByTestId("queue-title")).toContainText("Next from Bar ");
+  await list.getByTestId("queue-clear").click();
+  await expect.poll(order).toEqual([long.title]);
+  await page.keyboard.press("Escape");
+  await rows.filter({ hasText: short.title }).getByTestId("song-row-menu").click();
+  await page.getByTestId("song-play-next").click();
+  await expect
+    .poll(async () => (await debug(page))?.queue?.songIds)
+    .toEqual([long.songId, short.songId]);
+
+  // After a reload the queue is back, paused, with its repeat mode; Play starts it.
+  await page.reload();
+  await expect(mini.getByTestId("mini-title")).toHaveText(long.title, { timeout: 30_000 });
+  d = await debug(page);
+  expect(d?.dormant).toBe(true);
+  expect(d?.repeat).toBe("all");
+  expect(d?.queue?.songIds).toEqual([long.songId, short.songId]);
+  expect(d?.queue?.index).toBe(0);
+  await expect(mini.getByTestId("mini-play")).toHaveAccessibleName("Play");
+  await mini.getByTestId("mini-play").click();
+  await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("playing");
+  d = await debug(page);
+  expect(d?.songId).toBe(long.songId);
+  expect(d?.dormant).toBe(false);
+  await (await miniControl(page, testInfo, "mini-close")).click();
+  await expect(mini).toBeHidden();
+  // Closed: nothing comes back.
+  await page.reload();
+  await expect(page.getByTestId("song-row").first()).toBeVisible({ timeout: 30_000 });
+  await expect(mini).toBeHidden();
 });

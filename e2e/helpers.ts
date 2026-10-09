@@ -1,4 +1,10 @@
-import { expect, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
+import {
+  expect,
+  type APIRequestContext,
+  type Locator,
+  type Page,
+  type TestInfo,
+} from "@playwright/test";
 import { crc32 } from "node:zlib";
 
 /** Created by the webServer command via `bandroom create-admin` (playwright.config.ts). */
@@ -47,6 +53,36 @@ export async function loginAsNewUser(
 
 export function isMobile(testInfo: TestInfo): boolean {
   return testInfo.project.use.isMobile === true;
+}
+
+/** What the phone's compact player bar shows itself; the rest is in its sheet. */
+const COMPACT_BAR = new Set(["mini-play", "mini-next", "mini-title", "mini-seek", "mini-expand"]);
+
+/**
+ * A player bar control (SPEC §6.10). On phones the compact bar has only cover, title,
+ * play/pause, next and a thin slider; the other controls (and the queue) are in the sheet that
+ * a tap on the bar opens.
+ */
+export async function miniControl(
+  page: Page,
+  testInfo: TestInfo,
+  testId: string,
+): Promise<Locator> {
+  const bar = page.getByTestId("mini-player");
+  if (!isMobile(testInfo) || COMPACT_BAR.has(testId)) return bar.getByTestId(testId);
+  const sheet = page.getByTestId("mini-sheet");
+  if (!(await sheet.isVisible())) await bar.getByTestId("mini-expand").click();
+  await expect(sheet).toBeVisible();
+  return sheet.getByTestId(testId);
+}
+
+/** Opens the queue: the desktop bar's queue pane, or the phone's sheet. */
+export async function openQueue(page: Page, testInfo: TestInfo): Promise<Locator> {
+  if (isMobile(testInfo)) return miniControl(page, testInfo, "queue-list");
+  await page.getByTestId("mini-player").getByTestId("mini-queue").click();
+  const list = page.getByTestId("queue-list");
+  await expect(list).toBeVisible();
+  return list;
 }
 
 /**
