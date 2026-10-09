@@ -496,6 +496,32 @@ describe("Engine practice speed and pitch (SPEC §30.5)", () => {
     expect(loads()).toHaveLength(2);
   });
 
+  it("reloads in place with a new length (edit mode), keeping the switched clips", async () => {
+    const e = engine();
+    await e.loadSong(twoTracks);
+    e.seek(96_000);
+    const short = [{ ...clips[0], lengthFrames: 240_000 }] as typeof clips;
+    e.switchSource("gtr", short, 0, 0);
+    e.setLength(240_000);
+    expect(loads()).toHaveLength(2);
+    const load = loads().at(-1);
+    if (load?.t !== "load") throw new Error("no load");
+    expect(load.lengthFrames).toBe(240_000);
+    expect(load.tracks[0]?.clips).toEqual(short);
+    expect(e.lengthFrames).toBe(240_000);
+    await vi.waitFor(() => {
+      expect(mixerSent().findLast((c) => c.t === "seek")).toMatchObject({ frame: 96_000 });
+    });
+    // The same length again changes nothing; the position is clamped to a shorter song.
+    e.setLength(240_000);
+    expect(loads()).toHaveLength(2);
+    e.seek(200_000);
+    e.setLength(48_000);
+    await vi.waitFor(() => {
+      expect(mixerSent().findLast((c) => c.t === "seek")).toMatchObject({ frame: 48_000 });
+    });
+  });
+
   it("silences a muted track and switches it back in when unmuted", async () => {
     const e = engine();
     e.setPractice({ rate: 1, semitones: -1, quality: "high" });

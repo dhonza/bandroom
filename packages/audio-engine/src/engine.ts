@@ -352,6 +352,23 @@ export class Engine {
     this.reload(at);
   }
 
+  /**
+   * A new song length (edit mode, SPEC §24.5: a cut shortens the song, a move past the end makes
+   * it longer). Like a practice change it reloads the song in place: the position (clamped),
+   * mix, loop, click and play state stay; the downloaded bytes are kept.
+   */
+  setLength(frames: number): void {
+    const song = this.song;
+    const length = Math.max(0, Math.round(frames));
+    if (!song || length === this.length) return;
+    song.lengthFrames = length;
+    if (this._state === "idle" || this._state === "loading") {
+      this.length = length;
+      return;
+    }
+    this.reload(Math.min(this.getPositionFrames(), length));
+  }
+
   get practiceSetting(): EnginePractice {
     return this.practice;
   }
