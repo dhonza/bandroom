@@ -58,6 +58,7 @@ import {
 } from "../markers/store";
 import { positionSec, retryAudio, seekSec, setPrefs, skip, usePlayerView } from "./controller";
 import type { QualityPref } from "./model";
+import { useEdit } from "../edit/store";
 
 const QUALITIES: QualityPref[] = ["auto", "lossless", "high", "low"];
 /** Shown instead of the song length while it runs until Stop (not text to translate). */
@@ -175,6 +176,8 @@ export function Transport({
   const { t } = useTranslation();
   const status = usePlayerView((s) => s.status);
   const quality = usePlayerView((s) => s.quality);
+  const shownSong = usePlayerView((s) => s.songId);
+  const editing = useEdit((s) => s.songId !== null && s.songId === shownSong);
   const prefs = usePlayerView((s) => s.prefs);
   const fallback = usePlayerView(
     (s) => s.quality === "lossless" && s.tracks.some((p) => p.chosen.quality !== "lossless"),
@@ -284,30 +287,35 @@ export function Transport({
             <Menu.Divider />
           </>
         )}
-        <Menu.Label>
-          {t("rehearse.quality.title")} ·{" "}
-          {t("rehearse.quality.playing", { quality: t(`rehearse.quality.${quality}`) })}
-          {fallback ? ` (${t("rehearse.quality.noLossless")})` : ""}
-        </Menu.Label>
-        {QUALITIES.map((q) => (
-          <Menu.Item
-            key={q}
-            leftSection={prefs.quality === q ? <IconCheck size={14} /> : <Box w={14} />}
-            onClick={() => {
-              setPrefs({ quality: q });
-            }}
-          >
-            {t(`rehearse.quality.${q}`)}
-          </Menu.Item>
-        ))}
-        <Menu.Item
-          leftSection={prefs.preferLossless ? <IconCheck size={14} /> : <Box w={14} />}
-          onClick={() => {
-            setPrefs({ preferLossless: !prefs.preferLossless });
-          }}
-        >
-          {t("rehearse.quality.preferLossless")}
-        </Menu.Item>
+        {/* Edit mode plays the session's clips (SPEC §24.6): no quality choice. */}
+        {!editing && (
+          <>
+            <Menu.Label>
+              {t("rehearse.quality.title")} ·{" "}
+              {t("rehearse.quality.playing", { quality: t(`rehearse.quality.${quality}`) })}
+              {fallback ? ` (${t("rehearse.quality.noLossless")})` : ""}
+            </Menu.Label>
+            {QUALITIES.map((q) => (
+              <Menu.Item
+                key={q}
+                leftSection={prefs.quality === q ? <IconCheck size={14} /> : <Box w={14} />}
+                onClick={() => {
+                  setPrefs({ quality: q });
+                }}
+              >
+                {t(`rehearse.quality.${q}`)}
+              </Menu.Item>
+            ))}
+            <Menu.Item
+              leftSection={prefs.preferLossless ? <IconCheck size={14} /> : <Box w={14} />}
+              onClick={() => {
+                setPrefs({ preferLossless: !prefs.preferLossless });
+              }}
+            >
+              {t("rehearse.quality.preferLossless")}
+            </Menu.Item>
+          </>
+        )}
         {phone && (
           <>
             <Menu.Divider />

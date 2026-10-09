@@ -52,6 +52,7 @@ import { BackLink } from "../../components/BackLink";
 import { dropDeletedFromQueue } from "../../player/dropDeleted";
 import { SongLockBanner, SongLockButton } from "./songLock";
 import { AppModal } from "../../components/ResponsivePanel";
+import { EditButton, EditModeHeader, EditModeToolbar, useEditingSong } from "../../edit/EditMode";
 
 /** Song page (SPEC §11.3): metadata, the Player (Mixer in the header), tracks, notes and access. */
 export function SongPage() {
@@ -64,6 +65,8 @@ export function SongPage() {
   // Without tracks the Mixer still has the click lane once the song has a tempo (SPEC §9).
   const hasTempo = useTempoUi((s) => s.songId === songId && s.grid !== null);
   const [editOpen, edit] = useDisclosure(false);
+  // Edit mode (SPEC §24.6): the edit bar replaces the header actions; the Mixer is open.
+  const editing = useEditingSong(songId);
 
   if (query.isPending) {
     return (
@@ -102,28 +105,39 @@ export function SongPage() {
           )}
           <SongTempoSummary songId={song.id} />
         </Stack>
-        <Group gap="xs" wrap="wrap" justify="flex-end" style={{ flex: "0 1 auto" }}>
-          <MixerButton mixer={mixer} disabled={tracks.data?.tracks.length === 0 && !hasTempo} />
-          <OfflineButton kind="song" id={song.id} title={song.title} projectId={song.project.id} />
-          <FollowButton target="song" id={song.id} />
-          <SongLockButton song={song} />
-          {caps.has("edit.any") && (
-            <Button
-              variant="default"
-              h={44}
-              leftSection={<IconPencil size={16} />}
-              onClick={edit.open}
-              data-testid="edit-song"
-            >
-              {t("common.edit")}
-            </Button>
-          )}
-        </Group>
+        {editing ? (
+          <EditModeHeader song={song} />
+        ) : (
+          <Group gap="xs" wrap="wrap" justify="flex-end" style={{ flex: "0 1 auto" }}>
+            <MixerButton mixer={mixer} disabled={tracks.data?.tracks.length === 0 && !hasTempo} />
+            <OfflineButton
+              kind="song"
+              id={song.id}
+              title={song.title}
+              projectId={song.project.id}
+            />
+            <FollowButton target="song" id={song.id} />
+            <SongLockButton song={song} />
+            <EditButton song={song} tracks={tracks.data?.tracks ?? null} />
+            {caps.has("edit.any") && (
+              <Button
+                variant="default"
+                h={44}
+                leftSection={<IconPencil size={16} />}
+                onClick={edit.open}
+                data-testid="edit-song"
+              >
+                {t("common.edit")}
+              </Button>
+            )}
+          </Group>
+        )}
       </Group>
+      {editing && <EditModeToolbar />}
 
       <SongLockBanner song={song} />
       <WhatsNewBanner song={song} />
-      <SongPlayer song={song} mixer={mixer} />
+      <SongPlayer song={song} mixer={editing ? { ...mixer, open: true } : mixer} />
       <TracksSection song={song} />
       <DocsPanel song={song} />
 

@@ -73,6 +73,18 @@ import { recordingSupported } from "../record/opfs";
 import { useOnline } from "../offline/online";
 import { offlineItemFor, useOffline } from "../offline/controller";
 import { TimelineItemsDialog } from "../markers/TimelineItemsDialog";
+import { ClipOverlay, CLIP_ITEM_PREFIX } from "../edit/ClipOverlay";
+import {
+  laneClipsOf,
+  useEditPeakHashes,
+  useEditPlaybackSync,
+  useEditSnapSync,
+} from "../edit/engineSync";
+import { outOfSync } from "../edit/model";
+import { pickClip, startPicking, useEdit } from "../edit/store";
+import { useEditShortcuts } from "../edit/shortcuts";
+import { RULER_H } from "../timeline/Timeline";
+import type { View } from "../timeline/view";
 
 const HEADER_W = 320;
 /** Phones: name above M/S (DECISIONS 2026-10-07). */
@@ -199,8 +211,23 @@ export function RehearsePanel({
         }
       : undefined;
 
-  const hashes = playing.map((p) => p.version.variants.peaks?.hash ?? null);
-  const pyramids = usePeaks(hashes);
+  // Edit mode (SPEC §24.6): the lanes show the session's clips; the engine plays them.
+  const editing = useEdit((s) => s.songId === song.id && s.state !== null);
+  const editState = useEdit((s) => (s.songId === song.id ? s.state : null));
+  const editVersions = useEdit((s) => s.versions);
+  const picking = useEdit((s) => s.picking);
+  useEditPlaybackSync(song.id);
+  useEditSnapSync(song.id);
+  const editHashes = useEditPeakHashes(song.id);
+  const playingHashes = playing.map((p) => p.version.variants.peaks?.hash ?? null);
+  const hashes = [...playingHashes, ...editHashes.filter((h) => !playingHashes.includes(h))];
+  const allPyramids = usePeaks(hashes);
+  const pyramids = allPyramids.slice(0, playing.length);
+  const peaksByHash = useMemo(
+    () => new Map(hashes.map((h, i) => [h ?? "", allPyramids[i] ?? null])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the hashes are in the pyramids' key
+    [allPyramids],
+  );
   // The click lane (SPEC §11.3, DECISIONS 2026-10-07): last, with the Mixer open and a tempo
   // map; never in the overview.
   const grid = useTempoUi((s) => (s.songId === song.id ? s.grid : null));
@@ -219,8 +246,15 @@ export function RehearsePanel({
         // The version's gain shows in the waveform; the personal fader does not (§25.6).
         scale: dbToGain(p.version.gainDb),
         tint: true,
+        ...(editState && {
+          clips: laneClipsOf(
+            editState.tracks.find((x) => x.trackId === p.track.id)?.clips ?? [],
+            editVersions,
+            peaksByHash,
+          ),
+        }),
       })),
-    [playing, pyramids, dimmedKey],
+    [playing, pyramids, dimmedKey, editState, editVersions, peaksByHash],
   );
   const lanes = useMemo((): Lane[] => {
     if (!mixerOpen || !grid) return trackLanes;
@@ -259,6 +293,60 @@ export function RehearsePanel({
     mixerOpen ? lanes.length : 0,
     trackLaneHeight,
   );
+  const editLanes = useMemo(
+    () => playing.map((p) => ({ trackId: p.track.id, color: p.track.color })),
+    [playing],
+  );
+  const editOps = useEdit((s) => s.ops);
+  const editCursor = useEdit((s) => s.cursor);
+  const shifted = useMemo(
+    () =>
+      editing
+        ? outOfSync(
+            editOps,
+            editCursor,
+            playing.map((p) => p.track.id),
+          )
+        : {},
+    [editing, editOps, editCursor, playing],
+  );
+  useEditShortcuts(editing);
+  const markerProps = timelineMarkers.props;
+  // Edit mode: clips over the track lanes; touch taps and long-presses on them arrive through
+  // the timeline (a tap seeks, or adds while picking; a long-press starts picking).
+  const timelineProps =
+    editing && mixerOpen
+      ? {
+          ...markerProps,
+          renderOverlay: (v: View) => (
+            <>
+              {markerProps.renderOverlay?.(v)}
+              <ClipOverlay
+                view={v}
+                top={RULER_H + (markerProps.topLanesHeight ?? 0)}
+                laneHeight={laneHeight}
+                lanes={editLanes}
+                markers={timelineMarkers.markers}
+              />
+            </>
+          ),
+          onItemTap: (id: string, sec: number) => {
+            if (!id.startsWith(CLIP_ITEM_PREFIX)) {
+              markerProps.onItemTap?.(id, sec);
+              return;
+            }
+            if (picking) pickClip(id.slice(CLIP_ITEM_PREFIX.length), true);
+            else seekSec(sec);
+          },
+          onLongPress: (sec: number, x: number, y: number, item: string | null) => {
+            if (item?.startsWith(CLIP_ITEM_PREFIX)) {
+              startPicking(item.slice(CLIP_ITEM_PREFIX.length));
+              return;
+            }
+            markerProps.onLongPress?.(sec, x, y, item);
+          },
+        }
+      : markerProps;
 
   // Another song's state (before this one opens, or the queue moving the page on).
   if (!ready || shownSongId !== song.id) return <Loader size="sm" />;
@@ -307,7 +395,7 @@ export function RehearsePanel({
           laneHeight={laneHeight}
           onLaneHeight={mixerOpen ? setTrackLaneHeight : setOverviewHeight}
           minLaneHeight={mixerOpen ? minLaneHeight : MIN_LANE_H}
-          {...timelineMarkers.props}
+          {...timelineProps}
           {...(mixerOpen && {
             belowOverview: (
               <MixerTools
@@ -323,7 +411,13 @@ export function RehearsePanel({
               const p = playing[i];
               if (p)
                 return (
-                  <TrackStrip playable={p} song={song} height={laneHeight} compact={isPhone} />
+                  <TrackStrip
+                    playable={p}
+                    song={song}
+                    height={laneHeight}
+                    compact={isPhone}
+                    edit={editing ? { outOfSync: shifted[p.track.id] ?? 0 } : undefined}
+                  />
                 );
               return lanes[i]?.click ? <ClickStrip height={laneHeight} compact={isPhone} /> : null;
             },

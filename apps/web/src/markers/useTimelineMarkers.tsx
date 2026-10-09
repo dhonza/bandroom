@@ -22,11 +22,13 @@ import { COMMENT_ITEM_PREFIX, commentLaneHeight, CommentsLane } from "../comment
 import { useSongComments } from "../comments/queries";
 import { openCommentsFor } from "../comments/store";
 import { tapComment } from "../comments/actions";
+import { useRemappedComments, useRemappedMarkers, useTempoRemapPreview } from "../edit/preview";
 import {
   anchorNow,
   clearSelection,
   openTimeline,
   setDragging,
+  setMarkers,
   setSelection,
   useTimelineUi,
 } from "./store";
@@ -73,8 +75,15 @@ export function useTimelineMarkers(
   laneCount: number,
   laneHeight: number,
 ) {
-  const { markers } = useSongMarkers(song.id);
-  useSongTempo(song.id);
+  const { markers: stored } = useSongMarkers(song.id);
+  const { tempo } = useSongTempo(song.id);
+  // Edit mode previews where the edit moves them (SPEC §24.4); nothing is written.
+  const markers = useRemappedMarkers(song.id, stored, tempo);
+  useTempoRemapPreview(song.id, tempo);
+  // Navigation and loop targets follow the previewed items too (after the stored list's effect).
+  useEffect(() => {
+    setMarkers(markers);
+  }, [markers]);
   const grid = useTempoUi((s) => (s.songId === song.id ? s.grid : null));
   const { canEdit, canCreate } = useMarkerPermissions(song);
   const actions = useMarkerActions(song.id);
@@ -83,7 +92,8 @@ export function useTimelineMarkers(
   const tempoEditable =
     song.access.capabilities.includes("tempo.edit") &&
     !lockedOut(song.locked !== null, "tempo.edit");
-  const { comments } = useSongComments(song.id);
+  const { comments: storedComments } = useSongComments(song.id);
+  const comments = useRemappedComments(song.id, storedComments);
   // The comment lane shows only when the song has comments and it is not hidden (SPEC §11.3).
   const commentsHidden = useLaneVisibility((s) => s.hidden.comments);
   const commentH = comments.length > 0 && !commentsHidden ? commentLaneHeight(layout.coarse) : 0;

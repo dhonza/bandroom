@@ -192,6 +192,11 @@ type HelpAction =
   | "toggleChrome"
   | "practiceSpeed"
   | "practicePitch"
+  | "editSplit"
+  | "editCut"
+  | "editGain"
+  | "editUndo"
+  | "editEscape"
   | "help";
 
 const HELP_ROWS: [string[], HelpAction][] = [
@@ -218,6 +223,11 @@ const HELP_ROWS: [string[], HelpAction][] = [
   [["Shift", "F"], "toggleChrome"],
   [["Shift", ", / ."], "practiceSpeed"],
   [["Alt", "↓/↑"], "practicePitch"],
+  [["X"], "editSplit"],
+  [["Del"], "editCut"],
+  [["G"], "editGain"],
+  [["Ctrl/⌘", "Z"], "editUndo"],
+  [["Esc"], "editEscape"],
   [["?"], "help"],
 ];
 

@@ -1078,7 +1078,12 @@
       "pageTurn": "Next / previous page in a focused document",
       "toggleChrome": "Hide / show navigation (any page)",
       "practiceSpeed": "Practice speed −/+ 5 %",
-      "practicePitch": "Practice pitch −/+ 1 semitone"
+      "practicePitch": "Practice pitch −/+ 1 semitone",
+      "editSplit": "Edit mode: split at the playhead or the selection",
+      "editCut": "Edit mode: cut the selection (Shift: silence)",
+      "editGain": "Edit mode: gain of the selection",
+      "editUndo": "Edit mode: undo / redo (Ctrl+Y redoes too)",
+      "editEscape": "Edit mode: clear the picked regions, then the selection"
     }
   },
   "whatsNew": {
@@ -2038,5 +2043,109 @@
       "writer": "Saving the recording on this device failed (the storage may be full). The recording stopped; what was recorded is kept.",
       "save": "The recording could not be saved."
     }
+  },
+  "edit": {
+    "button": "Edit audio",
+    "buttonHint": "Edit mode: split, cut, silence and move regions of the tracks",
+    "mode": "Edit mode",
+    "toolbar": "Edit tools",
+    "split": "Split",
+    "splitAtMarkers": "Split at markers…",
+    "splitAtMarkersShort": "Markers",
+    "cut": "Cut",
+    "silence": "Silence",
+    "gain": "Gain…",
+    "gainShort": "Gain",
+    "undo": "Undo",
+    "redo": "Redo",
+    "options": "Options",
+    "cancel": "Cancel",
+    "tracksCount_one": "{{count}} of {{total}} tracks",
+    "tracksCount_other": "{{count}} of {{total}} tracks",
+    "allTracks": "All",
+    "noTracks": "None",
+    "trackSelect": "Edit {{track}}",
+    "outOfSync_one": "Out of sync with {{count}} track",
+    "outOfSync_other": "Out of sync with {{count}} tracks",
+    "outOfSyncHint": "A cut on some tracks only moved this track against the others. Undo it to get back in sync.",
+    "save": {
+      "saved": "Saved",
+      "saving": "Saving…",
+      "unsaved": "Not saved",
+      "error": "Not saved"
+    },
+    "reasons": {
+      "noRange": "Select a range first",
+      "noTracks": "Select tracks first",
+      "noPick": "Pick a region first",
+      "outsideSong": "Move the playhead into the song",
+      "noMarkers": "The song has no markers or sections inside it.",
+      "nothingToUndo": "Nothing to undo",
+      "nothingToRedo": "Nothing to redo"
+    },
+    "refusals": {
+      "tooManyOps": "Too many operations in this session",
+      "unknownTrack": "That track is not part of this edit",
+      "unknownClip": "That region no longer exists",
+      "outsideSong": "That is outside the song",
+      "noChange": "Nothing to change there",
+      "tooManyClips": "Too many regions on one track",
+      "tooManyOverlaps": "At most 4 regions may overlap"
+    },
+    "gainTitle": "Gain of the selected range",
+    "gainLabel": "Gain (dB)",
+    "gainHint": "Sets the level of the range on the selected tracks; 0 dB is the original.",
+    "gainApply": "Apply",
+    "splitTitle": "Split at markers and sections",
+    "sectionStart": "{{name}} (start)",
+    "sectionEnd": "{{name}} (end)",
+    "splitApply_one": "Split at {{count}} point",
+    "splitApply_other": "Split at {{count}} points",
+    "optionsTitle": "Edit options",
+    "fadesNote": "Fades in milliseconds (0 = hard edge). Changes apply to the next operations.",
+    "fades": {
+      "fadeIn": "Fade in",
+      "fadeOut": "Fade out",
+      "crossfade": "Crossfade"
+    },
+    "overlap": {
+      "title": "When regions overlap",
+      "mix": "Both play",
+      "overwrite": "Moved one wins",
+      "block": "No overlap"
+    },
+    "follow": {
+      "title": "Follow the edit",
+      "markers": "Markers",
+      "sections": "Sections",
+      "comments": "Comments",
+      "tempo": "Tempo map and time signatures"
+    },
+    "snap": "Snap",
+    "cancelTitle": "Cancel the edit session?",
+    "cancelBody_one": "{{count}} operation is discarded; the song stays as it was.",
+    "cancelBody_other": "{{count}} operations are discarded; the song stays as it was.",
+    "cancelConfirm": "Discard edits",
+    "keepEditing": "Keep editing",
+    "delta": "{{value}} s",
+    "gainBadge": "{{value}} dB",
+    "clipLabel": "Region {{start}}–{{end}} s",
+    "trimStart": "Trim the region's start",
+    "trimEnd": "Trim the region's end",
+    "banner": "Being edited by {{name}} since {{time}}",
+    "bannerNoName": "Being edited since {{time}}",
+    "bannerBody": "You hear the song as it was. Changes to it wait until the edit session ends.",
+    "takeOver": "Take over",
+    "cancelSession": "Cancel session",
+    "takeOverTitle": "Take over the edit session?",
+    "takeOverBody": "The session continues with you; nothing is lost. {{name}} can no longer change it.",
+    "cancelSessionTitle": "Cancel {{name}}'s edit session?",
+    "cancelSessionBody": "Their edits are discarded; the song stays as it was.",
+    "takenOver": "{{name}} took over this edit session. Your edits are kept in it.",
+    "ended": "The edit session has ended.",
+    "conflict": "This session was changed elsewhere. It now shows the saved state.",
+    "editing": "The song is being edited",
+    "startFailed": "Edit mode could not start.",
+    "folded": "Older undo steps were merged into the session."
   }
 }

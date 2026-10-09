@@ -4,6 +4,7 @@ import {
   Badge,
   Box,
   Button,
+  Checkbox,
   Group,
   Slider,
   Stack,
@@ -37,6 +38,8 @@ import { PitchLockedBadge, TrackPracticeSettings } from "./TrackTranspose";
 import { PanelPopover } from "../components/ResponsivePanel";
 import { trackTint } from "../timeline/render";
 import { VersionGainBadge, VersionGainField } from "./VersionGain";
+import { OutOfSyncChip } from "../edit/EditToolbar";
+import { toggleTrackSelected, useEdit } from "../edit/store";
 
 const FADER_MIN = -60;
 
@@ -64,6 +67,7 @@ export function TrackStrip({
   song,
   height,
   compact = false,
+  edit,
 }: {
   playable: PlayableTrack;
   song: Song;
@@ -71,6 +75,12 @@ export function TrackStrip({
   height: number;
   /** A narrow header (phones): name above M/S; a tap on the name opens the settings. */
   compact?: boolean;
+  /**
+   * Edit mode (SPEC §24.6): a checkbox selects the track for the ops; the session plays its own
+   * clips, so the version, A/B and version gain controls are hidden. `outOfSync`: how many tracks
+   * a subset ripple shifted it against.
+   */
+  edit?: { outOfSync: number } | undefined;
 }) {
   const { t } = useTranslation();
   const { track, version } = playable;
@@ -79,6 +89,7 @@ export function TrackStrip({
   const buffered = usePlayerView((s) => s.buffer[track.id] ?? 0);
   const pair = usePlayerView((s) => s.ab[track.id]);
   const error = usePlayerView((s) => s.errors[track.id]);
+  const selected = useEdit((s) => s.selectedTracks.includes(track.id));
   const [versionsOpen, versionsModal] = useDisclosure(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const userId = useOptionalUser()?.id ?? null;
@@ -101,7 +112,33 @@ export function TrackStrip({
   const channels = playable.chosen.variant.channels;
   const dualMono = version.media?.dualMono ?? false;
 
-  const versionButton = (
+  const editing = edit !== undefined;
+  const editCheck = editing && (
+    <Checkbox
+      size="md"
+      checked={selected}
+      onChange={() => {
+        toggleTrackSelected(track.id);
+      }}
+      aria-label={t("edit.trackSelect", { track: track.name })}
+      data-testid="edit-track-select"
+      styles={{ body: { alignItems: "center" } }}
+      // A 44 px target around the box (SPEC §11.1).
+      style={{
+        flex: "none",
+        minWidth: 44,
+        minHeight: 44,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+      }}
+    />
+  );
+  const syncChip = editing && edit.outOfSync > 0 && <OutOfSyncChip count={edit.outOfSync} />;
+  const versionButton = !editing && (
     <UnstyledButton
       onClick={versionsModal.open}
       aria-label={t("rehearse.versionMenu", { track: track.name, number: version.number })}
@@ -114,12 +151,12 @@ export function TrackStrip({
       </Badge>
     </UnstyledButton>
   );
-  const notCurrent = track.current && track.current.id !== version.id && (
+  const notCurrent = !editing && track.current && track.current.id !== version.id && (
     <Badge variant="outline" color="yellow" size="sm" style={{ flex: "none" }}>
       {t("rehearse.notCurrent")}
     </Badge>
   );
-  const abButton = pair && other && (
+  const abButton = !editing && pair && other && (
     <Tooltip label={t("rehearse.abToggle", { track: track.name, number: other.number })}>
       <Button
         size="compact-sm"
@@ -142,8 +179,9 @@ export function TrackStrip({
         {track.name}
       </Text>
       {versionButton}
+      {syncChip}
       <ChannelsIcon channels={channels} dualMono={dualMono} />
-      <VersionGainBadge version={version} />
+      {!editing && <VersionGainBadge version={version} />}
       {notCurrent}
       {abButton}
       <PitchLockedBadge track={track} />
@@ -164,7 +202,7 @@ export function TrackStrip({
       {track.name}
       <Text span size="xs" c="dimmed" fw={400}>
         {" "}
-        {t("rehearse.versionButton", { number: version.number })}{" "}
+        {!editing && t("rehearse.versionButton", { number: version.number })}{" "}
         <ChannelsIcon channels={channels} dualMono={dualMono} size={12} />
       </Text>
     </Text>
@@ -306,25 +344,28 @@ export function TrackStrip({
             </Text>
           )}
           <Group gap="xs" wrap="wrap">
-            <Button
-              variant="light"
-              h={44}
-              leftSection={<IconStack2 size={16} />}
-              rightSection={<IconChevronDown size={12} />}
-              onClick={() => {
-                setSettingsOpen(false);
-                versionsModal.open();
-              }}
-              aria-label={t("rehearse.versionMenu", {
-                track: track.name,
-                number: version.number,
-              })}
-              data-testid="track-version"
-            >
-              {t("rehearse.versionButton", { number: version.number })}
-            </Button>
+            {syncChip}
+            {!editing && (
+              <Button
+                variant="light"
+                h={44}
+                leftSection={<IconStack2 size={16} />}
+                rightSection={<IconChevronDown size={12} />}
+                onClick={() => {
+                  setSettingsOpen(false);
+                  versionsModal.open();
+                }}
+                aria-label={t("rehearse.versionMenu", {
+                  track: track.name,
+                  number: version.number,
+                })}
+                data-testid="track-version"
+              >
+                {t("rehearse.versionButton", { number: version.number })}
+              </Button>
+            )}
             <ChannelsIcon channels={channels} dualMono={dualMono} withText />
-            <VersionGainBadge version={version} />
+            {!editing && <VersionGainBadge version={version} />}
             {notCurrent}
             {abButton}
             <PitchLockedBadge track={track} />
@@ -350,7 +391,9 @@ export function TrackStrip({
         </Text>
         {pan}
       </div>
-      <VersionGainField song={song} track={track} version={version} canEdit={canEditTrack} />
+      {!editing && (
+        <VersionGainField song={song} track={track} version={version} canEdit={canEditTrack} />
+      )}
       <TrackPracticeSettings song={song} track={track} canEdit={canEditTrack} />
       {compact && canEditTrack && <TrackColorPalette track={track} />}
     </Stack>
@@ -397,6 +440,7 @@ export function TrackStrip({
       <Stack gap={2} px={6} py={2} justify="center" style={{ flex: 1, minWidth: 0 }}>
         {fullName}
         <Group gap={4} wrap="nowrap">
+          {editCheck}
           {buttons}
           {fader}
           {settings}
@@ -423,6 +467,7 @@ export function TrackStrip({
               : { left: 2, bottom: 2 }
           }
         >
+          {editCheck}
           {buttons}
         </Group>
       </Box>
@@ -432,6 +477,7 @@ export function TrackStrip({
       <Stack gap={2} px={6} justify="center" style={{ flex: 1, minWidth: 0 }}>
         {smallName}
         <Group gap={4} wrap="nowrap">
+          {editCheck}
           {buttons}
           {fader}
           {settings}
@@ -442,6 +488,7 @@ export function TrackStrip({
     content = (
       <Group gap={4} px={6} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
         <Box style={{ flex: 1, minWidth: 0 }}>{smallName}</Box>
+        {editCheck}
         {buttons}
         {settings}
       </Group>
