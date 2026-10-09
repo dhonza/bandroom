@@ -94,6 +94,92 @@ export const UpdateMarkerSchema = z
   .partial();
 export type UpdateMarker = z.infer<typeof UpdateMarkerSchema>;
 
+/** Converting markers to sections and back (SPEC §7.4 timeline items editor). */
+export const MARKER_CONVERT_MAX = 500;
+export const ConvertMarkersSchema = z.object({
+  ids: z.array(z.uuid()).min(1).max(MARKER_CONVERT_MAX),
+  to: MarkerTypeSchema,
+  /** Client UUID for idempotent replays (SPEC §18.3). */
+  requestId: z.uuid().optional(),
+});
+export type ConvertMarkers = z.infer<typeof ConvertMarkersSchema>;
+
+/** The fields of an item that a conversion reads. */
+export type ConvertibleMarker = Pick<
+  Marker,
+  "id" | "type" | "name" | "color" | "note" | "startSec" | "endSec" | "anchor"
+>;
+
+export interface ConversionPlan {
+  /** One new item per converted source, in source time order. */
+  creates: {
+    sourceId: string;
+    item: {
+      type: MarkerType;
+      name: string;
+      color: PaletteColor;
+      note: string;
+      startSec: number;
+      endSec: number | null;
+      anchor: MarkerAnchor;
+    };
+  }[];
+  /** Selected ids left as they are: unknown, already of the target type, or zero length. */
+  skippedIds: string[];
+}
+
+/**
+ * What converting the selected items does (pure; the server runs it in one transaction):
+ * - to sections: each selected marker spans to the next marker in time among *all* markers of
+ *   the song (not only the selected ones); the last one ends at `songEndSec`. Without a known
+ *   song end, or when that end is not after the marker, the marker is skipped.
+ * - to markers: each selected section becomes a marker at its start.
+ * Name, color, note and anchor carry over. `items` are the song's live items.
+ */
+export function conversionPlan(
+  items: readonly ConvertibleMarker[],
+  ids: readonly string[],
+  to: MarkerType,
+  songEndSec: number | null,
+): ConversionPlan {
+  const byId = new Map(items.map((m) => [m.id, m]));
+  const markerTimes = [
+    ...new Set(items.filter((m) => m.type === "marker").map((m) => m.startSec)),
+  ].sort((a, b) => a - b);
+  const creates: ConversionPlan["creates"] = [];
+  const skippedIds: string[] = [];
+  const sources: ConvertibleMarker[] = [];
+  for (const id of new Set(ids)) {
+    const m = byId.get(id);
+    if (!m || m.type === to) skippedIds.push(id);
+    else sources.push(m);
+  }
+  sources.sort((a, b) => a.startSec - b.startSec);
+  for (const m of sources) {
+    let endSec: number | null = null;
+    if (to === "section") {
+      endSec = markerTimes.find((t) => t > m.startSec) ?? songEndSec;
+      if (endSec === null || endSec <= m.startSec) {
+        skippedIds.push(m.id);
+        continue;
+      }
+    }
+    creates.push({
+      sourceId: m.id,
+      item: {
+        type: to,
+        name: m.name,
+        color: m.color,
+        note: m.note,
+        startSec: m.startSec,
+        endSec,
+        anchor: m.anchor,
+      },
+    });
+  }
+  return { creates, skippedIds };
+}
+
 /**
  * Lanes for overlapping sections (SPEC §7.4): sorted by start (then creation), each section
  * takes the lowest lane that is free at its start, so non-overlapping sections share lane 0.

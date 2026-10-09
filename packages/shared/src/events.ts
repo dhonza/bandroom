@@ -116,6 +116,8 @@ export const EVENT_ACTIONS = [
   "section.restored",
   /** Markers created from a MIDI import (details: count). */
   "markers.imported",
+  /** Markers converted to sections or back (details: to, sourceIds, newIds). */
+  "markers.converted",
   // tempo maps (SPEC §7.1–§7.3; details: action set|import|restore|delete)
   "tempo.changed",
   // comments (SPEC §8)

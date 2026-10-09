@@ -1,11 +1,13 @@
 import {
   assignLanes,
+  conversionPlan,
   PaletteColorSchema,
   secToBeat,
   uuidv7,
   type CreateMarker,
   type Marker,
   type MarkerAnchor,
+  type MarkerType,
   type TempoGrid,
   type UpdateMarker,
   type WhatsNew,
@@ -197,6 +199,94 @@ export function setMarkerDeleted(
       .run();
     afterTimelineChange(db, row.songId, now);
   });
+}
+
+export interface MarkerConversion {
+  /** The new items. */
+  markers: Marker[];
+  /** The converted (now soft-deleted) sources. */
+  deletedIds: string[];
+  skippedIds: string[];
+  /** Source id → new id. */
+  pairs: { from: string; to: string }[];
+}
+
+/**
+ * Converts markers to sections or back (see `conversionPlan`) in one transaction: the sources
+ * are soft-deleted (restorable for undo) and the new items keep their creator. `canConvert`
+ * decides per source row (the route's permission check); it runs before anything is written.
+ */
+export function convertMarkers(
+  db: Db,
+  songId: string,
+  ids: readonly string[],
+  to: MarkerType,
+  opts: {
+    songEndSec: number | null;
+    grid: TempoGrid | null;
+    canConvert: (row: MarkerRow) => boolean;
+    now?: number;
+  },
+): MarkerConversion | "forbidden" {
+  const now = opts.now ?? Date.now();
+  const rows = db
+    .select()
+    .from(markers)
+    .where(and(eq(markers.songId, songId), isNull(markers.deletedAt)))
+    .all();
+  const rowById = new Map(rows.map((r) => [r.id, r]));
+  const plan = conversionPlan(
+    rows.map((r) => {
+      const color = PaletteColorSchema.safeParse(r.color);
+      return { ...r, color: color.success ? color.data : "blue" };
+    }),
+    ids,
+    to,
+    opts.songEndSec,
+  );
+  const sources = plan.creates.map((c) => rowById.get(c.sourceId) as MarkerRow);
+  if (!sources.every(opts.canConvert)) return "forbidden";
+  const pairs: { from: string; to: string }[] = [];
+  if (plan.creates.length > 0) {
+    db.transaction(() => {
+      for (const [i, c] of plan.creates.entries()) {
+        const source = sources[i] as MarkerRow;
+        const id = uuidv7();
+        db.update(markers)
+          .set({ deletedAt: now, updatedAt: now })
+          .where(eq(markers.id, source.id))
+          .run();
+        db.insert(markers)
+          .values({
+            id,
+            songId,
+            type: c.item.type,
+            name: c.item.name,
+            color: c.item.color,
+            note: c.item.note,
+            startSec: c.item.startSec,
+            endSec: c.item.endSec,
+            ...anchorFields(opts.grid, c.item.anchor, c.item.startSec, c.item.endSec),
+            createdBy: source.createdBy,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .run();
+        pairs.push({ from: source.id, to: id });
+      }
+      afterTimelineChange(db, songId, now);
+    });
+  }
+  return {
+    markers: pairs.map((p) => {
+      const m = markerById(db, p.to);
+      if (!m) throw new Error("marker vanished");
+      return m;
+    }),
+    deletedIds: pairs.map((p) => p.from),
+    skippedIds: plan.skippedIds,
+    pairs,
+  };
 }
 
 // --- Visits and "What's new" (SPEC §4.4, §11.3) ------------------------------------------------

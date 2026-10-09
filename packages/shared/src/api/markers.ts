@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { CreateMarkerSchema, MarkerSchema, UpdateMarkerSchema, WhatsNewSchema } from "../markers";
+import {
+  ConvertMarkersSchema,
+  CreateMarkerSchema,
+  MarkerSchema,
+  UpdateMarkerSchema,
+  WhatsNewSchema,
+} from "../markers";
 import { OkSchema } from "./auth";
 import { defineContract } from "./contract";
 
@@ -54,6 +60,29 @@ export const restoreMarker = defineContract({
   response: z.object({ marker: MarkerSchema }),
   errors: ["NOT_FOUND", "FORBIDDEN"],
   auth: { capability: "annotate.own", scope: "marker" },
+});
+
+/**
+ * Converts markers to sections or back in one step (see `conversionPlan`): the sources go to
+ * the soft-deleted state and new items take their place. Each source needs `canActOn`.
+ * Undo = restore `deletedIds` and delete the new `markers` with the endpoints above.
+ */
+export const convertMarkers = defineContract({
+  method: "POST",
+  path: "/songs/:id/markers/convert",
+  params: IdParams,
+  body: ConvertMarkersSchema,
+  response: z.object({
+    /** The new items. */
+    markers: z.array(MarkerSchema),
+    /** The converted sources (soft-deleted). */
+    deletedIds: z.array(z.string()),
+    /** Selected ids left unchanged (already the target type, or no length). */
+    skippedIds: z.array(z.string()),
+    timelineRev: z.number(),
+  }),
+  errors: ["NOT_FOUND", "FORBIDDEN"],
+  auth: { capability: "annotate.own", scope: "song" },
 });
 
 /** What changed since the user's previous visit (SPEC §11.3 banner); read only. */

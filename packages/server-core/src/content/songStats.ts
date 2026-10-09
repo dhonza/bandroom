@@ -11,6 +11,15 @@ import type { Db } from "../db/connection";
  * One query; songs without ready audio are missing from the map.
  */
 export function songStatsBySong(db: Db, projectId: string): Map<string, SongStats> {
+  return statsWhere(db, "s.project_id = ?", projectId);
+}
+
+/** The Player's song length (see `songStatsBySong`); null while no audio is ready. */
+export function songDurationSec(db: Db, songId: string): number | null {
+  return statsWhere(db, "s.id = ?", songId).get(songId)?.durationSec ?? null;
+}
+
+function statsWhere(db: Db, where: string, param: string): Map<string, SongStats> {
   const rows = db.$client
     .prepare(
       `SELECT t.song_id AS songId, v.offset_samples AS offset,
@@ -21,11 +30,11 @@ export function songStatsBySong(db: Db, projectId: string): Map<string, SongStat
          JOIN assets a ON a.id = v.asset_id
          LEFT JOIN asset_variants o ON o.asset_id = a.id AND o.variant = 'opus'
          LEFT JOIN asset_variants l ON l.asset_id = a.id AND l.variant = 'opus_low'
-        WHERE s.project_id = ? AND s.deleted_at IS NULL AND t.deleted_at IS NULL
+        WHERE ${where} AND s.deleted_at IS NULL AND t.deleted_at IS NULL
           AND v.deleted_at IS NULL AND a.status = 'ready'
           AND (o.asset_id IS NOT NULL OR l.asset_id IS NOT NULL)`,
     )
-    .all(projectId) as { songId: string; offset: number; meta: string }[];
+    .all(param) as { songId: string; offset: number; meta: string }[];
   const stats = new Map<string, SongStats>();
   for (const r of rows) {
     const meta = parseMeta(r.meta);

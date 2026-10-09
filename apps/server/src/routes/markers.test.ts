@@ -1,5 +1,15 @@
-import { createSongRow, listEvents, setProjectGrantRow } from "@bandroom/server-core";
 import {
+  createAsset,
+  createSongRow,
+  createTrackWithVersion,
+  listEvents,
+  putVariant,
+  schema,
+  setAssetStatus,
+  setProjectGrantRow,
+} from "@bandroom/server-core";
+import {
+  convertMarkers,
   createComment,
   createMarker,
   createProject,
@@ -20,6 +30,8 @@ let admin: string;
 let member: string; // contributor (default member role)
 let viewer: string;
 let songId: string;
+let projectId: string;
+let bossId: string;
 
 beforeAll(async () => {
   t = await createTestApp();
@@ -29,7 +41,8 @@ beforeAll(async () => {
   admin = await loginAs(t, "boss");
   member = await loginAs(t, "petr");
   viewer = await loginAs(t, "vera");
-  const projectId = (await call(t, createProject, { body: { name: "Album" } }, admin)).json<{
+  bossId = boss.id;
+  projectId = (await call(t, createProject, { body: { name: "Album" } }, admin)).json<{
     project: { id: string };
   }>().project.id;
   setProjectGrantRow(t.db, projectId, v.id, "viewer", boss.id);
@@ -220,5 +233,116 @@ describe("what's new since the last visit (SPEC §11.3)", () => {
       await call(t, getSongWhatsNew, { params: { id: songId } }, member)
     ).json<WhatsNew>();
     expect(own.markers).toEqual([]);
+  });
+});
+
+describe("converting markers and sections", () => {
+  let song: string;
+  type Converted = { markers: Marker[]; deletedIds: string[]; skippedIds: string[] };
+  const add = async (body: Record<string, unknown>, cookie = member) =>
+    (
+      await call(t, createMarker, { params: { id: song }, body: { color: "red", ...body } }, cookie)
+    ).json<{ marker: Marker }>().marker;
+  const convert = (body: Record<string, unknown>, cookie = member) =>
+    call(t, convertMarkers, { params: { id: song }, body }, cookie);
+  const items = async () =>
+    (await call(t, listSongMarkers, { params: { id: song } }, member)).json<{
+      markers: Marker[];
+    }>().markers;
+
+  beforeAll(() => {
+    song = createSongRow(t.db, { projectId, title: "Convert", createdBy: bossId }).id;
+  });
+
+  it("turns markers into sections up to the next marker, the last one to the song end", async () => {
+    const intro = await add({ type: "marker", name: "Intro", startSec: 0, note: "soft" });
+    const verse = await add({ type: "marker", name: "Verse", color: "blue", startSec: 12 });
+    await add({ type: "marker", name: "Other's", startSec: 30 }, admin);
+    const outro = await add({ type: "marker", name: "Outro", startSec: 80 });
+    // Without ready audio the song has no known end: the last marker stays.
+    const noEnd = (await convert({ ids: [outro.id], to: "section" })).json<Converted>();
+    expect(noEnd).toMatchObject({ markers: [], deletedIds: [], skippedIds: [outro.id] });
+    // A ready 100 s track gives the song its end.
+    const asset = createAsset(t.db, {
+      kind: "audio",
+      originalFilename: "a.wav",
+      sizeBytes: 1,
+      originalHash: "h",
+      uploadedBy: bossId,
+    }).id;
+    t.db
+      .insert(schema.blobs)
+      .values({ hash: "b1", sizeBytes: 1, storageKey: "b1", createdAt: 1 })
+      .run();
+    putVariant(t.db, asset, "opus", "b1", { channels: 2, durationSamples48k: 100 * 48_000 });
+    setAssetStatus(t.db, asset, "ready");
+    createTrackWithVersion(t.db, { songId: song, name: "A", assetId: asset, uploadedBy: bossId });
+
+    const before = listEvents(t.db, { action: "markers.converted" }).length;
+    const requestId = "0192f0c4-0000-7000-8000-00000000c0de";
+    const body = { ids: [outro.id, intro.id, verse.id], to: "section", requestId };
+    const res = await convert(body);
+    expect(res.statusCode).toBe(200);
+    const out = res.json<Converted>();
+    expect(out.markers.map((m) => [m.type, m.name, m.color, m.note, m.startSec, m.endSec])).toEqual(
+      [
+        ["section", "Intro", "red", "soft", 0, 12],
+        ["section", "Verse", "blue", "", 12, 30], // the next marker is someone else's
+        ["section", "Outro", "red", "", 80, 100],
+      ],
+    );
+    expect(out.markers.every((m) => m.createdByName === "Petr")).toBe(true);
+    expect(out.deletedIds).toEqual([intro.id, verse.id, outro.id]);
+    // A replay returns the first answer and converts nothing again.
+    expect((await convert(body)).json<Converted>()).toEqual(out);
+    const now = await items();
+    expect(now.map((m) => [m.type, m.name])).toEqual([
+      ["section", "Intro"],
+      ["section", "Verse"],
+      ["marker", "Other's"],
+      ["section", "Outro"],
+    ]);
+    const events = listEvents(t.db, { action: "markers.converted" });
+    expect(events).toHaveLength(before + 1);
+    expect(JSON.parse(events[0]?.details ?? "{}")).toEqual({
+      to: "section",
+      count: 3,
+      sourceIds: out.deletedIds,
+      newIds: out.markers.map((m) => m.id),
+    });
+  });
+
+  it("turns sections back into markers at their start and can be undone", async () => {
+    const sections = (await items()).filter((m) => m.type === "section");
+    const res = (await convert({ ids: sections.map((m) => m.id), to: "marker" })).json<Converted>();
+    expect(res.markers.map((m) => [m.type, m.name, m.startSec, m.endSec])).toEqual([
+      ["marker", "Intro", 0, null],
+      ["marker", "Verse", 12, null],
+      ["marker", "Outro", 80, null],
+    ]);
+    // Undo with the existing endpoints: restore the sources, delete the new items.
+    for (const id of res.deletedIds)
+      expect((await call(t, restoreMarker, { params: { id } }, member)).statusCode).toBe(200);
+    for (const m of res.markers)
+      expect((await call(t, deleteMarker, { params: { id: m.id } }, member)).statusCode).toBe(200);
+    expect((await items()).filter((m) => m.type === "section")).toHaveLength(3);
+  });
+
+  it("needs the right to act on every converted item", async () => {
+    const others = (await items()).find((m) => m.name === "Other's");
+    const mine = (await items()).find((m) => m.name === "Intro");
+    const ids = [others?.id ?? "", mine?.id ?? ""];
+    expect((await convert({ ids, to: "section" })).statusCode).toBe(403);
+    expect((await items()).find((m) => m.name === "Intro")?.type).toBe("section");
+    expect((await convert({ ids, to: "section" }, viewer)).statusCode).toBe(403);
+    // Editors convert anyone's; ids of other songs or deleted items are skipped.
+    const res = await convert(
+      { ids: [others?.id ?? "", "0192f0c4-0000-7000-8000-000000000001"], to: "section" },
+      admin,
+    );
+    expect(res.json<Converted>()).toMatchObject({
+      markers: [{ name: "Other's", startSec: 30, endSec: 100, createdByName: "Boss" }], // "Outro" is a section now
+      skippedIds: ["0192f0c4-0000-7000-8000-000000000001"],
+    });
   });
 });
