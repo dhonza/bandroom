@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./worker": "./src/worker/entry.ts",
-    "./worklet": "./src/mixer/processor.ts"
+    "./worklet": "./src/mixer/processor.ts",
+    "./flac": "./src/flac/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
