@@ -36,18 +36,33 @@ import {
 import { isLinkMode, saveLocalMix } from "../links/linkMode";
 import { installMediaActions, setMediaInfo, setMediaPlaying } from "../player/mediaSession";
 import {
+  append,
+  clearQueue,
   dropGone,
+  endedIndex,
+  entriesOf,
   focusSong,
+  insertNext,
+  moveEntry,
   nextReadyIndex,
+  nextRepeat,
+  queueOf,
+  reconcile,
+  removeEntry,
   startIndex,
+  stepIndex,
   type GoneSongs,
   type PlayQueue,
   type QueueEntry,
+  type QueueItem,
+  type QueueProject,
   type QueueSource,
+  type RepeatMode,
   waitingAfter,
   withFreshReady,
 } from "../player/queue";
 import type { QueueLoader } from "../player/queueLoader";
+import { forgetSavedQueue } from "../player/queueStorage";
 import { setSongTempo, useTempoUi } from "../tempo/store";
 import { debugSnapshot, exposeDebug } from "./debug";
 import {
@@ -93,6 +108,18 @@ export interface SongInfo {
   imageHash: string | null;
 }
 
+/** The mini-player's song before it is loaded (a queue restored or started paused). */
+function infoOfEntry(e: QueueEntry): SongInfo {
+  return {
+    songId: e.songId,
+    title: e.title,
+    subtitle: e.subtitle,
+    projectId: e.projectId,
+    projectName: e.projectName,
+    imageHash: e.imageHash,
+  };
+}
+
 export function songInfoOf(song: Song): SongInfo {
   return {
     songId: song.id,
@@ -115,6 +142,13 @@ export interface RehearseState {
   open: boolean;
   /** The play queue (SPEC §6.10); a song opened on its page is a queue of its own. */
   queue: PlayQueue | null;
+  /** Repeat of the queue (player setting, kept with the saved queue). */
+  repeat: RepeatMode;
+  /**
+   * The queue's song is shown (mini-player) but not loaded yet: a queue restored after a reload
+   * or started by "Add to queue". Play (or next, previous, a jump) loads it inside the tap.
+   */
+  dormant: boolean;
   /**
    * The song page shows this song without the engine while another song plays on (SPEC §6.10):
    * its Player reads {@link usePreview} until Play switches the engine to it.
@@ -147,6 +181,8 @@ const initialState = (): RehearseState => ({
   info: null,
   open: false,
   queue: null,
+  repeat: "off",
+  dormant: false,
   previewSongId: null,
   status: "idle",
   mix: { tracks: {} },
@@ -288,12 +324,14 @@ function getEngine(): Engine {
   wake = new WakeLockController(useRehearse.getState().prefs.wakeLock);
   document.addEventListener("visibilitychange", onVisibility);
   engine = e;
-  exposeDebug(() => ({
-    ...debugSnapshot(engine, useRehearse.getState(), songGrid() !== null),
-    loads: songLoads,
-  }));
   return e;
 }
+
+// Also before the engine starts: a restored queue is visible to the e2e tests.
+exposeDebug(() => ({
+  ...debugSnapshot(engine, useRehearse.getState(), songGrid() !== null),
+  loads: songLoads,
+}));
 
 function onEngineState(s: EngineState) {
   useRehearse.setState({ status: s, ...(s === "playing" ? { ended: false } : {}) });
@@ -302,37 +340,49 @@ function onEngineState(s: EngineState) {
   if (useRehearse.getState().open) setMediaPlaying(playing);
 }
 
-/** The song ended: the queue's next ready song plays; at the queue's end a song left alone closes. */
+/**
+ * The song ended: repeat one plays it again, else the queue's next ready song plays; at the
+ * queue's end repeat all starts it over, and a song left alone closes.
+ */
 function onEnded() {
   useRehearse.setState({ ended: true });
   const s = useRehearse.getState();
-  const next = s.queue ? nextReadyIndex(s.queue.entries, s.queue.index, 1) : null;
+  const q = s.queue;
+  const next = q && s.repeat === "one" ? q.index : q ? nextReadyIndex(q.entries, q.index, 1) : null;
   if (next !== null) {
     playQueueIndex(next);
     return;
   }
-  const q = s.queue;
   const loader = queueLoader;
-  if (q?.source.kind === "project" && loader && waitingAfter(q)) {
+  if (q && q.source.kind !== "mixed" && loader && waitingAfter(q)) {
     // Songs that were still processing when the queue started may be ready now.
+    const projectId = q.source.projectId;
     const token = ++queueLoad;
     loader
-      .entries(q.source.projectId)
+      .entries(projectId)
       .then((fresh) => {
         const cur = useRehearse.getState().queue;
         if (token !== queueLoad || !cur) return;
-        const entries = withFreshReady(cur.entries, fresh);
+        const entries = withFreshReady(cur.entries, projectId, fresh);
         useRehearse.setState({ queue: { ...cur, entries } });
         const i = nextReadyIndex(entries, cur.index, 1);
         if (i !== null) playQueueIndex(i);
-        else endOfQueue();
+        else afterLastSong();
       })
       .catch(() => {
-        if (token === queueLoad) endOfQueue();
+        if (token === queueLoad) afterLastSong();
       });
     return;
   }
-  endOfQueue();
+  afterLastSong();
+}
+
+/** The last song ended: repeat all starts the queue over, else the queue ends. */
+function afterLastSong() {
+  const s = useRehearse.getState();
+  const i = s.queue && s.repeat === "all" ? endedIndex(s.queue, "all") : null;
+  if (i !== null) playQueueIndex(i);
+  else endOfQueue();
 }
 
 /** Nothing more to play: a song left alone (the user is elsewhere) closes. */
@@ -525,7 +575,8 @@ async function loadIntoEngine(args: OpenArgs, carry: Carry | null = null): Promi
     carry = c && { state: c.state };
   }
   const s = useRehearse.getState();
-  const sameSong = s.songId === songId;
+  // A dormant queue shows its song without having loaded it: not the engine's song yet.
+  const sameSong = s.songId === songId && !s.dormant;
   if (!sameSong) {
     // The previous song's mix is saved under its own id; its loop does not carry over.
     flushSave();
@@ -534,11 +585,20 @@ async function loadIntoEngine(args: OpenArgs, carry: Carry | null = null): Promi
   const { mix, quality, playable } = songView(args, sameSong ? s : (carry?.state ?? null));
   const key = loadKeyOf(songId, playable, mix);
   const trims = sameSong ? changedTrims(s.tracks, playable) : [];
-  const entry: QueueEntry = { songId, title: info.title, subtitle: info.subtitle, ready: true };
+  const entry: QueueEntry = {
+    songId,
+    title: info.title,
+    subtitle: info.subtitle,
+    ready: true,
+    projectId: info.projectId,
+    projectName: info.projectName,
+    imageHash: info.imageHash,
+  };
   useRehearse.setState({
     songId,
     info,
     open: true,
+    dormant: false,
     queue: focusSong(s.queue, entry, queueSourceOf(info)),
     mix,
     tracks: playable,
@@ -650,6 +710,8 @@ function queueSourceOf(info: SongInfo): QueueSource {
 export function closeSong(): void {
   const page = useRehearse.getState().previewSongId;
   stopPlayer();
+  // The queue ended (✕, its end, its song deleted): it does not come back after a reload.
+  forgetSavedQueue();
   if (page === null) return;
   const args = pageArgs;
   if (args?.[0] === page) void loadIntoEngine(args, takePreview(page));
@@ -665,7 +727,7 @@ export function stopPlayer(): void {
   wake?.setSongOpen(false);
   flushSave();
   if (useRehearse.getState().open) {
-    useRehearse.setState({ open: false, queue: null });
+    useRehearse.setState({ open: false, queue: null, dormant: false });
     setMediaInfo(null);
     setMediaPlaying(null);
   }
@@ -697,11 +759,12 @@ export function attachPage(songId: string): () => void {
  * the audio (iOS) before the song loads.
  */
 export function startQueue(
-  entries: QueueEntry[],
+  items: readonly QueueItem[],
   source: QueueSource,
   loader: QueueLoader,
   songId?: string,
 ): boolean {
+  const entries = entriesOf(items, source);
   const first = startIndex(entries, songId);
   if (first === null) return false;
   unlockAudio(getEngine());
@@ -719,7 +782,7 @@ function playQueueIndex(index: number): void {
   if (!q || !entry) return;
   const token = ++queueLoad;
   useRehearse.setState({ queue: { ...q, index }, ended: false });
-  if (s.songId === entry.songId && s.open && loadKey !== "") {
+  if (s.songId === entry.songId && s.open && !s.dormant && loadKey !== "") {
     // Already in the engine: from the start.
     engineSeek(0);
     engine?.play();
@@ -765,27 +828,172 @@ function playQueueIndex(index: number): void {
     });
 }
 
-/** Next song of the queue (mini-player, media controls). */
+/**
+ * Next song of the queue (mini-player, media controls); with repeat on it wraps around. In a
+ * dormant queue it loads and plays (inside the tap, for iOS).
+ */
 export function nextSong(): void {
-  const q = useRehearse.getState().queue;
-  const next = q ? nextReadyIndex(q.entries, q.index, 1) : null;
-  if (next !== null) playQueueIndex(next);
+  const s = useRehearse.getState();
+  const next = s.queue ? stepIndex(s.queue, 1, s.repeat) : null;
+  if (next === null) return;
+  if (s.dormant) unlockAudio(getEngine());
+  playQueueIndex(next);
 }
 
 /** Media-control convention: restart the song when more than 3 s in, else the previous song. */
 export function previousSong(): void {
-  const q = useRehearse.getState().queue;
-  const prev = q ? nextReadyIndex(q.entries, q.index, -1) : null;
+  const s = useRehearse.getState();
+  const q = s.queue;
+  const prev = q ? stepIndex(q, -1, s.repeat) : null;
+  if (s.dormant) {
+    unlockAudio(getEngine());
+    if (q) playQueueIndex(prev ?? q.index);
+    return;
+  }
   if (playingPositionSec() > 3 || prev === null) engineSeek(0);
   else playQueueIndex(prev);
 }
 
 export function hasNextSong(s: RehearseState = useRehearse.getState()): boolean {
-  return s.queue !== null && nextReadyIndex(s.queue.entries, s.queue.index, 1) !== null;
+  return s.queue !== null && stepIndex(s.queue, 1, s.repeat) !== null;
 }
 
 export function hasPreviousSong(s: RehearseState = useRehearse.getState()): boolean {
-  return s.queue !== null && nextReadyIndex(s.queue.entries, s.queue.index, -1) !== null;
+  return s.queue !== null && stepIndex(s.queue, -1, s.repeat) !== null;
+}
+
+/** The repeat toggle: off → all → one. */
+export function cycleRepeat(): void {
+  setRepeat(nextRepeat(useRehearse.getState().repeat));
+}
+
+export function setRepeat(repeat: RepeatMode): void {
+  useRehearse.setState({ repeat });
+}
+
+/** Plays the queue's entry at `index` (the queue pane); inside the tap, for iOS. */
+export function playQueueAt(index: number): void {
+  const q = useRehearse.getState().queue;
+  if (!q?.entries[index]) return;
+  unlockAudio(getEngine());
+  useRehearse.setState({ lockHint: false });
+  playQueueIndex(index);
+}
+
+/** Edits the queue (the playing song stays loaded); a dormant queue shows its new current song. */
+function editQueue(edit: (q: PlayQueue) => PlayQueue): void {
+  const s = useRehearse.getState();
+  if (!s.queue) return;
+  const queue = edit(s.queue);
+  if (queue === s.queue) return;
+  useRehearse.setState({ queue });
+}
+
+export function moveInQueue(from: number, to: number): void {
+  editQueue((q) => moveEntry(q, from, to));
+}
+
+export function removeFromQueue(index: number): void {
+  editQueue((q) => removeEntry(q, index));
+}
+
+/** "Clear": everything but the playing song leaves the queue. */
+export function clearUpcoming(): void {
+  editQueue(clearQueue);
+}
+
+/**
+ * "Play next" / "Add to queue" from a song menu (also songs of another project). With nothing
+ * queued the songs become a queue shown in the mini-player, paused: Play starts it.
+ */
+export function enqueue(
+  items: readonly QueueItem[],
+  project: QueueProject,
+  where: "next" | "end",
+  loader: QueueLoader,
+): void {
+  const add = entriesOf(items, project);
+  const s = useRehearse.getState();
+  if (s.open && s.queue) {
+    // The loader of the queue that plays (the app's) also loads the added songs.
+    queueLoader ??= loader;
+    editQueue((q) => (where === "next" ? insertNext(q, add) : append(q, add)));
+    return;
+  }
+  const q = queueOf(add);
+  if (q) showDormant(q, s.repeat, loader);
+}
+
+/**
+ * Shows a queue without loading anything (a restored or newly added queue): the mini-player
+ * shows its song, and Play loads it. Not while a song is open.
+ */
+function showDormant(q: PlayQueue, repeat: RepeatMode, loader: QueueLoader): boolean {
+  const s = useRehearse.getState();
+  const entry = q.entries[q.index];
+  if (s.open || !entry) return false;
+  queueLoader = loader;
+  queueLoad++;
+  // The engine may still hold a closed song: it is reloaded on Play.
+  loadKey = "";
+  useRehearse.setState({
+    songId: entry.songId,
+    info: infoOfEntry(entry),
+    open: true,
+    dormant: true,
+    queue: q,
+    repeat,
+    mix: { tracks: {} },
+    tracks: [],
+    ab: {},
+    errors: {},
+    buffer: {},
+    ended: false,
+    lockHint: false,
+    lengthSec: 0,
+    selectedTrackId: null,
+  });
+  return true;
+}
+
+/**
+ * The queue saved on this device (SPEC §6.10), shown paused after a reload. Its songs are then
+ * checked against the server: songs that are gone (or no longer readable) leave it.
+ */
+export function restoreQueue(q: PlayQueue, repeat: RepeatMode, loader: QueueLoader): void {
+  if (!showDormant(q, repeat, loader)) return;
+  const restored = useRehearse.getState().queue;
+  const projects = [...new Set(q.entries.map((e) => e.projectId))];
+  void Promise.all(
+    projects.map(async (id) => {
+      try {
+        return [id, await loader.entries(id)] as const;
+      } catch (err) {
+        // Not found or not allowed: its songs go; offline or a server error: they stay.
+        const status = (err as { status?: unknown } | null)?.status;
+        return status === 403 || status === 404 ? ([id, "gone"] as const) : null;
+      }
+    }),
+  ).then((answers) => {
+    const fresh = new Map<string, readonly QueueItem[] | "gone">();
+    for (const a of answers) if (a) fresh.set(a[0], a[1]);
+    const s = useRehearse.getState();
+    if (!s.queue) return;
+    if (s.dormant && s.queue === restored) {
+      const next = reconcile(s.queue, fresh);
+      const entry = next?.entries[next.index];
+      if (!next || !entry) {
+        closeSong();
+        return;
+      }
+      useRehearse.setState({ queue: next, songId: entry.songId, info: infoOfEntry(entry) });
+      return;
+    }
+    // Already playing (or edited): the songs that are gone leave it as deletions do.
+    const kept = new Set(reconcile(q, fresh)?.entries.map((e) => e.songId));
+    const gone = q.entries.map((e) => e.songId).filter((id) => !kept.has(id));
+    if (gone.length > 0) dropSongs({ songIds: gone });
+  });
 }
 
 /**
@@ -820,6 +1028,14 @@ export function dropSongs(gone: GoneSongs): "stopped" | "removed" | "none" {
  */
 export function togglePlay(): void {
   const e = getEngine();
+  const s = useRehearse.getState();
+  if (s.dormant && s.queue) {
+    // A restored or added queue: its song loads now and plays (no count-in, as the queue does).
+    unlockAudio(e);
+    useRehearse.setState({ lockHint: false });
+    if (pendingPlay === null) playQueueIndex(s.queue.index);
+    return;
+  }
   if (e.state === "error") {
     retryAudio();
     return;
@@ -854,6 +1070,12 @@ export function pageIsPlaying(): boolean {
 
 export function pause(): void {
   engine?.pause();
+}
+
+/** Seeks the song in the engine (the mini-player's slider; a page preview is not touched). */
+export function seekPlayingSec(sec: number): void {
+  if (useRehearse.getState().dormant) return;
+  engineSeek(sec);
 }
 
 function engineSeek(sec: number): void {

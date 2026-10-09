@@ -204,7 +204,7 @@ const nextSong = () => `song-${++song}`;
 beforeEach(() => {
   // Each test starts with no song in the mini-player (a paused one would keep the engine).
   controller.stopPlayer();
-  useRehearse.setState({ previewSongId: null });
+  useRehearse.setState({ previewSongId: null, repeat: "off" });
   const e = fake.FakeEngine.instance;
   if (e) {
     e.loads = [];
@@ -563,6 +563,163 @@ describe("song lifecycle and queue (SPEC §6.10)", () => {
     });
     expect(useRehearse.getState().previewSongId).toBeNull();
     expect(engine().loads).toHaveLength(1);
+    detach();
+  });
+});
+
+describe("repeat, editing and a restored queue (SPEC §6.10)", () => {
+  const songOf = (id: string) =>
+    ({
+      id,
+      title: `Title ${id}`,
+      subtitle: "",
+      project: { id: "p", name: "P", color: "blue", imageHash: null },
+    }) as unknown as Song;
+  const loaded: string[] = [];
+  const loaderWith = (fresh: (projectId: string) => Promise<ReturnType<typeof item>[]>) => {
+    const loader: QueueLoader = {
+      entries: fresh,
+      load(id) {
+        loaded.push(id);
+        return Promise.resolve({
+          song: songOf(id),
+          tracks: [track(`${id}-t`)],
+          saved: null,
+          listened: {},
+          tempo: null,
+        });
+      },
+    };
+    return loader;
+  };
+  const item = (songId: string, ready = true) => ({ songId, title: songId, subtitle: "", ready });
+  const project = { projectId: "p", projectName: "P", imageHash: null };
+  const source = { kind: "project" as const, ...project };
+  const ids = () => useRehearse.getState().queue?.entries.map((e) => e.songId);
+
+  async function playingSong(id: string) {
+    await vi.waitFor(() => {
+      expect(useRehearse.getState().songId).toBe(id);
+    });
+    await vi.waitFor(() => {
+      expect(engine().state).toBe("playing");
+    });
+  }
+
+  function end() {
+    engine().setState("stopped");
+    engine().emit("ended", undefined);
+  }
+
+  it("repeat one plays the song again; repeat all starts the queue over", async () => {
+    loaded.length = 0;
+    const loader = loaderWith(() => Promise.resolve([]));
+    controller.startQueue([item("ra"), item("rb")], source, loader);
+    await playingSong("ra");
+    controller.cycleRepeat();
+    controller.cycleRepeat();
+    expect(useRehearse.getState().repeat).toBe("one");
+    engine().seeks = [];
+    end();
+    await playingSong("ra");
+    expect(engine().seeks).toEqual([0]);
+    expect(useRehearse.getState().queue?.index).toBe(0);
+    // Next still moves on with repeat one, and wraps.
+    expect(controller.hasNextSong()).toBe(true);
+    controller.setRepeat("all");
+    controller.nextSong();
+    await playingSong("rb");
+    end();
+    await playingSong("ra");
+    expect(useRehearse.getState().queue?.index).toBe(0);
+    expect(controller.hasPreviousSong()).toBe(true);
+    // Off: the last song's end closes the queue (the user is elsewhere).
+    controller.setRepeat("off");
+    controller.nextSong();
+    await playingSong("rb");
+    expect(controller.hasNextSong()).toBe(false);
+    end();
+    expect(useRehearse.getState().open).toBe(false);
+  });
+
+  it("edits the playing queue; songs of another project make it mixed", async () => {
+    const loader = loaderWith(() => Promise.resolve([]));
+    controller.startQueue([item("ea"), item("eb"), item("ec")], source, loader);
+    await playingSong("ea");
+    controller.moveInQueue(2, 1);
+    expect(ids()).toEqual(["ea", "ec", "eb"]);
+    controller.removeFromQueue(2);
+    expect(ids()).toEqual(["ea", "ec"]);
+    controller.enqueue([item("x1")], { ...project, projectId: "p2" }, "next", loader);
+    expect(ids()).toEqual(["ea", "x1", "ec"]);
+    expect(useRehearse.getState().queue?.source.kind).toBe("mixed");
+    controller.enqueue([item("ea"), item("ed")], project, "end", loader);
+    expect(ids()).toEqual(["ea", "x1", "ec", "ed"]);
+    controller.playQueueAt(2);
+    await playingSong("ec");
+    controller.clearUpcoming();
+    expect(ids()).toEqual(["ec"]);
+    expect(useRehearse.getState().queue?.source.kind).toBe("song");
+  });
+
+  it("added with nothing queued: shown paused, Play loads and plays it", async () => {
+    loaded.length = 0;
+    const loader = loaderWith(() => Promise.resolve([]));
+    controller.enqueue([item("da"), item("db")], project, "end", loader);
+    let s = useRehearse.getState();
+    expect(s.open).toBe(true);
+    expect(s.dormant).toBe(true);
+    expect(s.info?.title).toBe("da");
+    expect(loaded).toEqual([]);
+    togglePlay();
+    await playingSong("da");
+    s = useRehearse.getState();
+    expect(s.dormant).toBe(false);
+    expect(loaded).toEqual(["da"]);
+    expect(ids()).toEqual(["da", "db"]);
+  });
+
+  it("a restored queue is shown paused and checked against the server", async () => {
+    loaded.length = 0;
+    const loader = loaderWith((projectId) =>
+      projectId === "gone"
+        ? Promise.reject(Object.assign(new Error("no"), { status: 404 }))
+        : Promise.resolve([item("sb", false), item("sc")]),
+    );
+    const entries = [
+      { ...item("sa"), ...project },
+      { ...item("sb"), ...project },
+      { ...item("sc"), ...project },
+      { ...item("g1"), ...project, projectId: "gone" },
+    ];
+    controller.restoreQueue({ entries, index: 0, source }, "all", loader);
+    expect(useRehearse.getState().info?.title).toBe("sa");
+    expect(useRehearse.getState().repeat).toBe("all");
+    await vi.waitFor(() => {
+      expect(ids()).toEqual(["sb", "sc"]);
+    });
+    const s = useRehearse.getState();
+    expect(s.queue?.index).toBe(0);
+    expect(s.songId).toBe("sb");
+    expect(s.dormant).toBe(true);
+    expect(loaded).toEqual([]);
+    // Next from a dormant queue loads and plays (sb is not ready: sc).
+    controller.nextSong();
+    await playingSong("sc");
+  });
+
+  it("a restored queue does not replace an open song", async () => {
+    const id = nextSong();
+    const detach = controller.attachPage(id);
+    await openSong(id, [track("a")], null, {}, NO_INSTRUMENT, info(id));
+    const loader = loaderWith(() => Promise.resolve([]));
+    controller.restoreQueue(
+      { entries: [{ ...item("zz"), ...project }], index: 0, source },
+      "off",
+      loader,
+    );
+    expect(useRehearse.getState().songId).toBe(id);
+    expect(useRehearse.getState().dormant).toBe(false);
     detach();
   });
 });

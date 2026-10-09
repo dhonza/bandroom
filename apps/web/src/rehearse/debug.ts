@@ -11,7 +11,15 @@ export function debugSnapshot(engine: Engine | null, s: RehearseState, hasTempo:
     songId: s.songId,
     open: s.open,
     previewSongId: s.previewSongId,
-    queue: s.queue ? { songIds: s.queue.entries.map((e) => e.songId), index: s.queue.index } : null,
+    queue: s.queue
+      ? {
+          songIds: s.queue.entries.map((e) => e.songId),
+          index: s.queue.index,
+          kind: s.queue.source.kind,
+        }
+      : null,
+    repeat: s.repeat,
+    dormant: s.dormant,
     status: s.status,
     position: engine ? engine.getPositionFrames() : 0,
     length: engine?.lengthFrames ?? 0,

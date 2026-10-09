@@ -18,7 +18,7 @@ import { isLinkMode, loadLocalMix } from "../links/linkMode";
 import { useOffline } from "../offline/controller";
 import { pendingMixer } from "../offline/pending";
 import { tempoKeys } from "../tempo/queries";
-import type { QueueEntry } from "./queue";
+import type { QueueItem } from "./queue";
 
 /** The personal mix and its snapshots, as the Player and the queue read them. */
 export async function fetchSongMixer(songId: string, signal?: AbortSignal): Promise<SongMixer> {
@@ -56,7 +56,7 @@ export interface LoadedSong {
 export interface QueueLoader {
   load(songId: string): Promise<LoadedSong>;
   /** The project's queue now (`getProjectQueue`): songs may have become ready since the start. */
-  entries(projectId: string): Promise<QueueEntry[]>;
+  entries(projectId: string): Promise<QueueItem[]>;
 }
 
 /**
