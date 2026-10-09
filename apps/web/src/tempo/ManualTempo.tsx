@@ -7,13 +7,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useApiError } from "../api/useApiError";
 import { positionNow } from "../markers/store";
-import { PHONE_QUERY } from "../shell/mediaQueries";
-import { ChangeRowEditor } from "./ChangeRowEditor";
+import { COARSE_POINTER_QUERY } from "../shell/mediaQueries";
+import { ChangeRowEditor, ChangeTableHeader } from "./ChangeRowEditor";
 import { clampManualBpm, offsetFromInput, roundMs } from "./midi";
 import {
   addChangeAtBar,
   addTap,
-  inEffectAtBar,
   mapFromRows,
   MAX_EDIT_BAR,
   METER_PRESETS,
@@ -46,7 +45,7 @@ export function ManualTempo({
   );
   const [head, setHead] = useState<HeadRow>(initial.head);
   const [rows, setRows] = useState<ChangeRow[]>(initial.rows);
-  const phone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
+  const coarse = useMediaQuery(COARSE_POINTER_QUERY, false, { getInitialValueInEffect: false });
   const [offset, setOffset] = useState<number>(tempo?.bar1OffsetSec ?? 0);
   const [taps, setTaps] = useState<number[]>([]);
   const [addBar, setAddBar] = useState<number | string>(5);
@@ -117,7 +116,7 @@ export function ManualTempo({
   };
 
   return (
-    <Stack gap="md">
+    <Stack gap="sm">
       <Group grow align="flex-start" wrap="wrap">
         <NumberInput
           label={t("tempo.bpm")}
@@ -153,40 +152,27 @@ export function ManualTempo({
         </Text>
       </Group>
 
-      <Stack gap={6}>
-        <NumberInput
-          label={t("tempo.offset")}
-          description={t("tempo.offsetHint")}
-          value={offset}
-          decimalScale={3}
-          step={0.001}
-          min={-60}
-          max={3600}
-          onChange={(v) => {
-            setOffset(offsetFromInput(v));
-          }}
-          data-testid="tempo-offset"
-        />
-        <Group gap={6} wrap="wrap">
-          {[-10, -1, 1, 10].map((ms) => (
-            <Button
-              key={ms}
-              {...BTN}
-              size="xs"
-              variant="default"
-              onClick={() => {
-                nudgeOffset(ms);
-              }}
-              data-testid={`tempo-offset-${ms}`}
-            >
-              {t("tempo.ms", { ms: ms > 0 ? `+${ms}` : String(ms) })}
-            </Button>
-          ))}
+      <Stack gap={4}>
+        <Group gap="xs" align="flex-end" wrap="nowrap">
+          <NumberInput
+            label={t("tempo.offset")}
+            description={`${t("tempo.offsetHint")} ${t("tempo.alignHint")}`}
+            value={offset}
+            decimalScale={3}
+            step={0.001}
+            min={-60}
+            max={3600}
+            onChange={(v) => {
+              setOffset(offsetFromInput(v));
+            }}
+            style={{ flex: 1, minWidth: 0 }}
+            data-testid="tempo-offset"
+          />
           <Button
             {...BTN}
-            size="xs"
             variant="light"
             color="yellow"
+            px="sm"
             onClick={() => {
               setOffset(roundMs(positionNow()));
             }}
@@ -195,28 +181,39 @@ export function ManualTempo({
             {t("tempo.align")}
           </Button>
         </Group>
-        <Text size="xs" c="dimmed">
-          {t("tempo.alignHint")}
-        </Text>
+        <Group gap={4} wrap="nowrap">
+          {[-10, -1, 1, 10].map((ms) => (
+            <Button
+              key={ms}
+              {...BTN}
+              size="xs"
+              px={6}
+              variant="default"
+              style={{ flex: 1 }}
+              onClick={() => {
+                nudgeOffset(ms);
+              }}
+              data-testid={`tempo-offset-${ms}`}
+            >
+              {t("tempo.ms", { ms: ms > 0 ? `+${ms}` : String(ms) })}
+            </Button>
+          ))}
+        </Group>
       </Stack>
 
-      <Stack gap={6}>
+      <Stack gap={4}>
         <Text fw={600} size="sm">
           {t("tempo.changes")}
         </Text>
         {rows.length > 0 && (
-          <Stack gap="xs" data-testid="tempo-changes">
+          <Stack gap={4} data-testid="tempo-changes">
+            <ChangeTableHeader />
             {rows.map((r) => (
               <ChangeRowEditor
                 key={r.id}
                 row={r}
-                phone={phone}
+                coarse={coarse}
                 invalid={!parsed.ok && parsed.rowId === r.id}
-                inEffect={() =>
-                  parsed.ok
-                    ? inEffectAtBar(parsed.segments, Number(r.bar) || 2)
-                    : { bpm: typeof head.bpm === "number" ? head.bpm : 120, meter: head.meter }
-                }
                 onChange={(patch) => {
                   setRow(r.id, patch);
                 }}
@@ -227,41 +224,53 @@ export function ManualTempo({
             ))}
           </Stack>
         )}
-        <Group gap="xs" align="flex-end" wrap="wrap">
+        <Group gap={6} align="center" wrap="nowrap" data-testid="tempo-add-row">
+          <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+            {t("tempo.atBar")}
+          </Text>
           <NumberInput
-            label={t("tempo.atBar")}
+            aria-label={t("tempo.atBar")}
+            size="sm"
+            styles={coarse ? { input: { height: 44, minHeight: 44 } } : undefined}
+            hideControls
             value={addBar}
             min={2}
             max={MAX_EDIT_BAR}
             step={1}
             allowDecimal={false}
-            w={110}
+            w={56}
             onChange={setAddBar}
             data-testid="tempo-add-bar"
           />
           <Button
-            {...BTN}
+            h={coarse ? 44 : undefined}
+            size="sm"
+            px="xs"
             variant="default"
-            leftSection={<IconPlus size={16} />}
+            leftSection={<IconPlus size={14} />}
             disabled={!parsed.ok}
+            aria-label={t("tempo.addTempoChange")}
             onClick={() => {
               add("tempo");
             }}
             data-testid="tempo-add-change"
           >
-            {t("tempo.addTempoChange")}
+            {t("tempo.title")}
           </Button>
           <Button
-            {...BTN}
+            h={coarse ? 44 : undefined}
+            size="sm"
+            px="xs"
             variant="default"
-            leftSection={<IconPlus size={16} />}
+            leftSection={<IconPlus size={14} />}
             disabled={!parsed.ok}
+            aria-label={t("tempo.addMeterChange")}
             onClick={() => {
               add("meter");
             }}
             data-testid="tempo-add-meter"
           >
-            {t("tempo.addMeterChange")}
+            {t("tempo.sigShort")}
           </Button>
         </Group>
       </Stack>

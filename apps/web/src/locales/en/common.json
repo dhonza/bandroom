@@ -1071,8 +1071,8 @@
     "atBar": "At bar",
     "addTempoChange": "Add tempo change",
     "addMeterChange": "Add time signature change",
-    "tempoOn": "Change the tempo here",
-    "meterOn": "Change the time signature here",
+    "sigShort": "Time sig.",
+    "rampTo": "Ramps to {{bpm}} BPM",
     "removeChange": "Remove this change",
     "errors": {
       "meter": "Enter a time signature like 4/4 or 6/8.",
