@@ -244,4 +244,29 @@ describe("render (real ffmpeg)", () => {
     // 3 s of the source = 144 000 at 48 kHz → 144 000 − 120 000 = 24 000 into the output.
     expect(Math.abs(peakAt(pcm, 24_000) - 24_000)).toBeLessThanOrEqual(1);
   }, 60_000);
+
+  it("mixes more clips than one ffmpeg run takes in groups, sample-exact", async () => {
+    const source = { path: dc, sampleRate: 48_000, channels: 1 as const, plainMono: true };
+    // 70 clips of 1 000 frames, every 1 500 frames, gain −6 dB: 0.25 inside, 0 in the gaps.
+    const clips = Array.from({ length: 70 }, (_, i) =>
+      clip({
+        sourceStartFrame: i * 10,
+        startFrame: 500 + i * 1_500,
+        lengthFrames: 1_000,
+        gainDb: -6,
+      }),
+    );
+    const span = renderSpan(clips);
+    const file = path.join(tmp.dir, "groups.wav");
+    await renderInputs(
+      { tools, tmpDir: tmp.dir },
+      clips.map((c) => ({ source, clip: c })),
+      { ...span, channels: 1, file, codec: "pcm_f32le" },
+    );
+    const pcm = await decode(file);
+    expect(pcm.length).toBe(span.length);
+    const g = 0.5 * 10 ** (-6 / 20);
+    for (const at of [0, 999, 1_000, 1_499, 1_500, 69 * 1_500 + 999])
+      expect(pcm[at]).toBeCloseTo(at % 1_500 < 1_000 ? g : 0, 6);
+  }, 60_000);
 });

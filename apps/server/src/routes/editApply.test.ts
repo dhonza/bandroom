@@ -384,6 +384,13 @@ describe("Apply (SPEC §24.8)", () => {
           .where(eq(schema.songs.id, songId))
           .get()?.r,
       ).toBe((rev ?? 0) + 1);
+      // The tempo map follows as one new revision with source "edit".
+      const revisions = t.db
+        .select()
+        .from(schema.tempoMapRevisions)
+        .where(eq(schema.tempoMapRevisions.songId, songId))
+        .all();
+      expect(revisions.map((x) => x.source)).toEqual(["manual", "edit"]);
       const events = songEvents(songId).map((e) => e.action);
       expect(events.filter((a) => a === "edit.applied")).toHaveLength(1);
       expect(events.filter((a) => a === "timeline.remapped")).toHaveLength(1);
