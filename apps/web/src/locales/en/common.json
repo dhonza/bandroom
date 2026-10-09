@@ -1286,7 +1286,9 @@
       "new_document": "{{actor}} added the document {{title}}",
       "new_document_version": "{{actor}} uploaded {{title}} v{{number}}",
       "link_password_failed": "Someone entered a wrong password for the link “{{link}}”",
-      "link_comment": "{{actor}} commented on {{song}} through a public link"
+      "link_comment": "{{actor}} commented on {{song}} through a public link",
+      "edit_bounced_one": "{{actor}} made {{count}} song from {{song}}",
+      "edit_bounced_other": "{{actor}} made {{count}} songs from {{song}}"
     },
     "toast": {
       "mention": "You were mentioned in a comment.",
@@ -1299,7 +1301,8 @@
       "reset_request": "A user asks for a new password.",
       "new_document": "New document in a project you follow.",
       "link_password_failed": "Wrong password on one of your links.",
-      "link_comment": "New comment through one of your links."
+      "link_comment": "New comment through one of your links.",
+      "edit_bounced": "New songs made from an edit in a project you follow."
     }
   },
   "follow": {

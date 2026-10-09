@@ -93,6 +93,16 @@ export function describeNotification(n: Notification, t: TFunction): Notificatio
         detail: where,
         link: linkPage(p),
       };
+    case "edit_bounced":
+      return {
+        title: t("notifications.types.edit_bounced", {
+          actor,
+          count: p.count ?? 1,
+          song: p.songTitle ?? "",
+        }),
+        detail: p.projectName ?? null,
+        link: p.projectId ? `/projects/${p.projectId}` : songLink(false),
+      };
     case "link_comment":
       return {
         title: t("notifications.types.link_comment", { actor, song: p.songTitle ?? "" }),

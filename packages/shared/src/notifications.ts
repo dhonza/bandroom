@@ -17,6 +17,8 @@ export const NOTIFICATION_TYPES = [
   "link_password_failed",
   /** A visitor commented through one of my public links. */
   "link_comment",
+  /** Songs were made from an edit session (split into songs, SPEC §24.9); one per bounce. */
+  "edit_bounced",
 ] as const;
 export const NotificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;
@@ -41,6 +43,8 @@ export const NotificationPayloadSchema = z.object({
   documentTitle: z.string().optional(),
   linkId: z.string().optional(),
   linkLabel: z.string().optional(),
+  /** How many items (e.g. songs made by an edit bounce). */
+  count: z.number().optional(),
 });
 export type NotificationPayload = z.infer<typeof NotificationPayloadSchema>;
 

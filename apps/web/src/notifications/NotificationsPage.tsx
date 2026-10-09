@@ -17,6 +17,7 @@ import {
   IconAt,
   IconBell,
   IconCornerDownRight,
+  IconCut,
   IconDatabase,
   IconFileText,
   IconKey,
@@ -47,6 +48,7 @@ const ICONS: Record<Notification["type"], Icon> = {
   new_document: IconFileText,
   link_password_failed: IconLock,
   link_comment: IconLink,
+  edit_bounced: IconCut,
 };
 
 /** Notifications (SPEC §11.2, §16): list, mark read, deep links; in-app only. */

@@ -120,6 +120,32 @@ export function checkScope(
   return access;
 }
 
+/**
+ * The conditional project capability of a route (`bodyProjectCapability`), after body
+ * validation: when the body's field has the value, the project role needs the capability too.
+ */
+export function checkBodyProjectCapability(
+  db: Db,
+  user: UserRow,
+  auth: RouteAuth,
+  access: unknown,
+  body: unknown,
+): void {
+  if (!("bodyProjectCapability" in auth) || auth.bodyProjectCapability === undefined) return;
+  const rule = auth.bodyProjectCapability;
+  if (typeof body !== "object" || body === null) return;
+  if ((body as Record<string, unknown>)[rule.field] !== rule.value) return;
+  const project =
+    typeof access === "object" && access !== null && "project" in access
+      ? (access as { project: ProjectRow }).project
+      : null;
+  if (!project) throw new AppError("FORBIDDEN", `Missing capability ${rule.capability}`);
+  const role = resolveProjectAccess(db, user, project.id)?.role ?? "none";
+  if (!hasCapability(role, rule.capability)) {
+    throw new AppError("FORBIDDEN", `Missing capability ${rule.capability} on the project`);
+  }
+}
+
 function checkOneScope(
   db: Db,
   user: UserRow,

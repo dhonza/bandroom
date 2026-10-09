@@ -15,6 +15,7 @@ import type { z } from "zod";
 import { checkBatch, type BatchScopeAccess } from "./batch";
 import { AppError } from "./errors";
 import {
+  checkBodyProjectCapability,
   checkScope,
   checkSongLock,
   songOfAccess,
@@ -165,6 +166,8 @@ export function registerContract<C extends ContractDef>(
             request.body as Parameters<typeof checkBatch>[3],
           );
         }
+        if (auth !== undefined && "bodyProjectCapability" in auth && request.user)
+          checkBodyProjectCapability(app.authDb, request.user, auth, request.access, request.body);
         checkSongLock(app.authDb, auth, songOfAccess(request.access), request.method, request.body);
         done();
       } catch (err) {

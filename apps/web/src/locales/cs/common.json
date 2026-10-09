@@ -1334,7 +1334,11 @@
       "new_document": "{{actor}} přidal(a) dokument {{title}}",
       "new_document_version": "{{actor}} nahrál(a) {{title}} v{{number}}",
       "link_password_failed": "Někdo zadal špatné heslo k odkazu „{{link}}“",
-      "link_comment": "{{actor}} okomentoval(a) {{song}} přes veřejný odkaz"
+      "link_comment": "{{actor}} okomentoval(a) {{song}} přes veřejný odkaz",
+      "edit_bounced_one": "{{actor}} vytvořil(a) {{count}} píseň z {{song}}",
+      "edit_bounced_few": "{{actor}} vytvořil(a) {{count}} písně z {{song}}",
+      "edit_bounced_many": "{{actor}} vytvořil(a) {{count}} písně z {{song}}",
+      "edit_bounced_other": "{{actor}} vytvořil(a) {{count}} písní z {{song}}"
     },
     "toast": {
       "mention": "Byli jste zmíněni v komentáři.",
@@ -1347,7 +1351,8 @@
       "reset_request": "Uživatel žádá o nové heslo.",
       "new_document": "Nový dokument v projektu, který sledujete.",
       "link_password_failed": "Špatné heslo u jednoho z vašich odkazů.",
-      "link_comment": "Nový komentář přes jeden z vašich odkazů."
+      "link_comment": "Nový komentář přes jeden z vašich odkazů.",
+      "edit_bounced": "Z úpravy vznikly nové písně v projektu, který sledujete."
     }
   },
   "follow": {

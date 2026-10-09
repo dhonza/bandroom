@@ -61,6 +61,15 @@ export type RouteAuth =
        * not count): e.g. a bounce reads the song and creates a song in its project (SPEC §5.5).
        */
       readonly projectCapability?: Capability;
+      /**
+       * Like `projectCapability`, but only when the body's `field` equals `value` (checked after
+       * body validation): e.g. an edit bounce into new songs needs `song.create` (SPEC §24.12).
+       */
+      readonly bodyProjectCapability?: {
+        readonly field: string;
+        readonly value: string;
+        readonly capability: Capability;
+      };
     };
 
 /**
