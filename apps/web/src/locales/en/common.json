@@ -741,6 +741,7 @@
       "original": "Download original",
       "flac": "Download FLAC",
       "wav": "Download WAV",
+      "wavpack": "Download WavPack (32-bit float)",
       "opus": "Download Opus (small)"
     },
     "errors": {

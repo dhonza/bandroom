@@ -54,7 +54,9 @@ export function toTrackVersion(
   const downloads: DownloadFormat[] = [];
   if (allowDownload && v.asset.status === "ready") {
     if (vars.has("original")) downloads.push("original");
-    if (flac) downloads.push("flac", "wav");
+    // A float source: WAV (rebuilt exactly) and its WavPack; the 24-bit FLAC is only near-lossless.
+    if (vars.has("wavpack")) downloads.push("wav", "wavpack");
+    else if (flac) downloads.push("flac", "wav");
     else if (vars.has("original") && p?.lossless) downloads.push("wav");
     if (vars.has("opus")) downloads.push("opus");
   }

@@ -1,4 +1,4 @@
-import { getProjectExportPreview, type DownloadFormat, type Project } from "@bandroom/shared";
+import { getProjectExportPreview, type ExportFormat, type Project } from "@bandroom/shared";
 import { Alert, Button, Group, Loader, Select, Stack, Text } from "@mantine/core";
 import { IconDownload, IconFileZip } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
@@ -10,7 +10,7 @@ import { useFormatters } from "../../i18n/format";
 import { exportUrl } from "../../lib/media";
 import { AppModal } from "../../components/ResponsivePanel";
 
-const FORMATS = ["flac", "wav", "opus", "original"] as const satisfies readonly DownloadFormat[];
+const FORMATS = ["flac", "wav", "opus", "original"] as const satisfies readonly ExportFormat[];
 
 /** "Export" on the project page (SPEC §28.7): needs `download` on the project. */
 export function ExportProjectButton({ project }: { project: Project }) {
@@ -52,7 +52,7 @@ export function ExportProjectDialog({
   const { t } = useTranslation();
   const fmt = useFormatters();
   const apiError = useApiError();
-  const [format, setFormat] = useState<DownloadFormat>("flac");
+  const [format, setFormat] = useState<ExportFormat>("flac");
   const preview = useQuery({
     queryKey: ["projects", project.id, "export", format],
     queryFn: ({ signal }) =>

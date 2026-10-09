@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import http from "node:http";
-import { BWF_FILE, matrix, MP3_FILE } from "@bandroom/fixtures";
+import { BWF_FILE, FLOAT_FILE, matrix, MP3_FILE } from "@bandroom/fixtures";
 import {
+  audioMd5,
   getBlob,
   getTrackVersionRow,
   getVariant,
@@ -299,6 +300,41 @@ describe("upload → ingest → tracks → download (SPEC §5)", () => {
     });
     // One bitrate profile for every track (SPEC §5.3, M21).
     expect(mix?.current?.variants.opus?.bitrate).toBe(96);
+  }, 60_000);
+
+  it("offers WAV and WavPack for a float source, both exact", async () => {
+    const res = await tusUpload(t, member, await fs.readFile(FLOAT_FILE()), "take.wav", {
+      type: "newTrack",
+      songId,
+      name: "Float",
+    });
+    const id = UploadResultSchema.parse(JSON.parse(res.body)).trackVersionId ?? "";
+    await runQueuedJobs(t);
+    const float = (await tracksOf(member)).find((x) => x.name === "Float");
+    // No FLAC: it is only near-lossless 24-bit for a float source.
+    expect(float?.current?.downloads).toEqual(["wav", "wavpack", "opus"]);
+    const dl = (format: string) =>
+      t.app.inject({
+        url: `/api/v1/track-versions/${id}/download?format=${format}`,
+        headers: { cookie: member },
+      });
+    const wav = await dl("wav");
+    expect(wav.statusCode).toBe(200);
+    expect(wav.rawPayload.equals(await fs.readFile(FLOAT_FILE()))).toBe(true);
+
+    const wv = await dl("wavpack");
+    expect(wv.statusCode).toBe(200);
+    expect(wv.headers["content-type"]).toBe("audio/wavpack");
+    expect(wv.headers["content-disposition"]).toContain('filename="take.wv"');
+    expect(wv.rawPayload.subarray(0, 4).toString("ascii")).toBe("wvpk");
+    const file = `${t.dataDir}/take.wv`;
+    await fs.writeFile(file, wv.rawPayload);
+    expect(await audioMd5(file, { float: true })).toBe(
+      await audioMd5(FLOAT_FILE(), { float: true }),
+    );
+    expect(
+      (await call(t, deleteTrack, { params: { id: float?.id ?? "" } }, member)).statusCode,
+    ).toBe(200);
   }, 60_000);
 
   it("lets uploaders delete their own track; others need editor rights", async () => {

@@ -24,18 +24,23 @@ import { AppError } from "./errors";
 /** Retry hint while the WAV rebuild slot is busy. */
 const WAV_BUSY_RETRY_SEC = 5;
 
-/** WAV header for lossless sources that were not WAV files (AIFF, FLAC, ALAC, …). */
+/**
+ * WAV header for lossless sources that were not WAV files (AIFF, FLAC, ALAC, …); `float` for a
+ * 32-bit float source rebuilt from its WavPack.
+ */
 function syntheticWavMeta(
   channels: number,
   sampleRate: number,
   bitDepth: number,
   frames: number,
+  float = false,
 ): ParsedWavMeta {
   const fmt = Buffer.alloc(8 + 16);
   fmt.write("fmt ", 0, "ascii");
   fmt.writeUInt32LE(16, 4);
   const bytes = bitDepth / 8;
-  fmt.writeUInt16LE(1, 8);
+  const formatTag = float ? 3 : 1;
+  fmt.writeUInt16LE(formatTag, 8);
   fmt.writeUInt16LE(channels, 10);
   fmt.writeUInt32LE(sampleRate, 12);
   fmt.writeUInt32LE(sampleRate * channels * bytes, 16);
@@ -44,7 +49,13 @@ function syntheticWavMeta(
   return {
     index: {
       version: 1,
-      fmt: { formatTag: 1, channels, sampleRate, bitsPerSample: bitDepth, encoding: "int" },
+      fmt: {
+        formatTag,
+        channels,
+        sampleRate,
+        bitsPerSample: bitDepth,
+        encoding: float ? "float" : "int",
+      },
       chunks: [
         { id: "fmt ", size: 16, blobOffset: 0 },
         { id: "data", size: frames * channels * bytes },
@@ -65,19 +76,21 @@ export type DownloadSource =
       contentType: string;
     }
   | {
-      /** A WAV rebuilt from the FLAC with ffmpeg (needs `ctx.ffmpegSlots`). */
+      /** A WAV rebuilt from the FLAC or WavPack with ffmpeg (needs `ctx.ffmpegSlots`). */
       kind: "wav";
       size: number;
       filename: string;
       meta: ParsedWavMeta;
-      flacPath: string;
+      /** The FLAC, or the WavPack of a float source. */
+      srcPath: string;
       /** Dual-mono FLAC expanded back to stereo. */
       expand: boolean;
     };
 
 /**
- * Resolves a track version to its file in `format`: original/FLAC/Opus are stored blobs; WAV is
- * the kept original when it was a WAV, else rebuilt from the FLAC with the stored header.
+ * Resolves a track version to its file in `format`: original/FLAC/WavPack/Opus are stored blobs;
+ * WAV is the kept original when it was a WAV, else rebuilt with the stored header from the WavPack
+ * (float sources, exact) or the FLAC.
  */
 export async function resolveDownload(
   ctx: AppContext,
@@ -112,16 +125,19 @@ export async function resolveDownload(
   if (format === "original") return direct("original", asset.originalFilename, asset.mimeType);
   if (format === "flac") return direct("flac", `${base}.flac`, "audio/flac");
   if (format === "opus") return direct("opus", `${base}.opus`, "audio/ogg");
+  if (format === "wavpack") return direct("wavpack", `${base}.wv`, "audio/wavpack");
 
-  // WAV: the kept original if it is a WAV, else streamed from the FLAC (SPEC §5.6).
+  // WAV: the kept original if it is a WAV, else streamed from the WavPack or FLAC (SPEC §5.6).
   const wavName = /\.wav$/i.test(asset.originalFilename) ? asset.originalFilename : `${base}.wav`;
   if (vars.has("original") && probe && /wav/.test(probe.container)) {
     return direct("original", wavName, "audio/wav");
   }
-  const flac = vars.get("flac");
-  const flacBlob = flac && getBlob(ctx.db, flac.blobHash);
-  if (!flac || !flacBlob || !probe) throw new AppError("NOT_FOUND", "No WAV available");
-  const flacMeta = JSON.parse(flac.meta) as { channels?: number; bitDepth?: number };
+  // A float source's exact copy is the WavPack; its FLAC is only near-lossless 24-bit.
+  const source = vars.get("wavpack") ?? vars.get("flac");
+  const sourceBlob = source && getBlob(ctx.db, source.blobHash);
+  if (!source || !sourceBlob || !probe) throw new AppError("NOT_FOUND", "No WAV available");
+  const float = source.variant === "wavpack";
+  const sourceMeta = JSON.parse(source.meta) as { channels?: number; bitDepth?: number };
   const wavmeta = vars.get("wavmeta");
   const wavmetaBlob = wavmeta && getBlob(ctx.db, wavmeta.blobHash);
   let meta: ParsedWavMeta;
@@ -133,8 +149,9 @@ export async function resolveDownload(
     meta = syntheticWavMeta(
       probe.channels,
       probe.sampleRate,
-      flacMeta.bitDepth ?? 24,
+      float ? 32 : (sourceMeta.bitDepth ?? 24),
       probe.durationSamples,
+      float,
     );
   }
   return {
@@ -142,13 +159,13 @@ export async function resolveDownload(
     size: reconstructedWavSize(meta),
     filename: path.basename(wavName),
     meta,
-    flacPath: await ctx.storage.localPath(flacBlob.storageKey),
-    expand: meta.index.fmt.channels === 2 && flacMeta.channels === 1,
+    srcPath: await ctx.storage.localPath(sourceBlob.storageKey),
+    expand: meta.index.fmt.channels === 2 && sourceMeta.channels === 1,
   };
 }
 
 /**
- * Streams a rebuilt WAV: ffmpeg decodes the FLAC to raw PCM, the stored header and chunks go
+ * Streams a rebuilt WAV: ffmpeg decodes the FLAC or WavPack to raw PCM, the stored header and chunks go
  * around it. The caller holds the ffmpeg slot (SPEC §19.6); `signal` stops ffmpeg. A failed
  * decode errors the stream (never a short, zero-padded WAV).
  */
@@ -167,7 +184,7 @@ export function streamWav(
     ctx.tools.ffmpeg,
     ffmpegArgs(
       "-i",
-      src.flacPath,
+      src.srcPath,
       ...(src.expand ? ["-af", "pan=stereo|c0=c0|c1=c0"] : []),
       "-c:a",
       codec,
@@ -203,7 +220,7 @@ export function acquireFfmpegSlot(ctx: AppContext, message: string): () => void 
 }
 
 /**
- * Sends a track version as original/FLAC/WAV/Opus (SPEC §5.6). `logDownload` records the event.
+ * Sends a track version as original/FLAC/WAV/WavPack/Opus (SPEC §5.6). `logDownload` records the event.
  * A WAV rebuild runs ffmpeg in the API, so it needs the process-wide slot (`ctx.ffmpegSlots`,
  * SPEC §19.6); while it is taken the request answers `RATE_LIMITED`.
  */

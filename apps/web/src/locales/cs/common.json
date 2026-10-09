@@ -767,6 +767,7 @@
       "original": "Stáhnout originál",
       "flac": "Stáhnout FLAC",
       "wav": "Stáhnout WAV",
+      "wavpack": "Stáhnout WavPack (32bitový float)",
       "opus": "Stáhnout Opus (malý)"
     },
     "errors": {

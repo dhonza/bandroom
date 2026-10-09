@@ -5,9 +5,14 @@ import { FormantModeSchema, InstrumentSchema, VoiceRangeSchema } from "./instrum
 import { VersionArchivedSchema } from "./lossless";
 import { UploadGainDbSchema } from "./recording";
 
-export const DOWNLOAD_FORMATS = ["original", "flac", "wav", "opus"] as const;
+/** `wavpack`: the exact copy of a 32-bit float source (DECISIONS 2026-10-09). */
+export const DOWNLOAD_FORMATS = ["original", "flac", "wav", "wavpack", "opus"] as const;
 export type DownloadFormat = (typeof DOWNLOAD_FORMATS)[number];
 export const DownloadFormatSchema = z.enum(DOWNLOAD_FORMATS);
+/** Formats of whole-project exports (SPEC §28.7): no WavPack, which only float sources have. */
+export const EXPORT_FORMATS = ["original", "flac", "wav", "opus"] as const;
+export type ExportFormat = (typeof EXPORT_FORMATS)[number];
+export const ExportFormatSchema = z.enum(EXPORT_FORMATS);
 /** Query of `GET …/track-versions/:id/download` (band and link routes). */
 export const DownloadQuerySchema = z.object({ format: DownloadFormatSchema });
 

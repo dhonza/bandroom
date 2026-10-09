@@ -13,7 +13,12 @@ import {
   type UserRow,
   type ZipEntry,
 } from "@bandroom/server-core";
-import { hasCapability, type DownloadFormat, type ProjectExportPreview } from "@bandroom/shared";
+import {
+  hasCapability,
+  type DownloadFormat,
+  type ExportFormat,
+  type ProjectExportPreview,
+} from "@bandroom/shared";
 import type { FastifyRequest } from "fastify";
 import type { AppContext } from "../context";
 import { AppError } from "./errors";
@@ -44,7 +49,7 @@ type Choice = { format: DownloadFormat; fallback: "opus" | "original" | null } |
  * The format a version is exported in, like the download menu (SPEC §5.6, §26.4): versions whose
  * full quality was removed give Opus; lossy sources (no FLAC) give the uploaded file.
  */
-export function exportFormatOf(v: TrackListVersion, wanted: DownloadFormat): Choice {
+export function exportFormatOf(v: TrackListVersion, wanted: ExportFormat): Choice {
   if (v.asset.status !== "ready") return null;
   const has = new Set(v.variants.map((x) => x.variant));
   const opus: Choice = has.has("opus") ? { format: "opus", fallback: "opus" } : null;
@@ -67,7 +72,7 @@ export async function planProjectExport(
   ctx: AppContext,
   user: UserRow,
   access: ProjectScopeAccess,
-  format: DownloadFormat,
+  format: ExportFormat,
 ): Promise<ExportPlan> {
   const { db } = ctx;
   const root = zipPathSegment(access.project.name);

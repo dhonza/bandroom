@@ -10,7 +10,7 @@ import {
   SongTitleSchema,
 } from "../content";
 import { ContentRoleSchema, DownloadPolicySchema } from "../permissions/content";
-import { DownloadFormatSchema } from "../tracks";
+import { ExportFormatSchema } from "../tracks";
 import { OkSchema } from "./auth";
 import { defineContract } from "./contract";
 
@@ -168,7 +168,7 @@ export const IMAGE_URL_MAX_BYTES = 20 * 1024 * 1024;
 
 /** Query of the project export (SPEC §28.7); FLAC by default. */
 export const ProjectExportQuerySchema = z.object({
-  format: DownloadFormatSchema.default("flac"),
+  format: ExportFormatSchema.default("flac"),
 });
 
 export const ProjectExportPreviewSchema = z.object({
