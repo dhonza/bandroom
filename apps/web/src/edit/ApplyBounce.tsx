@@ -86,9 +86,11 @@ function ApplyBody() {
 function ReviewState({
   review,
   showTimeline,
+  songs,
 }: {
   review: ReturnType<typeof useEditReview>;
   showTimeline?: boolean;
+  songs?: boolean;
 }) {
   const { t } = useTranslation();
   if (review.error) return <Alert color="red">{review.error}</Alert>;
@@ -101,7 +103,7 @@ function ReviewState({
         </Text>
       </Group>
     );
-  return <ReviewSummary review={review.view} showTimeline={showTimeline} />;
+  return <ReviewSummary review={review.view} showTimeline={showTimeline} songs={songs} />;
 }
 
 const BOUNCE_KINDS: readonly BounceKind[] = ["bounceVersions", "bounceTracks", "bounceSongs"];
@@ -369,7 +371,11 @@ function BounceBody({
           />
         </Stack>
       )}
-      <ReviewState review={{ ...review, view }} showTimeline={kind === "bounceVersions"} />
+      <ReviewState
+        review={{ ...review, view }}
+        showTimeline={kind === "bounceVersions"}
+        songs={songs}
+      />
       <Group justify="flex-end">
         <Button variant="default" onClick={close}>
           {t("common.cancel")}

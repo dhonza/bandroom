@@ -2207,7 +2207,8 @@
         "tempo_one": "tempo map adjusted",
         "tempo_other": "tempo map adjusted"
       },
-      "trashNote": "The old audio goes to the Trash; you can restore it there."
+      "trashNote": "The old audio goes to the Trash; you can restore it there.",
+      "song": "Song"
     },
     "bounceDialog": {
       "title": "Bounce the edit",

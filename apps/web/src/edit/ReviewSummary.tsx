@@ -19,9 +19,12 @@ import {
 export function ReviewSummary({
   review,
   showTimeline = true,
+  songs = false,
 }: {
   review: ReviewView;
   showTimeline?: boolean;
+  /** Rows are new songs (split into songs), not tracks. */
+  songs?: boolean;
 }) {
   const { t } = useTranslation();
   const fmt = useFormatters();
@@ -35,7 +38,7 @@ export function ReviewSummary({
           <Table verticalSpacing={4} horizontalSpacing="xs" layout="fixed">
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>{t("edit.review.track")}</Table.Th>
+                <Table.Th>{songs ? t("edit.review.song") : t("edit.review.track")}</Table.Th>
                 <Table.Th w="34%" ta="right">
                   {t("edit.review.duration")}
                 </Table.Th>

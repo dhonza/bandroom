@@ -2405,7 +2405,8 @@
         "tempo_many": "tempová mapa se upraví",
         "tempo_other": "tempová mapa se upraví"
       },
-      "trashNote": "Původní zvuk půjde do Koše; odtud ho můžete obnovit."
+      "trashNote": "Původní zvuk půjde do Koše; odtud ho můžete obnovit.",
+      "song": "Skladba"
     },
     "bounceDialog": {
       "title": "Uložit úpravy jako",
