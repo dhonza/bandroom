@@ -35,6 +35,7 @@ import {
   Checkbox,
   Group,
   Loader,
+  Menu,
   Paper,
   Stack,
   Text,
@@ -46,6 +47,7 @@ import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconCloudCheck,
+  IconDots,
   IconGripVertical,
   IconListCheck,
   IconMusic,
@@ -53,6 +55,8 @@ import {
   IconTrash,
   IconDiamondOff,
   IconArrowsTransferUp,
+  IconPlaylistAdd,
+  IconPlayerTrackNext,
   IconStack2,
 } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -110,7 +114,7 @@ export function SongsList({ project }: { project: Project }) {
   const qc = useQueryClient();
   const songs = useProjectSongs(project.id);
   // The row play buttons start the engine queue (SPEC §6.10); readiness comes from the queue.
-  const { queue, play } = useProjectPlay(project);
+  const { queue, play, enqueue } = useProjectPlay(project);
   useRefreshQueue(project.id, songs.dataUpdatedAt);
   const [createOpen, create] = useDisclosure(false);
   const caps = new Set(project.access.capabilities);
@@ -256,6 +260,7 @@ export function SongsList({ project }: { project: Project }) {
                   }}
                   ready={queue.data?.some((e) => e.songId === s.id && e.ready) ?? false}
                   onPlay={play}
+                  onEnqueue={enqueue}
                 />
               ))}
             </Stack>
@@ -385,6 +390,7 @@ function SongRow({
   onToggle,
   ready,
   onPlay,
+  onEnqueue,
 }: {
   song: SongSummary;
   index: number;
@@ -399,6 +405,8 @@ function SongRow({
   /** Has audio to play (the queue's `ready`). */
   ready: boolean;
   onPlay: (songId: string) => void;
+  /** "Play next" / "Add to queue". */
+  onEnqueue: (songId: string, where: "next" | "end") => void;
 }) {
   const { t } = useTranslation();
   const fmt = useFormatters();
@@ -511,6 +519,44 @@ function SongRow({
             </Group>
           </Group>
         </UnstyledButton>
+        {!selecting && (
+          <Menu position="bottom-end" withinPortal>
+            <Menu.Target>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size={44}
+                aria-label={t("listen.songActions", { title: song.title })}
+                data-testid="song-row-menu"
+                style={{ flex: "none" }}
+              >
+                <IconDots size={18} />
+              </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item
+                leftSection={<IconPlayerTrackNext size={16} />}
+                disabled={!ready}
+                onClick={() => {
+                  onEnqueue(song.id, "next");
+                }}
+                data-testid="song-play-next"
+              >
+                {t("listen.playNext")}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconPlaylistAdd size={16} />}
+                disabled={!ready}
+                onClick={() => {
+                  onEnqueue(song.id, "end");
+                }}
+                data-testid="song-add-to-queue"
+              >
+                {t("listen.addToQueue")}
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        )}
       </Group>
     </Paper>
   );

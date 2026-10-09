@@ -4,7 +4,7 @@ import { notifications } from "@mantine/notifications";
 import { IconPlayerPlayFilled } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useProjectQueue, useQueueLoader } from "../../player/useProjectQueue";
-import { startQueue } from "../../rehearse/controller";
+import { enqueue as enqueueSongs, startQueue } from "../../rehearse/controller";
 
 /**
  * Starts the project's engine queue (SPEC §6.10) at a song or from the top; the queue items too
@@ -28,7 +28,26 @@ export function useProjectPlay(project: Pick<Project, "id" | "name" | "imageHash
       notifications.show({ color: "gray", message: t("listen.nothingToPlay") });
     }
   };
-  return { queue, play };
+  /** "Play next" / "Add to queue" (SPEC §6.10): also into a queue of another project. */
+  const enqueue = (songId: string, where: "next" | "end") => {
+    const item = queue.data?.find((i) => i.songId === songId);
+    if (!item) return;
+    enqueueSongs(
+      [item],
+      { projectId: project.id, projectName: project.name, imageHash: project.imageHash },
+      where,
+      loader,
+    );
+    notifications.show({
+      id: "queue-added",
+      color: "gray",
+      message:
+        where === "next"
+          ? t("listen.queuedNext", { title: item.title })
+          : t("listen.queuedEnd", { title: item.title }),
+    });
+  };
+  return { queue, play, enqueue };
 }
 
 /** "Play all" (SPEC §6.10, §11.2): the project's songs one after another on the engine. */

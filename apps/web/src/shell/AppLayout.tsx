@@ -11,6 +11,8 @@ import { useClientConfig } from "../config/ClientConfigContext";
 import { useEventStream } from "../realtime/useEventStream";
 import { dropDeletedFromQueue } from "../player/dropDeleted";
 import { stopPlayer } from "../rehearse/controller";
+import { useQueuePersistence } from "../player/useQueuePersistence";
+import { useCurrentUser } from "../auth/session";
 import type { GoneSongs } from "../player/queue";
 import { BottomTabBar, TAB_BAR_HEIGHT } from "./BottomTabBar";
 import { ChromeRestoreButton } from "./ChromeRestoreButton";
@@ -18,7 +20,7 @@ import { isChromeToggleKey, isTypingTarget, toggleChrome, useChrome } from "./ch
 import { ColorSchemeToggle } from "./ColorSchemeToggle";
 import { DesktopNav } from "./DesktopNav";
 import { LanguageSwitcher } from "./LanguageSwitcher";
-import { MINI_PLAYER_HEIGHT, MiniPlayer, useMiniPlayerVisible } from "./MiniPlayer";
+import { MiniPlayer, miniPlayerHeight, useMiniPlayerVisible } from "./MiniPlayer";
 import { PHONE_QUERY } from "./mediaQueries";
 import { UserMenu } from "./UserMenu";
 import { NotificationBell } from "../notifications/NotificationBell";
@@ -55,6 +57,8 @@ export function AppLayout() {
   useEventStream(true, onNotification, onGone);
   // Leaving the app (logout, an expired session): the player stops with it.
   useEffect(() => stopPlayer, []);
+  // The queue saved on this device comes back, paused (SPEC §6.10).
+  useQueuePersistence(useCurrentUser().id);
   const mini = useMiniPlayerVisible();
   // Split view: the documents panel sits beside the page on desktop (SPEC §11.3).
   const docsInset = useDocsInset();
@@ -62,7 +66,7 @@ export function AppLayout() {
   const hidden = useChrome((s) => s.hidden);
   useChromeShortcut();
   const tabBar = isPhone && !hidden;
-  const footerHeight = (tabBar ? TAB_BAR_HEIGHT : 0) + (mini ? MINI_PLAYER_HEIGHT : 0);
+  const footerHeight = (tabBar ? TAB_BAR_HEIGHT : 0) + (mini ? miniPlayerHeight(isPhone) : 0);
 
   return (
     <AppShell
