@@ -1,67 +1,254 @@
 import {
-  initialClip,
-  uuidv7,
-  type EditBase,
+  cancelEditSession,
+  getEditSession,
+  saveEditSession,
+  startEditSession,
+  takeOverEditSession,
+  type EditSession,
   type Track,
   type TrackVersion,
 } from "@bandroom/shared";
-import { enterEdit, exitEdit, useEdit } from "./store";
+import { notifications } from "@mantine/notifications";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import type { TFunction } from "i18next";
+import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { api, ApiError } from "../api/client";
+import { errorMessage } from "../api/errorMessage";
+import { useOptionalUser } from "../auth/session";
+import { onReconnect } from "../offline/online";
+import {
+  enterEdit,
+  exitEdit,
+  runOp,
+  savedAt,
+  setSaveStatus,
+  useEdit,
+  type LoadedSession,
+} from "./store";
 
 /**
- * Edit sessions (SPEC §24.7). Until the server contracts exist the session lives on this page
- * only (no autosave, no lock).
+ * Edit sessions on the server (SPEC §24.7, §24.11): start, reload, autosave 1 s after the last
+ * change with optimistic concurrency on `rev`, takeover and cancel. The song page follows the
+ * session through `edit.changed` (the session query) and `song.updated` (the song's `editing`).
  */
 
-/** Length of a version at 48 kHz (what the clips can reveal). */
-export function versionFrames(v: TrackVersion): number {
-  const opus = v.variants.opus ?? v.variants.opusLow;
-  if (opus) return opus.durationSamples48k;
-  const flac = v.variants.flac;
-  if (flac && flac.sampleRate > 0)
-    return Math.round((flac.durationSamples * 48_000) / flac.sampleRate);
-  return Math.round((v.media?.durationSec ?? 0) * 48_000);
-}
+export const editKeys = {
+  session: (songId: string) => ["songs", songId, "edit-session"] as const,
+};
 
-/** The base of a new session: the current, ready versions of the tracks (SPEC §24.7). */
-export function baseOf(
-  tracks: readonly Track[],
-): { base: EditBase; versions: Record<string, TrackVersion> } | null {
-  const versions: Record<string, TrackVersion> = {};
-  const out: EditBase["tracks"] = [];
-  for (const t of tracks) {
-    const v = t.current;
-    if (!v || v.status !== "ready") continue;
-    const lengthFrames = versionFrames(v);
-    if (lengthFrames < 1) continue;
-    versions[v.id] = v;
-    const bt = {
-      trackId: t.id,
-      versionId: v.id,
-      offsetSamples: v.offsetSamples,
-      gainDb: v.gainDb,
-      lengthFrames,
-    };
-    out.push({ ...bt, clip: initialClip(bt) });
-  }
-  if (out.length === 0) return null;
-  return { base: { tracks: out, remap: [], foldedOps: 0 }, versions };
-}
+/** Autosave delay after the last change (SPEC §24.7). */
+export const AUTOSAVE_MS = 1000;
+const RETRY_MS = 5000;
 
-export async function startEditSession(songId: string, tracks: readonly Track[]): Promise<boolean> {
-  const b = baseOf(tracks);
-  if (!b) return false;
-  enterEdit({
-    session: { id: uuidv7(), songId, rev: 0 },
-    base: b.base,
-    ops: [],
-    cursor: 0,
-    options: useEdit.getState().options,
-    versions: b.versions,
+export function useEditSessionQuery(songId: string, enabled = true) {
+  return useQuery({
+    queryKey: editKeys.session(songId),
+    queryFn: ({ signal }) => api(getEditSession, { params: { id: songId } }, { signal }),
+    enabled,
   });
-  return Promise.resolve(true);
 }
 
-export async function cancelEditSession(): Promise<void> {
-  exitEdit();
-  return Promise.resolve();
+/** The versions the base plays (the tracks' current versions; the lock keeps them). */
+export function versionsFor(
+  session: Pick<EditSession, "base">,
+  tracks: readonly Track[],
+): Record<string, TrackVersion> {
+  const ids = new Set(session.base?.tracks.map((t) => t.versionId));
+  const out: Record<string, TrackVersion> = {};
+  for (const t of tracks) if (t.current && ids.has(t.current.id)) out[t.current.id] = t.current;
+  return out;
+}
+
+/** The owner's view of a session as the edit store loads it; null without the editing state. */
+export function loadedOf(session: EditSession, tracks: readonly Track[]): LoadedSession | null {
+  const { base, ops, cursor, options, rev } = session;
+  if (!base || !ops || cursor === undefined || !options || rev === undefined) return null;
+  return {
+    session: { id: session.id, songId: session.songId, rev },
+    base,
+    ops,
+    cursor,
+    options,
+    versions: versionsFor(session, tracks),
+  };
+}
+
+function load(session: EditSession, tracks: readonly Track[]): boolean {
+  const loaded = loadedOf(session, tracks);
+  if (loaded) enterEdit(loaded);
+  return loaded !== null;
+}
+
+export async function startEdit(
+  qc: QueryClient,
+  songId: string,
+  tracks: readonly Track[],
+): Promise<void> {
+  const { session } = await api(startEditSession, { params: { id: songId } });
+  qc.setQueryData(editKeys.session(songId), { session });
+  load(session, tracks);
+}
+
+export async function takeOverEdit(
+  qc: QueryClient,
+  sessionId: string,
+  songId: string,
+  tracks: readonly Track[],
+): Promise<void> {
+  const { session } = await api(takeOverEditSession, { params: { id: sessionId } });
+  qc.setQueryData(editKeys.session(songId), { session });
+  load(session, tracks);
+}
+
+/** Cancels a session (the own one, or another editor's); nothing else changes. */
+export async function cancelEdit(
+  qc: QueryClient,
+  sessionId: string,
+  songId: string,
+): Promise<void> {
+  const mine = useEdit.getState().session?.id === sessionId;
+  // Nothing more is saved: the session ends as it is on the server.
+  if (mine) useEdit.setState({ dirty: false });
+  try {
+    await api(cancelEditSession, { params: { id: sessionId } });
+  } catch (err) {
+    // Already ended elsewhere: leave edit mode all the same.
+    if (!(err instanceof ApiError && err.code === "EDIT_SESSION_STATE")) throw err;
+  }
+  if (mine) exitEdit();
+  qc.setQueryData(editKeys.session(songId), { session: null });
+  void qc.invalidateQueries({ queryKey: ["songs", songId], exact: true });
+}
+
+function notify(message: string, color = "yellow") {
+  notifications.show({ id: "edit-session", color, message, autoClose: 8000 });
+}
+
+/**
+ * Keeps the page's edit mode in line with the server's session: the owner's page enters edit
+ * mode with it (a reload continues the session), a session taken over or ended elsewhere leaves
+ * edit mode with a note, and a newer saved state from another tab replaces an unchanged one.
+ */
+export function useEditSessionSync(
+  songId: string,
+  tracks: readonly Track[] | undefined,
+): EditSession | null {
+  const { t } = useTranslation();
+  const me = useOptionalUser()?.id ?? null;
+  const query = useEditSessionQuery(songId, me !== null);
+  const server = query.data?.session ?? null;
+  const loaded = query.data !== undefined;
+  useEffect(() => {
+    if (!loaded || !tracks) return;
+    const local = useEdit.getState();
+    const mineLocal = local.songId === songId && local.session !== null ? local.session : null;
+    if (server && server.status === "open" && server.owner.id === me && server.base) {
+      if (!mineLocal || mineLocal.id !== server.id) {
+        load(server, tracks);
+        return;
+      }
+      if ((server.rev ?? 0) > mineLocal.rev && !local.dirty && local.save !== "saving")
+        load(server, tracks);
+      return;
+    }
+    if (!mineLocal) return;
+    exitEdit();
+    if (server && server.owner.id !== me) notify(t("edit.takenOver", { name: server.owner.name }));
+    else notify(t("edit.ended"));
+  }, [loaded, server, tracks, songId, me, t]);
+  useAutosave(songId, tracks, t);
+  return server;
+}
+
+const samePrefix = <T>(list: readonly T[], prefix: readonly T[]) =>
+  list.length >= prefix.length && prefix.every((x, i) => list[i] === x);
+
+/** Saves the session 1 s after the last change (SPEC §24.7); retries while the network is gone. */
+function useAutosave(songId: string, tracks: readonly Track[] | undefined, t: TFunction) {
+  const qc = useQueryClient();
+  const known = tracks ?? null;
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let inFlight = false;
+    let again = false;
+    const schedule = (ms = AUTOSAVE_MS) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void save(), ms);
+    };
+    const onConflict = async () => {
+      const { session } = await api(getEditSession, { params: { id: songId } }).catch(() => ({
+        session: null,
+      }));
+      qc.setQueryData(editKeys.session(songId), { session });
+      if (session && known && load(session, known)) notify(t("edit.conflict"));
+      else exitEdit();
+    };
+    const save = async (): Promise<void> => {
+      const s = useEdit.getState();
+      if (!s.session || !s.dirty || s.songId !== songId) return;
+      if (inFlight) {
+        again = true;
+        return;
+      }
+      inFlight = true;
+      const seq = s.changeSeq;
+      const sentOps = s.ops;
+      setSaveStatus("saving");
+      try {
+        const { session } = await api(saveEditSession, {
+          params: { id: s.session.id },
+          body: { rev: s.session.rev, ops: s.ops, cursor: s.cursor, options: s.options },
+        });
+        qc.setQueryData(editKeys.session(songId), { session });
+        const cur = useEdit.getState();
+        if (cur.session?.id !== session.id) return;
+        const folded = (session.base?.foldedOps ?? 0) !== (cur.base?.foldedOps ?? 0);
+        if (folded && known) {
+          // The oldest ops went into the base: continue from the server's state, then redo the
+          // ops made since this save was sent.
+          const extra = samePrefix(cur.ops, sentOps)
+            ? cur.ops.slice(sentOps.length, Math.max(sentOps.length, cur.cursor))
+            : [];
+          load(session, known);
+          for (const op of extra) runOp(op);
+          if (extra.length === 0) savedAt(session.rev ?? 0, useEdit.getState().changeSeq);
+        } else savedAt(session.rev ?? 0, seq);
+      } catch (err) {
+        const code = err instanceof ApiError ? err.code : null;
+        if (code === "EDIT_CONFLICT") await onConflict();
+        else if (code === "NOT_SESSION_OWNER" || code === "EDIT_SESSION_STATE") {
+          exitEdit();
+          notify(errorMessage(t, err));
+          void qc.invalidateQueries({ queryKey: editKeys.session(songId) });
+        } else if (code === "VALIDATION_FAILED") {
+          setSaveStatus("error");
+          notify(errorMessage(t, err), "red");
+        } else {
+          // Offline or the server is away: kept in memory, saved on reconnect (SPEC §24.7).
+          setSaveStatus("error");
+          schedule(RETRY_MS);
+        }
+      } finally {
+        inFlight = false;
+        if (again) {
+          again = false;
+          schedule();
+        }
+      }
+    };
+    const unsub = useEdit.subscribe((s, p) => {
+      if (s.changeSeq !== p.changeSeq && s.songId === songId) schedule();
+    });
+    const stopReconnect = onReconnect(() => {
+      if (useEdit.getState().dirty) schedule(0);
+    });
+    return () => {
+      unsub();
+      stopReconnect();
+      clearTimeout(timer);
+      // Leaving the page: what is not saved yet goes now.
+      void save();
+    };
+  }, [songId, qc, t, known]);
 }

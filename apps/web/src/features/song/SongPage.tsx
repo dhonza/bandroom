@@ -52,7 +52,14 @@ import { BackLink } from "../../components/BackLink";
 import { dropDeletedFromQueue } from "../../player/dropDeleted";
 import { SongLockBanner, SongLockButton } from "./songLock";
 import { AppModal } from "../../components/ResponsivePanel";
-import { EditButton, EditModeHeader, EditModeToolbar, useEditingSong } from "../../edit/EditMode";
+import {
+  EditBanner,
+  EditButton,
+  EditModeHeader,
+  EditModeToolbar,
+  useEditingSong,
+} from "../../edit/EditMode";
+import { useEditSessionSync } from "../../edit/session";
 
 /** Song page (SPEC §11.3): metadata, the Player (Mixer in the header), tracks, notes and access. */
 export function SongPage() {
@@ -67,6 +74,7 @@ export function SongPage() {
   const [editOpen, edit] = useDisclosure(false);
   // Edit mode (SPEC §24.6): the edit bar replaces the header actions; the Mixer is open.
   const editing = useEditingSong(songId);
+  useEditSessionSync(songId, tracks.data?.tracks);
 
   if (query.isPending) {
     return (
@@ -121,6 +129,7 @@ export function SongPage() {
             <EditButton song={song} tracks={tracks.data?.tracks ?? null} />
             {caps.has("edit.any") && (
               <Button
+                disabled={!!song.editing}
                 variant="default"
                 h={44}
                 leftSection={<IconPencil size={16} />}
@@ -136,6 +145,7 @@ export function SongPage() {
       {editing && <EditModeToolbar />}
 
       <SongLockBanner song={song} />
+      <EditBanner song={song} tracks={tracks.data?.tracks ?? null} />
       <WhatsNewBanner song={song} />
       <SongPlayer song={song} mixer={editing ? { ...mixer, open: true } : mixer} />
       <TracksSection song={song} />

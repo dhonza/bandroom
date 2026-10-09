@@ -111,6 +111,12 @@ export function useEventStream(
         void qc.invalidateQueries({ queryKey: docKeys.all });
         return;
       }
+      // Edit sessions (SPEC §24.7): the session's owner, status and rev; the edit lock itself
+      // arrives as `song.updated`.
+      if (e.type === "edit.changed") {
+        if (songId) void qc.invalidateQueries({ queryKey: ["songs", songId, "edit-session"] });
+        return;
+      }
       if (e.type === "tempo.changed") {
         if (songId) void qc.invalidateQueries({ queryKey: ["songs", songId, "tempo"] });
         return;
@@ -220,6 +226,7 @@ const EVENT_TYPES = [
   "project.deleted",
   "marker.changed",
   "tempo.changed",
+  "edit.changed",
   "comment.changed",
   "document.changed",
   "notification",
