@@ -404,13 +404,13 @@ describe("Trash and batch rights (SPEC §26.3, §26.6)", () => {
 });
 
 describe("audio uploads and recorded takes (SPEC §5.1, §9)", () => {
-  it("needs upload, record for a take, and song.create for a new song", () => {
+  it("needs upload, record for a take, and song.create for a new song unless it is a take", () => {
     // [upload, record a take, new song with upload, new song with a take]
     const want: Record<EffectiveRole, readonly boolean[]> = {
       none: [false, false, false, false],
       viewer: [false, false, false, false],
       commenter: [false, false, false, false],
-      contributor: [true, true, false, false],
+      contributor: [true, true, false, true],
       editor: [true, true, true, true],
       manager: [true, true, true, true],
       admin: [true, true, true, true],

@@ -134,9 +134,16 @@ export function authorizeTarget(
         target.source === "recording",
       );
     case "newSong": {
-      const access = checkScope(ctx.db, user, "project", target.projectId, "song.create");
-      if (!canUploadNewSong(access.role, target.source === "recording"))
-        throw new AppError("FORBIDDEN", "Missing capability upload or record on the project");
+      const recording = target.source === "recording";
+      const access = checkScope(
+        ctx.db,
+        user,
+        "project",
+        target.projectId,
+        recording ? "record" : "song.create",
+      );
+      if (!canUploadNewSong(access.role, recording))
+        throw new AppError("FORBIDDEN", "Missing capability upload, record or song.create");
       return access;
     }
     case "projectImage":

@@ -274,11 +274,14 @@ export function canUploadAudio(role: EffectiveRole, recording: boolean): boolean
 }
 
 /**
- * An audio upload that creates a song (a take recorded on the project page, SPEC §9): adding a
- * song (`song.create` and `upload`, as for copies) and the audio upload rule.
+ * An audio upload that creates a song. A take recorded on the project page needs only the take
+ * rule (`upload` and `record`), so contributors can record rehearsals as new songs (owner,
+ * 2026-10-09); any other file also needs adding a song (`song.create`, as for copies).
  */
 export function canUploadNewSong(role: EffectiveRole, recording: boolean): boolean {
-  return canAddSongsTo(role) && canUploadAudio(role, recording);
+  return recording
+    ? canUploadAudio(role, true)
+    : canAddSongsTo(role) && canUploadAudio(role, false);
 }
 
 // --- Bounce (SPEC §5.5) ---------------------------------------------------------------------------

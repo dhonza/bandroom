@@ -123,18 +123,17 @@ describe("recorded takes (SPEC §9)", () => {
     }
   });
 
-  it("creates a song from a project-page take (song.create)", async () => {
-    // Contributors may record into songs but not add songs.
+  it("creates a song from a project-page take (contributors too)", async () => {
+    // Without source = recording, a new song needs song.create (editors).
     const denied = await tusUpload(t, member, take, "take.flac", {
       type: "newSong",
       projectId,
-      title: "Recording 2026-10-09 19:30",
+      title: "Plain upload",
       trackName: "Recording",
-      source: "recording",
     });
     expect(denied.createStatus).toBe(403);
 
-    const res = await tusUpload(t, admin, take, "take.flac", {
+    const res = await tusUpload(t, member, take, "take.flac", {
       type: "newSong",
       projectId,
       title: "Recording 2026-10-09 19:30",
