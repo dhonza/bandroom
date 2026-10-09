@@ -43,11 +43,12 @@ export async function detectDualMono(
 /**
  * MD5 of the decoded audio samples (SPEC §5.3 step 4 verification), normalized to 32-bit signed
  * PCM so sources and FLAC variants of different sample formats compare equal. `leftOnly` compares
- * a mono (dual-mono) FLAC against the source's first channel.
+ * a mono (dual-mono) FLAC against the source's first channel. `float` normalizes to 32-bit float
+ * instead (WavPack of a float source: integer PCM would clip the overs and round the rest).
  */
 export async function audioMd5(
   file: string,
-  opts: { leftOnly?: boolean; signal?: AbortSignal } = {},
+  opts: { leftOnly?: boolean; float?: boolean; signal?: AbortSignal } = {},
   tools = DEFAULT_TOOLS,
 ): Promise<string> {
   const { stdout } = await runTool(
@@ -59,7 +60,7 @@ export async function audioMd5(
       "0:a:0",
       ...(opts.leftOnly ? ["-af", "pan=mono|c0=c0"] : []),
       "-c:a",
-      "pcm_s32le",
+      opts.float ? "pcm_f32le" : "pcm_s32le",
       "-f",
       "md5",
       "-",

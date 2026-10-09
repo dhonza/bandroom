@@ -184,7 +184,7 @@ describe("remove full quality: preview (SPEC §26.4)", () => {
 
     expect(await preview({ songs: [song] })).toEqual({
       versions: 3,
-      files: { flac: 2, original: 1, wavmeta: 1 },
+      files: { flac: 2, original: 1, wavmeta: 1, wavpack: 0 },
       usageBytes: 1000 + 1000 + 10 + 500,
       bytesFreed: 1000 + 10 + 500, // the shared FLAC file goes once
       lossySources: {

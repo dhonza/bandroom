@@ -19,8 +19,8 @@ import { opusKbpsFor, standardOpusKbps } from "../media/opusRates";
 import { removeVariant } from "../media/variants";
 import type { TrackRow, TrackVersionRow } from "./tracks";
 
-// Remove full quality (SPEC §26.4): drop the flac, original and wavmeta variants of versions,
-// keep Opus and peaks, and mark the versions archived.
+// Remove full quality (SPEC §26.4): drop the flac, original, wavmeta and wavpack variants of
+// versions, keep Opus and peaks, and mark the versions archived.
 
 const LOSSLESS: readonly string[] = LOSSLESS_VARIANTS;
 /** Removed along: the FLAC's seek index is useless without the FLAC. */
@@ -188,7 +188,7 @@ export function planLosslessRemoval(
         quality: qualityForKbps(opus.kbps, opus.mono, standard),
       });
   }
-  const files: Record<LosslessVariant, number> = { flac: 0, original: 0, wavmeta: 0 };
+  const files: Record<LosslessVariant, number> = { flac: 0, original: 0, wavmeta: 0, wavpack: 0 };
   const removedRefs = new Map<string, number>();
   for (const assetId of assetIds) {
     for (const v of losslessVariantsOf(assetId)) {
@@ -292,7 +292,7 @@ export interface ArchivedVersion {
 }
 
 /**
- * Applies a plan (SPEC §26.4): removes the flac (with its seek index), original and wavmeta
+ * Applies a plan (SPEC §26.4): removes the flac (with its seek index), original, wavmeta and wavpack
  * variants of each asset
  * (usage drops at once, the blobs become GC candidates) and marks every version using those
  * assets archived — copies too, since they share the files. Call inside a transaction.

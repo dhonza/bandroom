@@ -66,7 +66,7 @@ export const trackVersions = sqliteTable(
     deletedAt: integer("deleted_at"),
     /** Who moved the version to the Trash (SPEC §26.3). */
     deletedBy: text("deleted_by").references(() => users.id, { onDelete: "set null" }),
-    /** Full-quality files removed (SPEC §15.3, §26.4): no flac, original or wavmeta variants. */
+    /** Full-quality files removed (SPEC §15.3, §26.4): no flac, original, wavmeta or wavpack variants. */
     archivedAt: integer("archived_at"),
     /** Who removed them (SPEC §26.4). */
     archivedBy: text("archived_by").references(() => users.id, { onDelete: "set null" }),

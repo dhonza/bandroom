@@ -14,7 +14,7 @@ export interface WavSpec {
   channels: number;
   format: SampleFormat;
   frames: number;
-  /** Sample value in [-1, 1] for (frame, channel). */
+  /** Sample value in [-1, 1] for (frame, channel); f32 keeps values outside it (overs). */
   sample: (frame: number, channel: number) => number;
   extraChunks?: ExtraChunk[];
   /** Write WAVE_FORMAT_EXTENSIBLE instead of plain PCM/float. */
@@ -55,6 +55,10 @@ function fmtChunk(spec: WavSpec): Buffer {
 }
 
 function encodeSample(buf: Buffer, off: number, v: number, format: SampleFormat): void {
+  if (format === "f32") {
+    buf.writeFloatLE(v, off);
+    return;
+  }
   const x = Math.max(-1, Math.min(1, v));
   switch (format) {
     case "s16":
@@ -65,9 +69,6 @@ function encodeSample(buf: Buffer, off: number, v: number, format: SampleFormat)
       break;
     case "s32":
       buf.writeInt32LE(Math.round(x * 2147483647), off);
-      break;
-    case "f32":
-      buf.writeFloatLE(x, off);
       break;
   }
 }

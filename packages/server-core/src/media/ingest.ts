@@ -8,7 +8,7 @@ import { PermanentJobError, type JobContext, type JobHandler } from "../jobs/typ
 import { getSetting } from "../settings/registry";
 import { audioMd5, detectDualMono, measureLoudness } from "./analysis";
 import { assetIngestOptions, getAsset, setAssetProbe, setAssetStatus } from "./assets";
-import { encodeFlac, encodeOpus } from "./encode";
+import { encodeFlac, encodeOpus, encodeWavPack } from "./encode";
 import { flacSeekIndex } from "./flacIndex";
 import { opusKbpsFor } from "./opusRates";
 import { readOggOpus } from "./ogg";
@@ -46,6 +46,15 @@ export function isLosslessFlacCandidate(p: Probe): boolean {
   return p.lossless && !p.isFloat && p.bitDepth > 0 && p.bitDepth <= 24;
 }
 
+/**
+ * 32-bit float sources are stored as verified-lossless WavPack (DECISIONS 2026-10-09); their FLAC
+ * is only near-lossless 24-bit, for playback. 64-bit float stays as the original (WavPack has no
+ * double precision).
+ */
+export function isWavPackCandidate(p: Probe): boolean {
+  return p.lossless && p.isFloat && /^flt/.test(p.sampleFormat);
+}
+
 async function writeJson(ctx: JobContext, name: string, data: unknown): Promise<string> {
   const file = path.join(ctx.tmpDir, name);
   await fs.writeFile(file, JSON.stringify(data));
@@ -54,7 +63,7 @@ async function writeJson(ctx: JobContext, name: string, data: unknown): Promise<
 
 /**
  * `audio.ingest` (SPEC §5.3): probe, classify, dual-mono detection, FLAC (+ wavmeta, MD5
- * verification), Opus high/low with pre-skip and exact 48 kHz length, seek indexes, peaks and
+ * verification; WavPack for float sources), Opus high/low with pre-skip and exact 48 kHz length, seek indexes, peaks and
  * loudness. The worker runs one job at a time, and every tool runs niced with one thread.
  */
 export const audioIngestHandler: JobHandler<
@@ -151,6 +160,30 @@ export const audioIngestHandler: JobHandler<
       variants.push("flac", "seekindex_flac");
       bestSource = await ctx.input(ref("flac"));
 
+      // Float: the exact copy is a WavPack with every channel (the FLAC above is 24-bit).
+      if (isWavPackCandidate(probe)) {
+        const wvTmp = path.join(ctx.tmpDir, "audio.wv");
+        await encodeWavPack(src, wvTmp, { signal }, tools);
+        const a = await audioMd5(src, { float: true, signal }, tools);
+        const b = await audioMd5(wvTmp, { float: true, signal }, tools);
+        if (a === b) {
+          await ctx.output(ref("wavpack"), wvTmp, {
+            codec: "wavpack",
+            sampleRate: probe.sampleRate,
+            channels: probe.channels,
+            bitDepth: 32,
+            float: true,
+            durationSamples: probe.durationSamples,
+            verified: true,
+          });
+          variants.push("wavpack");
+          verified = true;
+        } else {
+          ctx.log("WavPack verification failed: keeping the original");
+        }
+        ctx.progress(0.35, "wavpack");
+      }
+
       // Dropped only after the whole job succeeds, so a retry after a later failure still has it.
       if (verified && !getSetting(db, "keepOriginalLossless")) originalKept = false;
     }
@@ -231,7 +264,8 @@ export const audioIngestHandler: JobHandler<
       return { lossless: probe.lossless, dualMono, originalKept: false, variants, lossyOnly };
     }
 
-    // 10: done. The original's blob stays until GC (24 h); the verified FLAC reconstructs it exactly.
+    // 10: done. The original's blob stays until GC (24 h); the verified FLAC (or WavPack for float)
+    // reconstructs it exactly.
     if (!originalKept) removeVariant(db, assetId, "original");
     setAssetStatus(db, assetId, "ready");
     ctx.progress(1, "ready");

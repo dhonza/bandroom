@@ -20,7 +20,7 @@ const preview = (
   ],
 ): RemoveLosslessPreview => ({
   versions: 2,
-  files: { flac: 2, original: 0, wavmeta: 0 },
+  files: { flac: 2, original: 0, wavmeta: 0, wavpack: 0 },
   usageBytes: 2048,
   bytesFreed: 2048,
   lossySources: { count: 0, items: [] },

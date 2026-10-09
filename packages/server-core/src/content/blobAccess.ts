@@ -13,6 +13,7 @@ export const DOWNLOAD_ONLY_VARIANTS: ReadonlySet<string> = new Set([
   "flac",
   "seekindex_flac",
   "wavmeta",
+  "wavpack",
 ]);
 
 export type BlobReferrer =

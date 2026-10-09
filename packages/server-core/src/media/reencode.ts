@@ -63,7 +63,10 @@ export const audioReencodeHandler: JobHandler<AudioReencodePayload, AudioReencod
     const { assetId } = payload;
     const asset = getAsset(db, assetId);
     if (!asset) throw new PermanentJobError(`Asset ${assetId} not found`);
-    const source = getVariant(db, assetId, "flac") ?? getVariant(db, assetId, "original");
+    const source =
+      getVariant(db, assetId, "flac") ??
+      getVariant(db, assetId, "original") ??
+      getVariant(db, assetId, "wavpack");
     if (!source) {
       // Removed meanwhile (e.g. "keep current" in a later request): nothing to do.
       if (assetLosslessRemoved(db, assetId)) return { skipped: "full quality already removed" };

@@ -90,6 +90,37 @@ export async function encodeFlac(
 }
 
 /**
+ * WavPack storage variant for 32-bit float sources (SPEC §5.3 step 4, DECISIONS 2026-10-09):
+ * lossless with the float samples (overs above 0 dBFS included), all channels kept, verified by an
+ * f32 MD5 afterwards. Compression level 1 keeps it fast on one vCPU; higher levels save ~1 %.
+ */
+export async function encodeWavPack(
+  src: string,
+  dest: string,
+  opts: { signal?: AbortSignal } = {},
+  tools: ToolPaths = DEFAULT_TOOLS,
+): Promise<void> {
+  await runTool(
+    tools.ffmpeg,
+    ffmpegArgs(
+      "-i",
+      src,
+      ...STRIP,
+      "-c:a",
+      "wavpack",
+      "-sample_fmt",
+      "fltp",
+      "-compression_level",
+      "1",
+      "-f",
+      "wv",
+      dest,
+    ),
+    { signal: opts.signal },
+  );
+}
+
+/**
  * Opus playback variant (SPEC §5.3 step 5): 48 kHz via soxr, Ogg, libopus, `-application audio`,
  * VBR. More than two channels are downmixed to stereo.
  */

@@ -9,6 +9,7 @@ import {
   AIFF_FILE,
   BWF_FILE,
   FLAC_FILE,
+  FLOAT_FILE,
   MP3_FILE,
   SMPTE_MIDI_FILE,
   TONE_FILE,
@@ -72,6 +73,7 @@ describe("generateFixtures", () => {
     const expected = [
       ...[...matrix(), ...longFixtures()].map((f) => f.file),
       BWF_FILE(),
+      FLOAT_FILE(),
       TONE_FILE(),
       MP3_FILE(),
       FLAC_FILE(),

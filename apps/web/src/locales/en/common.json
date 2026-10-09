@@ -1730,7 +1730,9 @@
       "original_one": "{{count}} original",
       "original_other": "{{count}} originals",
       "wavmeta_one": "{{count}} WAV header",
-      "wavmeta_other": "{{count}} WAV headers"
+      "wavmeta_other": "{{count}} WAV headers",
+      "wavpack_one": "{{count}} WavPack file",
+      "wavpack_other": "{{count}} WavPack files"
     },
     "space": "Frees {{usage}} of storage.",
     "diskShared": "Some files are shared with identical uploads, so the disk gets {{disk}} back.",

@@ -262,6 +262,7 @@ function opusName(t: TFunction, opus: CurrentOpus): string {
 function nowLine(t: TFunction, p: RemoveLosslessPreview): string {
   const kinds = [
     p.files.flac > 0 && "FLAC",
+    p.files.wavpack > 0 && "WavPack",
     p.files.original > 0 && t("lossless.now.originals"),
   ].filter((x): x is string => typeof x === "string");
   const full =
@@ -297,6 +298,7 @@ function Summary({
     p.files.flac > 0 && t("lossless.files.flac", { count: p.files.flac }),
     p.files.original > 0 && t("lossless.files.original", { count: p.files.original }),
     p.files.wavmeta > 0 && t("lossless.files.wavmeta", { count: p.files.wavmeta }),
+    p.files.wavpack > 0 && t("lossless.files.wavpack", { count: p.files.wavpack }),
   ].filter((x): x is string => typeof x === "string");
   return (
     <Stack gap={4} data-testid="lossless-summary">

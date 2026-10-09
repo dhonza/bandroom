@@ -91,6 +91,8 @@ export const BWF_FILE = () => path.join(FIXTURES_DIR, "bwf_48000_s24_chunks.wav"
 export const MP3_FILE = () => path.join(FIXTURES_DIR, "lossy_44100.mp3");
 export const FLAC_FILE = () => path.join(FIXTURES_DIR, "lossless_48000_s16.flac");
 export const AIFF_FILE = () => path.join(FIXTURES_DIR, "lossless_44100_s24.aiff");
+/** 32-bit float stereo with overs above 0 dBFS and BWF chunks (WavPack storage, v0.7.2). */
+export const FLOAT_FILE = () => path.join(FIXTURES_DIR, "float_48000_f32_overs.wav");
 export const TONE_FILE = () => path.join(FIXTURES_DIR, "tone_48000_s16_stereo.wav");
 export const REAPER_MIDI_FILE = () => path.join(FIXTURES_DIR, "reaper_tempo_map.mid");
 export const LOGIC_MIDI_FILE = () => path.join(FIXTURES_DIR, "logic_tempo_map.mid");
@@ -192,6 +194,21 @@ export async function generateFixtures(
   });
   if (bwf) log("wrote BWF fixture");
 
+  await make(FLOAT_FILE(), (tmp) => {
+    const sr = 48_000;
+    return writeWav(tmp, {
+      sampleRate: sr,
+      channels: 2,
+      format: "f32",
+      frames: 3 * sr + 1,
+      // Left peaks at +3.5 dBFS (1.5), right stays quiet: float must keep both exactly.
+      sample: (fr, ch) => (ch ? 0.01 : 1.5) * Math.sin((2 * Math.PI * (ch ? 660 : 440) * fr) / sr),
+      extraChunks: [
+        { id: "bext", data: bextChunk() },
+        { id: "LIST", data: listChunk(), after: true },
+      ],
+    });
+  });
   await make(TONE_FILE(), (tmp) => {
     const sr = 48_000;
     return writeWav(tmp, {

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { generateFixtures, MP3_FILE, TONE_FILE } from "@bandroom/fixtures";
+import { FLOAT_FILE, generateFixtures, MP3_FILE, TONE_FILE } from "@bandroom/fixtures";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { insertUser } from "../auth/users";
@@ -91,7 +91,7 @@ describe("remove full quality (SPEC §26.4)", () => {
       const plan = planLosslessRemoval(db, [{ kind: "song", id: songId }]);
       expect(plan.preview).toMatchObject({
         versions: 2,
-        files: { flac: 1, original: 1, wavmeta: 1 },
+        files: { flac: 1, original: 1, wavmeta: 1, wavpack: 0 },
         lossySources: { count: 1, items: [{ id: mp3.version.id, trackName: "Demo" }] },
         sharedCopies: 0,
         skipped: { notReady: 0, alreadyLossy: 0 },
@@ -134,6 +134,22 @@ describe("remove full quality (SPEC §26.4)", () => {
       expect(getAsset(db, wav.assetId)?.status).toBe("ready");
     },
   );
+
+  it("removes the WavPack of a float source too", { timeout: 60_000 }, async () => {
+    const songId = newSong();
+    const float = await addTrack(songId, FLOAT_FILE(), "Float");
+    expect(names(float.assetId)).toContain("wavpack");
+    const plan = planLosslessRemoval(db, [{ kind: "version", id: float.version.id }]);
+    expect(plan.preview.files).toEqual({ flac: 1, original: 0, wavmeta: 1, wavpack: 1 });
+    db.transaction(() => applyLosslessRemoval(db, plan, userId));
+    expect(names(float.assetId)).toEqual([
+      "opus",
+      "opus_low",
+      "peaks",
+      "seekindex_opus",
+      "seekindex_opus_low",
+    ]);
+  });
 
   it("counts shared copies, archives them too, and skips versions not ready", async () => {
     const songId = newSong();

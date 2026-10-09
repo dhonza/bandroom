@@ -5,7 +5,7 @@ import { BatchItemsSchema, BatchResultSchema } from "./trash";
 // Remove full quality (SPEC §26.4).
 
 /** Variants that hold (or rebuild) the full-quality audio; Opus and peaks stay. */
-export const LOSSLESS_VARIANTS = ["flac", "original", "wavmeta"] as const;
+export const LOSSLESS_VARIANTS = ["flac", "original", "wavmeta", "wavpack"] as const;
 export type LosslessVariant = (typeof LOSSLESS_VARIANTS)[number];
 
 /** Lists in a preview are capped; the counts are always complete. */
@@ -39,6 +39,8 @@ export const RemoveLosslessPreviewSchema = z.object({
     flac: z.number().int(),
     original: z.number().int(),
     wavmeta: z.number().int(),
+    /** WavPack copies of 32-bit float sources (DECISIONS 2026-10-09). */
+    wavpack: z.number().int(),
   }),
   /** Taken off the uploaders' storage usage at once. */
   usageBytes: z.number().int(),

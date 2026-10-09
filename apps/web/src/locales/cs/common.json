@@ -1850,7 +1850,11 @@
       "wavmeta_one": "{{count}} hlavička WAV",
       "wavmeta_few": "{{count}} hlavičky WAV",
       "wavmeta_many": "{{count}} hlaviček WAV",
-      "wavmeta_other": "{{count}} hlaviček WAV"
+      "wavmeta_other": "{{count}} hlaviček WAV",
+      "wavpack_one": "{{count}} soubor WavPack",
+      "wavpack_few": "{{count}} soubory WavPack",
+      "wavpack_many": "{{count}} souborů WavPack",
+      "wavpack_other": "{{count}} souborů WavPack"
     },
     "space": "Uvolní {{usage}} úložiště.",
     "diskShared": "Některé soubory sdílejí stejné nahrávky, takže na disku se uvolní {{disk}}.",

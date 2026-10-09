@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import {
   BWF_FILE,
   FLAC_FILE,
+  FLOAT_FILE,
   AIFF_FILE,
   generateFixtures,
   impulseFrames,
@@ -95,7 +96,7 @@ describe("audio.ingest alignment matrix (SPEC §6.5)", () => {
       expect(probe?.dualMono).toBe(f.layout === "dualmono");
       expect(getAsset(db, id)?.status).toBe("ready");
 
-      // Variants present; original kept only for float sources.
+      // Variants present; float sources get a verified WavPack instead of a lossless FLAC.
       const names = listVariants(db, id)
         .map((v) => v.variant)
         .sort();
@@ -109,7 +110,11 @@ describe("audio.ingest alignment matrix (SPEC §6.5)", () => {
         "seekindex_opus_low",
         "wavmeta",
       ];
-      expect(names).toEqual(f.format === "f32" ? [...expected, "original"].sort() : expected);
+      expect(names).toEqual(f.format === "f32" ? [...expected, "wavpack"].sort() : expected);
+      if (f.format === "f32") {
+        // Every channel kept (dual-mono too: the exact copy is the whole file).
+        expect(meta(id, "wavpack")).toMatchObject({ channels: f.channels, verified: true });
+      }
       expect(meta(id, "flac")).toMatchObject({
         nearLossless: f.format === "f32",
         verified: f.format !== "f32",
@@ -189,6 +194,82 @@ describe("audio.ingest details", () => {
       expect(getVariant(db, asset.id, "original")).toBeUndefined();
     },
   );
+
+  it(
+    "stores a float source as verified WavPack with its overs, and drops the original",
+    { timeout: 60_000 },
+    async () => {
+      const id = await ingest(FLOAT_FILE());
+      const names = listVariants(db, id).map((v) => v.variant);
+      expect(names).toContain("wavpack");
+      expect(names).toContain("wavmeta");
+      expect(names).not.toContain("original");
+      expect(meta(id, "wavpack")).toEqual({
+        codec: "wavpack",
+        sampleRate: 48_000,
+        channels: 2,
+        bitDepth: 32,
+        float: true,
+        durationSamples: 3 * 48_000 + 1,
+        verified: true,
+      });
+      // The FLAC is still made for playback, near-lossless 24-bit.
+      expect(meta(id, "flac")).toMatchObject({ nearLossless: true, bitDepth: 24 });
+      const wv = await variantPath(h, id, "wavpack");
+      expect(await audioMd5(wv, { float: true })).toBe(
+        await audioMd5(FLOAT_FILE(), { float: true }),
+      );
+      // The overs survive (an integer path would clip them at 0 dBFS).
+      const peak: { db: number } = { db: -Infinity };
+      await runTool(
+        DEFAULT_TOOLS.ffmpeg,
+        ffmpegArgs(
+          "-i",
+          wv,
+          "-af",
+          "astats=measure_perchannel=none:measure_overall=Peak_level",
+          "-f",
+          "null",
+          "-",
+        ),
+        {
+          onStderrLine: (l) => {
+            const m = /Peak level dB:\s*(-?[\d.]+)/.exec(l);
+            if (m?.[1]) peak.db = Number(m[1]);
+          },
+        },
+      );
+      expect(peak.db).toBeGreaterThan(3);
+
+      setSetting(db, "keepOriginalLossless", true);
+      const kept = await ingest(FLOAT_FILE());
+      setSetting(db, "keepOriginalLossless", false);
+      const keptNames = listVariants(db, kept).map((v) => v.variant);
+      expect(keptNames).toContain("original");
+      expect(keptNames).toContain("wavpack");
+    },
+  );
+
+  it("keeps a float original when the WavPack does not verify", { timeout: 60_000 }, async () => {
+    // An ffmpeg wrapper whose f32 MD5 of the WavPack differs.
+    const ffmpeg = `${h.root}/ffmpeg-bad-wavpack.sh`;
+    await fs.writeFile(
+      ffmpeg,
+      `#!/bin/sh\ncase "$*" in *audio.wv*pcm_f32le*) echo MD5=00000000000000000000000000000000; exit 0;; esac\nexec "${DEFAULT_TOOLS.ffmpeg}" "$@"\n`,
+      { mode: 0o755 },
+    );
+    const asset = await addOriginal(h, FLOAT_FILE(), uploader);
+    const { status } = await runOneJob(
+      h,
+      "audio.ingest",
+      { assetId: asset.id },
+      { ...DEFAULT_TOOLS, ffmpeg },
+    );
+    expect(status).toBe("done");
+    const names = listVariants(db, asset.id).map((v) => v.variant);
+    expect(names).toContain("original");
+    expect(names).not.toContain("wavpack");
+  });
 
   it("handles lossy sources: keeps the original, no FLAC", { timeout: 60_000 }, async () => {
     const id = await ingest(MP3_FILE());
