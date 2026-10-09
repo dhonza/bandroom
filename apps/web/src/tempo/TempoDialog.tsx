@@ -1,8 +1,9 @@
 import { lockedOut, type Song, type SongTempo } from "@bandroom/shared";
 import { Badge, Button, Tabs, Text } from "@mantine/core";
 import { IconMetronome } from "@tabler/icons-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { create } from "zustand";
 import { LockedHint } from "../features/song/songLock";
 import { usePlayerView } from "../rehearse/controller";
 import { ManualTempo } from "./ManualTempo";
@@ -22,6 +23,18 @@ export function useTempoLabel(tempo: SongTempo | null): string | null {
   return t("tempo.summary", tempoSummaryParams(summarize(tempo.map)));
 }
 
+/** Whether the tempo dialog is open: the toolbar button or the time-signature lane opens it. */
+const useTempoDialog = create<{ open: boolean }>(() => ({ open: false }));
+
+/** Opens the tempo dialog of the song page's tempo button (the time-signature lane). */
+export function openTempoDialog(): void {
+  useTempoDialog.setState({ open: true });
+}
+
+function closeTempoDialog(): void {
+  useTempoDialog.setState({ open: false });
+}
+
 /**
  * Toolbar button: the tempo summary (or "Set tempo") that opens the tempo dialog for editors
  * (SPEC §7.2, §7.3); others see the summary only.
@@ -30,7 +43,9 @@ export function TempoButton({ song }: { song: Song }) {
   const { t } = useTranslation();
   const { tempo } = useSongTempo(song.id);
   const label = useTempoLabel(tempo);
-  const [open, setOpen] = useState(false);
+  const open = useTempoDialog((s) => s.open);
+  // Leaving the song page closes it (the next song must not open with it).
+  useEffect(() => closeTempoDialog, []);
   const canEdit = song.access.capabilities.includes("tempo.edit");
   if (!canEdit) {
     return label ? (
@@ -50,9 +65,7 @@ export function TempoButton({ song }: { song: Song }) {
           variant="default"
           leftSection={<IconMetronome size={16} />}
           disabled={locked}
-          onClick={() => {
-            setOpen(true);
-          }}
+          onClick={openTempoDialog}
           data-testid="tempo-button"
         >
           {label ?? t("tempo.set")}
@@ -64,7 +77,7 @@ export function TempoButton({ song }: { song: Song }) {
           tempo={tempo}
           onClose={() => {
             endTempoPreview();
-            setOpen(false);
+            closeTempoDialog();
           }}
         />
       )}

@@ -941,6 +941,7 @@
     "sections": "Sections",
     "markers": "Markers",
     "signatures": "Time signature",
+    "signatureLabel": "Time signature {{meter}} from bar {{bar}}",
     "lanes": "Lanes",
     "lanesMenu": "Show or hide lanes",
     "showAllLanes": "Show all lanes",

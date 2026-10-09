@@ -969,6 +969,7 @@
     "sections": "Části",
     "markers": "Značky",
     "signatures": "Takt",
+    "signatureLabel": "Takt {{meter}} od {{bar}}. taktu",
     "lanes": "Řádky",
     "lanesMenu": "Zobrazit nebo skrýt řádky",
     "showAllLanes": "Zobrazit všechny řádky",

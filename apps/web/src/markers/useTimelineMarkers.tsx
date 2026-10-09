@@ -1,7 +1,8 @@
-import type { Marker, Song } from "@bandroom/shared";
+import { lockedOut, type Marker, type Song } from "@bandroom/shared";
 import { useCallback, useEffect, useState } from "react";
 import { useSongTempo } from "../tempo/queries";
 import { useTempoUi } from "../tempo/store";
+import { openTempoDialog } from "../tempo/TempoDialog";
 import { useLaneVisibility } from "../timeline/laneVisibility";
 import { RULER_H, type TimelineProps } from "../timeline/Timeline";
 import type { View } from "../timeline/view";
@@ -15,6 +16,7 @@ import {
   type Range,
 } from "./model";
 import { LanesMenu } from "./LanesMenu";
+import { SIGNATURE_ITEM_PREFIX, SignatureLane } from "./SignatureLane";
 import { useMarkerActions, useMarkerPermissions, useSongMarkers } from "./queries";
 import { COMMENT_ITEM_PREFIX, commentLaneHeight, CommentsLane } from "../comments/CommentsLane";
 import { useSongComments } from "../comments/queries";
@@ -76,7 +78,11 @@ export function useTimelineMarkers(
   const grid = useTempoUi((s) => (s.songId === song.id ? s.grid : null));
   const { canEdit, canCreate } = useMarkerPermissions(song);
   const actions = useMarkerActions(song.id);
-  const layout = useMarkerLayout(markers);
+  const layout = useMarkerLayout(markers, grid !== null);
+  // Tapping a time signature opens the tempo dialog (not while the song is locked, SPEC §25.12).
+  const tempoEditable =
+    song.access.capabilities.includes("tempo.edit") &&
+    !lockedOut(song.locked !== null, "tempo.edit");
   const { comments } = useSongComments(song.id);
   // The comment lane shows only when the song has comments and it is not hidden (SPEC §11.3).
   const commentsHidden = useLaneVisibility((s) => s.hidden.comments);
@@ -109,6 +115,15 @@ export function useTimelineMarkers(
     ...(hasLaneItems && { renderCorner: () => <LanesMenu /> }),
     renderOverlay: (view: View) => (
       <>
+        {grid && layout.signatureH > 0 && (
+          <SignatureLane
+            view={view}
+            grid={grid}
+            top={RULER_H}
+            height={layout.signatureH}
+            onOpen={tempoEditable ? openTempoDialog : null}
+          />
+        )}
         {commentH > 0 && (
           <CommentsLane
             view={view}
@@ -152,6 +167,10 @@ export function useTimelineMarkers(
       setMenu({ sec, x, y, editId: m && canEdit(m) ? m.id : null });
     },
     onItemTap: (id) => {
+      if (id.startsWith(SIGNATURE_ITEM_PREFIX)) {
+        if (tempoEditable) openTempoDialog();
+        return;
+      }
       if (id.startsWith(COMMENT_ITEM_PREFIX)) {
         const c = comments.find((x) => `${COMMENT_ITEM_PREFIX}${x.id}` === id);
         if (c) tapComment(c);
