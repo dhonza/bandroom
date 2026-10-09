@@ -341,6 +341,10 @@ test("Player bar: repeat one, seeking, editing the queue, and the queue after a 
   const rows = page.getByTestId("song-row");
   const shortPlay = rows.filter({ hasText: short.title }).getByTestId("song-row-play");
   await expect(shortPlay).toBeEnabled({ timeout: 30_000 });
+  // The long song can still be processing on a loaded machine; the queue taps need it ready.
+  await expect(rows.filter({ hasText: long.title }).getByTestId("song-row-play")).toBeEnabled({
+    timeout: 300_000,
+  });
 
   // The short song plays; elsewhere the bar shows the project above the title.
   await shortPlay.click();

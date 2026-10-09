@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -34,6 +35,7 @@ import {
   clearUpcoming,
   moveInQueue,
   playQueueAt,
+  refreshQueueReady,
   removeFromQueue,
   useRehearse,
 } from "../rehearse/controller";
@@ -53,6 +55,8 @@ export function QueueList() {
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+  // Songs still processing when they were queued may be ready by now.
+  useEffect(refreshQueueReady, []);
   if (!queue) return null;
   const { entries, index, source } = queue;
   const ids = entries.map((e) => e.songId);

@@ -897,6 +897,29 @@ export function removeFromQueue(index: number): void {
   editQueue((q) => removeEntry(q, index));
 }
 
+/**
+ * Re-checks the queued songs that were still processing (the queue pane shows them greyed out).
+ * Without this they are only re-checked when a song ends.
+ */
+export function refreshQueueReady(): void {
+  const loader = queueLoader;
+  const q = useRehearse.getState().queue;
+  if (!loader || !q) return;
+  const projects = new Set(q.entries.filter((e) => !e.ready).map((e) => e.projectId));
+  for (const projectId of projects) {
+    loader
+      .entries(projectId)
+      .then((fresh) => {
+        const cur = useRehearse.getState().queue;
+        if (!cur) return;
+        useRehearse.setState({
+          queue: { ...cur, entries: withFreshReady(cur.entries, projectId, fresh) },
+        });
+      })
+      .catch(() => undefined);
+  }
+}
+
 /** "Clear": everything but the playing song leaves the queue. */
 export function clearUpcoming(): void {
   editQueue(clearQueue);

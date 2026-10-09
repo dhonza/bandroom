@@ -662,6 +662,20 @@ describe("repeat, editing and a restored queue (SPEC §6.10)", () => {
     expect(useRehearse.getState().queue?.source.kind).toBe("song");
   });
 
+  it("re-checks queued songs that were still processing", async () => {
+    let fresh = [item("qa"), item("qb", false)];
+    const loader = loaderWith(() => Promise.resolve(fresh));
+    controller.startQueue(fresh, source, loader);
+    await playingSong("qa");
+    const ready = () => useRehearse.getState().queue?.entries.map((e) => e.ready);
+    expect(ready()).toEqual([true, false]);
+    fresh = [item("qa"), item("qb")];
+    controller.refreshQueueReady();
+    await vi.waitFor(() => {
+      expect(ready()).toEqual([true, true]);
+    });
+  });
+
   it("added with nothing queued: shown paused, Play loads and plays it", async () => {
     loaded.length = 0;
     const loader = loaderWith(() => Promise.resolve([]));
