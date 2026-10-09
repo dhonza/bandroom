@@ -23,7 +23,14 @@ test.beforeEach(({ browserName }, testInfo) => {
 interface ApiTrack {
   id: string;
   name: string;
-  current: { id: string; source: string; offsetSamples: number; status: string; label: string };
+  current: {
+    id: string;
+    source: string;
+    offsetSamples: number;
+    status: string;
+    label: string;
+    gainDb: number;
+  };
 }
 
 async function projectWithSong(page: Page, testInfo: TestInfo, tempo: boolean) {
@@ -93,12 +100,23 @@ test("Song page: record a take, save it as a new track, then adjust its position
   const panel = await openRecorder(page);
   // A tempo map: the count-in switch is offered; the hint says what plays.
   await expect(panel.getByTestId("record-count-in")).toBeVisible();
+  // Input gain typed in dB: the slider follows.
+  const gainInput = panel.getByTestId("record-gain-input");
+  await gainInput.fill("12");
+  await gainInput.blur();
+  await expect(panel.getByTestId("record-gain-slider").getByRole("slider")).toHaveAttribute(
+    "aria-valuenow",
+    "12",
+  );
   await recordFor(page, 3);
   await page.getByTestId("record-stop").click();
 
   const dialog = page.getByTestId("take-dialog-body");
   await expect(dialog).toBeVisible({ timeout: 30_000 });
   await expect(dialog.getByTestId("take-name")).toHaveValue("Recording 1");
+  // Auto level: on, with the resulting gain shown.
+  await expect(dialog.getByTestId("take-auto-level")).toBeChecked();
+  await expect(dialog.getByTestId("take-auto-gain")).toHaveAttribute("data-gain", /\d/);
   await dialog.getByTestId("take-label").fill("first take");
   // Recorded from 0: the latency reaches before the start, so it starts at 0 plus the nudge.
   await dialog.getByTestId("nudge-plus-10").click();
@@ -118,6 +136,8 @@ test("Song page: record a take, save it as a new track, then adjust its position
     offsetSamples: 480,
     label: "first take",
   });
+  // The auto level set the new version's gain.
+  expect(track?.current.gainDb).not.toBe(0);
 
   // Adjust position: +100 ms, saved.
   const row = page.getByTestId("track-row").filter({ hasText: "Recording 1" });
@@ -131,6 +151,29 @@ test("Song page: record a take, save it as a new track, then adjust its position
   await expect
     .poll(async () => (await tracksOf(page, songId))[0]?.current.offsetSamples)
     .toBe(5280);
+});
+
+test("A 32-bit float take uploads", async ({ page, request }, testInfo) => {
+  await loginAsNewUser(page, request, testInfo, "member");
+  const { songId } = await projectWithSong(page, testInfo, false);
+  await page.goto(`songs/${songId}`);
+  const panel = await openRecorder(page);
+  await panel.getByTestId("record-float").check();
+  // The recorder re-arms for the float format.
+  await expect(panel).toHaveAttribute("data-phase", "armed", { timeout: 60_000 });
+  await expect(page.getByTestId("record-start")).toBeEnabled();
+  await recordFor(page, 2);
+  await page.getByTestId("record-stop").click();
+
+  const dialog = page.getByTestId("take-dialog-body");
+  await expect(dialog).toBeVisible({ timeout: 30_000 });
+  await dialog.getByTestId("take-save").click();
+  await expect(dialog).toBeHidden();
+  await expect
+    .poll(async () => (await tracksOf(page, songId))[0]?.current.status, { timeout: 120_000 })
+    .toBe("ready");
+  const [track] = await tracksOf(page, songId);
+  expect(track?.current.source).toBe("recording");
 });
 
 test("Project page: record a new song", async ({ page, request }, testInfo) => {
