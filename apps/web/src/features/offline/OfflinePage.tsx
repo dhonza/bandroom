@@ -35,6 +35,8 @@ import {
 } from "../../offline/controller";
 import type { OfflineItem } from "../../offline/db";
 import { InstallHint } from "../../offline/InstallHint";
+import { PendingTakes } from "../../record/PendingTakes";
+import { useTakes } from "../../record/takes";
 import { useDownloadPercent } from "../../offline/OfflineButton";
 import { useOnline } from "../../offline/online";
 import { isPhoneDevice } from "../../rehearse/prefs";
@@ -76,6 +78,7 @@ export function OfflinePage() {
   const locale = i18n.resolvedLanguage ?? "en";
   const items = useOffline((s) => s.items);
   const outbox = useOffline((s) => s.outbox);
+  const pendingTakes = useTakes((s) => s.pending.length);
   const online = useOnline();
   const storage = useStorageInfo(items);
   const sorted = [...items].sort((a, b) => a.title.localeCompare(b.title, locale));
@@ -125,6 +128,16 @@ export function OfflinePage() {
           <InstallHint always />
         </Stack>
       </Card>
+
+      {pendingTakes > 0 && (
+        <Stack gap="xs" data-testid="offline-pending-takes">
+          <Text fw={600}>{t("record.pending.title")}</Text>
+          <Text size="sm" c="dimmed">
+            {t("record.pending.explain")}
+          </Text>
+          <PendingTakes />
+        </Stack>
+      )}
 
       {outbox.length > 0 && (
         <Alert color="yellow" variant="light" data-testid="outbox-pending">

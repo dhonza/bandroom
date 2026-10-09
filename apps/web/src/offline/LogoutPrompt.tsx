@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { create } from "zustand";
 import { useLogout } from "../auth/useAccount";
 import { formatBytes } from "../lib/media";
+import { unsentTakeCount, useTakes } from "../record/takes";
 import { useOffline } from "./controller";
 
 const usePrompt = create<{ open: boolean }>(() => ({ open: false }));
@@ -18,7 +19,8 @@ export function useRequestLogout(): { request: () => void; pending: boolean } {
     pending: logout.isPending,
     request: () => {
       const { items, outbox } = useOffline.getState();
-      if (items.length > 0 || outbox.length > 0) usePrompt.setState({ open: true });
+      if (items.length > 0 || outbox.length > 0 || unsentTakeCount() > 0)
+        usePrompt.setState({ open: true });
       else logout.mutate();
     },
   };
@@ -29,6 +31,7 @@ export function LogoutPrompt() {
   const open = usePrompt((s) => s.open);
   const items = useOffline((s) => s.items);
   const outbox = useOffline((s) => s.outbox);
+  const takes = useTakes(unsentTakeCount);
   const logout = useLogout();
   const locale = i18n.resolvedLanguage ?? "en";
   const close = () => {
@@ -46,6 +49,11 @@ export function LogoutPrompt() {
               </List.Item>
             ))}
           </List>
+        )}
+        {takes > 0 && (
+          <Text size="sm" c="red" data-testid="logout-unsent-takes">
+            {t("record.logoutUnsent", { count: takes })}
+          </Text>
         )}
         {outbox.length > 0 && (
           <Text size="sm" c="red">

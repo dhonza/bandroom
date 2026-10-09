@@ -1,4 +1,4 @@
-import type { OfflineQuality } from "@bandroom/shared";
+import type { OfflineQuality, UploadTarget } from "@bandroom/shared";
 import { deleteDB, openDB, type IDBPDatabase } from "idb";
 import { offlineDbName } from "./names";
 
@@ -52,6 +52,33 @@ export interface OutboxEntry {
   payload: unknown;
 }
 
+/**
+ * A recorded take the user saved that has not been uploaded yet (SPEC §9): the audio stays in
+ * OPFS (`takes/<userId>/<takeId>.flac`); this is what to upload it as.
+ */
+export interface PendingTake {
+  takeId: string;
+  userId: string;
+  createdAt: number;
+  savedAt: number;
+  /** File name sent with the upload. */
+  filename: string;
+  bytes: number;
+  frames: number;
+  channels: number;
+  /** Where it goes (`source: "recording"`, `offsetSamples`, the upload options). */
+  target: UploadTarget;
+  songId: string | null;
+  projectId: string;
+  /** The version label, set after the upload. */
+  label: string;
+  /** What the row shows: the track name, or the new song's title. */
+  title: string;
+  /** `waiting` (offline or not tried), `uploading`, `error` (the server refused it). */
+  status: "waiting" | "uploading" | "error";
+  errorCode: string | null;
+}
+
 /** Storage of one user's offline metadata; IndexedDB in the browser, a Map in tests. */
 export interface OfflineDb {
   items(): Promise<OfflineItem[]>;
@@ -62,6 +89,9 @@ export interface OfflineDb {
   addOutbox(entry: OutboxEntry): Promise<number>;
   putOutbox(entry: OutboxEntry): Promise<void>;
   deleteOutbox(seq: number): Promise<void>;
+  takes(): Promise<PendingTake[]>;
+  putTake(take: PendingTake): Promise<void>;
+  deleteTake(takeId: string): Promise<void>;
   close(): void;
 }
 
@@ -69,11 +99,18 @@ export function itemKey(kind: OfflineItem["kind"], id: string): string {
   return `${kind}:${id}`;
 }
 
+/** v1: items and outbox; v2: recorded takes. */
+export const DB_VERSION = 2;
+
 export async function openOfflineDb(userId: string): Promise<OfflineDb> {
-  const db: IDBPDatabase = await openDB(offlineDbName(userId), 1, {
-    upgrade(d) {
-      d.createObjectStore("items", { keyPath: "key" });
-      d.createObjectStore("outbox", { keyPath: "seq", autoIncrement: true });
+  const db: IDBPDatabase = await openDB(offlineDbName(userId), DB_VERSION, {
+    upgrade(d, oldVersion) {
+      if (oldVersion < 1) {
+        d.createObjectStore("items", { keyPath: "key" });
+        d.createObjectStore("outbox", { keyPath: "seq", autoIncrement: true });
+      }
+      // v2 (M12): recorded takes waiting for their upload.
+      if (oldVersion < 2) d.createObjectStore("takes", { keyPath: "takeId" });
     },
   });
   return {
@@ -93,6 +130,11 @@ export async function openOfflineDb(userId: string): Promise<OfflineDb> {
       await db.put("outbox", entry);
     },
     deleteOutbox: (seq) => db.delete("outbox", seq),
+    takes: () => db.getAll("takes") as Promise<PendingTake[]>,
+    putTake: async (take) => {
+      await db.put("takes", take);
+    },
+    deleteTake: (takeId) => db.delete("takes", takeId),
     close: () => {
       db.close();
     },
@@ -107,6 +149,7 @@ export async function deleteOfflineDb(userId: string): Promise<void> {
 export function memoryOfflineDb(): OfflineDb {
   const items = new Map<string, OfflineItem>();
   const outbox = new Map<number, OutboxEntry>();
+  const takes = new Map<string, PendingTake>();
   let seq = 0;
   const clone = <T>(x: T): T => structuredClone(x);
   return {
@@ -133,6 +176,16 @@ export function memoryOfflineDb(): OfflineDb {
     },
     deleteOutbox: (s) => {
       outbox.delete(s);
+      return Promise.resolve();
+    },
+    takes: () =>
+      Promise.resolve([...takes.values()].sort((a, b) => a.savedAt - b.savedAt).map(clone)),
+    putTake: (take) => {
+      takes.set(take.takeId, clone(take));
+      return Promise.resolve();
+    },
+    deleteTake: (takeId) => {
+      takes.delete(takeId);
       return Promise.resolve();
     },
     close: () => undefined,

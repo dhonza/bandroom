@@ -14,6 +14,9 @@ import {
 } from "@bandroom/shared";
 import { create } from "zustand";
 import { api, ApiError } from "../api/client";
+import { removeUserTakes } from "../record/opfs";
+import { stopTakeWriter } from "../record/takeWriterClient";
+import { stopTakes } from "../record/takes";
 import {
   deleteOfflineDb,
   openOfflineDb,
@@ -345,6 +348,11 @@ export async function enqueueMixerState(
   await reload(s);
 }
 
+/** The user's offline database while the offline session runs (recorded takes, SPEC §9). */
+export function offlineDb(): OfflineDb | null {
+  return session?.db ?? null;
+}
+
 export function hasOfflineSession(): boolean {
   return session !== null;
 }
@@ -419,6 +427,10 @@ export function replayNow(): Promise<void> {
 
 /** Deletes everything this device keeps for a user (SPEC §13: logout clears offline data). */
 export async function clearOfflineData(userId: string): Promise<void> {
+  // Recorded takes go too (SPEC §9; the logout prompt warned about unsent ones).
+  stopTakes();
+  stopTakeWriter();
+  await removeUserTakes(userId);
   if (session?.userId === userId) stopOffline();
   if (typeof caches !== "undefined") {
     for (const name of userCacheNames(userId)) await caches.delete(name);

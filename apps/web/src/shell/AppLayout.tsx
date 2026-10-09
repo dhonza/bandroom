@@ -26,6 +26,7 @@ import { UserMenu } from "./UserMenu";
 import { NotificationBell } from "../notifications/NotificationBell";
 import { useDocsInset } from "../documents/DocsPanel";
 import { LogoutPrompt } from "../offline/LogoutPrompt";
+import { TakeReviewHost } from "../record/TakeDialog";
 import { OfflineIndicator } from "../offline/OfflineIndicator";
 import { ProcessingIndicator } from "../processing/ProcessingIndicator";
 import { UpdateBanner } from "../offline/UpdateBanner";
@@ -143,6 +144,7 @@ export function AppLayout() {
         <UpdateBanner />
         <Outlet />
         <LogoutPrompt />
+        <TakeReviewHost />
       </AppShell.Main>
 
       {footerHeight > 0 && (

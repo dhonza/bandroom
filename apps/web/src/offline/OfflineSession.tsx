@@ -3,12 +3,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { SESSION_QUERY_KEY } from "../auth/session";
+import { useTakesDeps } from "../record/session";
+import { startTakes } from "../record/takes";
 import { startOffline, useOffline } from "./controller";
 import { setServiceWorkerUser, usePwa } from "./pwa";
 
 /**
  * Starts the logged-in user's offline data (SPEC §13): tells the service worker whose caches to
  * serve, opens the offline store (auto-update, outbox), and reports replayed offline changes.
+ * Recorded takes (SPEC §9) start with it: recovery after a crash, uploads waiting for the network.
  */
 export function OfflineSession({ userId }: { userId: string }) {
   const { t } = useTranslation();
@@ -31,9 +34,13 @@ export function OfflineSession({ userId }: { userId: string }) {
     });
   }, [lastGone, t]);
 
+  useTakesDeps();
   useEffect(() => {
     void setServiceWorkerUser(userId);
-    void startOffline(userId);
+    // Recorded takes (SPEC §9) use the offline database: after it opened.
+    void startOffline(userId)
+      .catch(() => undefined)
+      .then(() => startTakes(userId));
   }, [userId]);
 
   // Once the worker controls the page, read the session through it so it is kept for offline use.

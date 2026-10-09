@@ -59,6 +59,7 @@ import {
 } from "../../upload/UploadRow";
 import { songKeys, useSongTracks } from "../library/queries";
 import { MatchDialog } from "./MatchDialog";
+import { PendingTakes } from "../../record/PendingTakes";
 import { uploadTargetFor } from "./model";
 import { TrackRow } from "./TrackRow";
 import { errorMessage } from "../../api/errorMessage";
@@ -240,6 +241,7 @@ export function TracksSection({ song }: { song: Song }) {
       {uploads.map((u) => (
         <UploadRow key={u.id} item={u} errorText={errorText} />
       ))}
+      <PendingTakes songId={song.id} />
 
       {tracks.isPending ? (
         <Loader size="sm" />

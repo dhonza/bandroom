@@ -4,6 +4,7 @@ import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { clearOfflineData, isNetworkError } from "../offline/controller";
+import { disarmRecorder } from "../record/recorder";
 import { setServiceWorkerUser } from "../offline/pwa";
 import { api } from "../api/client";
 import { useOptionalUser, useSetSessionUser } from "./session";
@@ -40,6 +41,8 @@ export function useLogout() {
   const user = useOptionalUser();
   const { t } = useTranslation();
   const done = async () => {
+    // A recording in progress ends first (its take is removed with the user's data).
+    disarmRecorder();
     if (user) await clearOfflineData(user.id).catch(() => undefined);
     await setServiceWorkerUser(null);
     setUser(null);
