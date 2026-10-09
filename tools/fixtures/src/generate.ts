@@ -94,6 +94,22 @@ export const AIFF_FILE = () => path.join(FIXTURES_DIR, "lossless_44100_s24.aiff"
 /** 32-bit float stereo with overs above 0 dBFS and BWF chunks (WavPack storage, v0.7.2). */
 export const FLOAT_FILE = () => path.join(FIXTURES_DIR, "float_48000_f32_overs.wav");
 export const TONE_FILE = () => path.join(FIXTURES_DIR, "tone_48000_s16_stereo.wav");
+/**
+ * Constant (DC) left 0.5, right 0.25 (both exact in s24), 6 s at 48 kHz: clip envelopes are
+ * measured on it (SPEC §24.17).
+ */
+export const DC_FILE = () => path.join(FIXTURES_DIR, "dc_48000_s24_stereo.wav");
+export const DC_LEFT = 0.5;
+export const DC_RIGHT = 0.25;
+
+/** The long Opus fixture: a 60 s piece repeated (see {@link longOpusFixture}). */
+export const LONG_OPUS = {
+  file: () => path.join(FIXTURES_DIR, "long_opus_2h_mono.opus"),
+  pieceSeconds: 60,
+  repeats: 120,
+  /** Impulse (0.9) in each piece, over noise of amplitude 0.05. */
+  impulseSecond: 30,
+} as const;
 export const REAPER_MIDI_FILE = () => path.join(FIXTURES_DIR, "reaper_tempo_map.mid");
 export const LOGIC_MIDI_FILE = () => path.join(FIXTURES_DIR, "logic_tempo_map.mid");
 export const SMPTE_MIDI_FILE = () => path.join(FIXTURES_DIR, "smpte.mid");
@@ -225,6 +241,67 @@ export async function generateFixtures(
   );
   await make(FLAC_FILE(), (tmp) => ffmpeg("-i", tone, "-c:a", "flac", tmp));
   await make(AIFF_FILE(), (tmp) => ffmpeg("-i", tone, "-ar", "44100", "-c:a", "pcm_s24be", tmp));
+  await make(DC_FILE(), (tmp) =>
+    writeWav(tmp, {
+      sampleRate: 48_000,
+      channels: 2,
+      format: "s24",
+      frames: 6 * 48_000,
+      sample: (_fr, ch) => (ch ? DC_RIGHT : DC_LEFT),
+    }),
+  );
   await writeMidiFixtures(dir); // tiny and deterministic: always rewritten (atomically)
   log(`fixtures ready in ${dir}`);
+}
+
+/**
+ * A 2 h mono Ogg Opus file (48 kbit/s, ~38 MB) for the windowed-fetch test (SPEC §24.5, §24.17):
+ * a 60 s piece (noise with an impulse at 30 s) encoded once and repeated by stream copy, so it
+ * takes a second rather than encoding two hours. Each repeat adds the piece's packets as they
+ * are, so the repeat period is the piece's packet count × 960 samples (pre-skip only applies
+ * once). Not part of {@link generateFixtures}; made on demand (atomically, skipped when present).
+ */
+export async function longOpusFixture(opts: { force?: boolean } = {}): Promise<string> {
+  const target = LONG_OPUS.file();
+  if (opts.force !== true && (await exists(target))) return target;
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  const at = Math.round(LONG_OPUS.impulseSecond * 48_000);
+  await writeAtomically(target, async (tmp) => {
+    const piece = tmp.replace(/\.opus$/, ".piece.opus");
+    try {
+      await ffmpeg(
+        "-fflags",
+        "+bitexact",
+        "-f",
+        "lavfi",
+        "-i",
+        `aevalsrc='if(eq(n\\,${at})\\,0.9\\,0.05*(random(0)*2-1))':s=48000:d=${LONG_OPUS.pieceSeconds}`,
+        "-ac",
+        "1",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        "48k",
+        "-flags",
+        "+bitexact",
+        piece,
+      );
+      await ffmpeg(
+        "-stream_loop",
+        String(LONG_OPUS.repeats - 1),
+        "-i",
+        piece,
+        "-c",
+        "copy",
+        "-fflags",
+        "+bitexact",
+        "-flags",
+        "+bitexact",
+        tmp,
+      );
+    } finally {
+      await fs.rm(piece, { force: true });
+    }
+  });
+  return target;
 }

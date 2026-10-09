@@ -8,6 +8,7 @@ import { tempPathFor, writeAtomically } from "./atomic";
 import {
   AIFF_FILE,
   BWF_FILE,
+  DC_FILE,
   FLAC_FILE,
   FLOAT_FILE,
   MP3_FILE,
@@ -75,6 +76,7 @@ describe("generateFixtures", () => {
       BWF_FILE(),
       FLOAT_FILE(),
       TONE_FILE(),
+      DC_FILE(),
       MP3_FILE(),
       FLAC_FILE(),
       AIFF_FILE(),
