@@ -898,12 +898,19 @@ export class Engine {
       channels,
       maxFrames: Math.max(1, Math.round(opts.maxFrames)),
       buffers,
+      gainDb: opts.gainDb ?? 0,
     };
     node.port.postMessage(arm, [opts.port, ...buffers.map((b) => b.buffer)]);
     this.rec = rec;
     this.cancelIdle();
     void ctx.resume();
     this.emit("recording", "armed");
+  }
+
+  /** The input gain in dB while armed or recording (the worklet ramps to it). */
+  setRecordingGain(db: number): void {
+    if (!this.rec || !Number.isFinite(db)) return;
+    this.node?.port.postMessage({ t: "recGain", db } satisfies MixerCommand);
   }
 
   /**

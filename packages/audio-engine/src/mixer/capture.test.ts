@@ -308,4 +308,61 @@ describe("MixerCore capture", () => {
     r = events.filter((e) => e.type === "report").at(-1);
     expect(r?.type === "report" && [...r.inputPeaks]).toEqual([0, 0]);
   });
+
+  it("applies the input gain to the meter and the take", () => {
+    const { m, events } = setup();
+    m.setOpenEnd(true);
+    m.armCapture(2, 0, 20); // ×10, from the start
+    pool(m, 8, 2);
+    run(m, 19);
+    const r = events.filter((e) => e.type === "report").at(-1);
+    expect(r?.type === "report" && [...r.inputPeaks]).toEqual([24_310, 24_310]);
+    m.startCapture();
+    m.play();
+    events.length = 0;
+    run(m, 4, 19);
+    m.stopCapture("user");
+    const s = samples(events);
+    expect(s.slice(0, 4)).toEqual([24_320, -24_320, 24_330, -24_330]);
+  });
+
+  it("ramps a gain change across one block, then holds it", () => {
+    const { m, events } = setup();
+    m.setOpenEnd(true);
+    m.armCapture(1, 0);
+    pool(m, 8);
+    m.startCapture();
+    m.play();
+    const in0 = new Float32Array(128).fill(0.5);
+    const out = new Float32Array(128);
+    const block = () => {
+      m.mixBlock(out, out, 128, 0, [in0]);
+    };
+    block();
+    m.setCaptureGain(6.020_599_913_279_624); // ×2
+    block();
+    block();
+    m.stopCapture("user");
+    const s = samples(events);
+    expect(s.slice(0, 128).every((v) => v === 0.5)).toBe(true);
+    const ramp = s.slice(128, 256);
+    for (let i = 1; i < 128; i++) expect(ramp[i]).toBeGreaterThan(ramp[i - 1] ?? 0);
+    expect(ramp[0]).toBeGreaterThan(0.5);
+    expect(ramp[127]).toBeCloseTo(1, 6);
+    expect(s.slice(256).every((v) => Math.abs(v - 1) < 1e-6)).toBe(true);
+  });
+
+  it("does not clip: overs stay in the float take", () => {
+    const { m, events } = setup();
+    m.setOpenEnd(true);
+    m.armCapture(1, 0, 40);
+    pool(m, 8);
+    m.startCapture();
+    m.play();
+    const in0 = new Float32Array(128).fill(0.5);
+    const out = new Float32Array(128);
+    m.mixBlock(out, out, 128, 0, [in0]);
+    m.stopCapture("user");
+    expect(samples(events).every((v) => Math.abs(v - 50) < 1e-4)).toBe(true);
+  });
 });

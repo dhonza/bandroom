@@ -104,6 +104,14 @@ export class Capture {
   /** Input peak per channel since the last report. */
   peak0 = 0;
   peak1 = 0;
+  /**
+   * Input gain (linear): `gain` at the end of the last block, ramping to `gainTarget` across the
+   * next one (no zipper noise); `rampFrom`/`rampStep` describe the current block's ramp.
+   */
+  private gain = 1;
+  private gainTarget = 1;
+  private rampFrom = 1;
+  private rampStep = 0;
   private pendingGap = 0;
   private seq = 0;
   private pool: (Float32Array | null)[] = new Array<Float32Array | null>(POOL_MAX).fill(null);
@@ -135,12 +143,32 @@ export class Capture {
 
   constructor(private readonly emit: (m: TakeMessage) => void) {}
 
-  /** The input is connected: meter it, and record `channels` (1 or 2) when asked. */
-  arm(channels: number, maxFrames: number): void {
+  /**
+   * The input is connected: meter it, and record `channels` (1 or 2) when asked, with the input
+   * gain `gainDb` (from the start, no ramp).
+   */
+  arm(channels: number, maxFrames: number, gainDb = 0): void {
     if (this.on || this.wanted) this.end("disarmed");
     this.armed = true;
     this.channels = channels === 2 ? 2 : 1;
     this.maxFrames = maxFrames > 0 ? maxFrames : Number.POSITIVE_INFINITY;
+    this.setGain(gainDb);
+    this.gain = this.gainTarget;
+    this.rampFrom = this.gain;
+    this.rampStep = 0;
+  }
+
+  /**
+   * Input gain in dB (digital, before metering and writing): the gain ramps to it across the
+   * next block. No clipping here: the FLAC encoder clips, a float take keeps the overs.
+   */
+  setGain(db: number): void {
+    this.gainTarget = Number.isFinite(db) ? (db === 0 ? 1 : Math.pow(10, db / 20)) : 1;
+  }
+
+  /** The current linear input gain (tests). */
+  get linearGain(): number {
+    return this.gain;
   }
 
   disarm(): void {
@@ -183,8 +211,16 @@ export class Capture {
     this.emit(m);
   }
 
-  /** Input peaks of a block (while armed, also before and after a take). */
+  /**
+   * Input peaks of a block (while armed, also before and after a take), after the input gain.
+   * Called once per block before {@link write}: it sets the block's gain ramp.
+   */
   meter(input: readonly Float32Array[] | undefined, n: number): void {
+    const g0 = this.gain;
+    const step = n > 0 ? (this.gainTarget - g0) / n : 0;
+    this.rampFrom = g0;
+    this.rampStep = step;
+    this.gain = this.gainTarget;
     if (!this.armed || !input) return;
     const a = input[0];
     const b = input[1] ?? a;
@@ -192,8 +228,10 @@ export class Capture {
     let p0 = this.peak0;
     let p1 = this.peak1;
     for (let i = 0; i < n; i++) {
-      const x = a[i] ?? 0;
-      const y = b[i] ?? 0;
+      // Sample i of the ramp; without a ramp exactly `g0` (1 at 0 dB: bit-identical).
+      const g = step === 0 ? g0 : g0 + step * (i + 1);
+      const x = (a[i] ?? 0) * g;
+      const y = (b[i] ?? 0) * g;
       const mx = x > 0 ? x : -x;
       const my = y > 0 ? y : -y;
       if (mx > p0) p0 = mx;
@@ -229,16 +267,20 @@ export class Capture {
       const buf = this.buf;
       const k = Math.min(n - i, CAPTURE_CHUNK_FRAMES - this.fill, room);
       let w = this.fill * ch;
+      const g0 = this.rampFrom;
+      const step = this.rampStep;
       if (ch === 1) {
         for (let j = i; j < i + k; j++) {
+          const g = step === 0 ? g0 : g0 + step * (j + 1);
           const x = a ? (a[j] ?? 0) : 0;
-          buf[w++] = b ? (x + (b[j] ?? 0)) * 0.5 : x;
+          buf[w++] = (b ? (x + (b[j] ?? 0)) * 0.5 : x) * g;
         }
       } else {
         for (let j = i; j < i + k; j++) {
+          const g = step === 0 ? g0 : g0 + step * (j + 1);
           const x = a ? (a[j] ?? 0) : 0;
-          buf[w++] = x;
-          buf[w++] = b ? (b[j] ?? 0) : x;
+          buf[w++] = x * g;
+          buf[w++] = (b ? (b[j] ?? 0) : x) * g;
         }
       }
       this.fill += k;
