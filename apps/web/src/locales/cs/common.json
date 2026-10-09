@@ -340,7 +340,10 @@
       "logoRemove": "Odebrat logo",
       "logoRemoved": "Logo bylo odebráno.",
       "trashRetentionDays": "Uchovávat smazané položky (dny)",
-      "trashRetentionHint": "Smazané písně, stopy a verze zůstanou v koši tak dlouho, pak se smažou natrvalo a uvolní se jejich místo."
+      "trashRetentionHint": "Smazané písně, stopy a verze zůstanou v koši tak dlouho, pak se smažou natrvalo a uvolní se jejich místo.",
+      "recording": "Nahrávání",
+      "recordingMaxTakeMinutes": "Nejdelší nahrávka (minuty)",
+      "recordingMaxTakeHint": "Nahrávání v prohlížeči se po této době zastaví (1–600 minut)."
     },
     "import": {
       "tab": "Import",

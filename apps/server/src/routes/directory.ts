@@ -17,6 +17,7 @@ function readSettings(ctx: AppContext): InstanceSettings {
     defaultProjectRoleMember: getSetting(ctx.db, "defaultProjectRole.member"),
     defaultProjectRoleGuest: getSetting(ctx.db, "defaultProjectRole.guest"),
     trashRetentionDays: getSetting(ctx.db, "trash.retentionDays"),
+    recordingMaxTakeMinutes: getSetting(ctx.db, "recording.maxTakeMinutes"),
   };
 }
 
@@ -43,6 +44,9 @@ export function registerDirectoryRoutes(app: FastifyInstance, ctx: AppContext): 
       }
       if (body.trashRetentionDays !== undefined) {
         setSetting(db, "trash.retentionDays", body.trashRetentionDays);
+      }
+      if (body.recordingMaxTakeMinutes !== undefined) {
+        setSetting(db, "recording.maxTakeMinutes", body.recordingMaxTakeMinutes);
       }
     });
     const after = readSettings(ctx);

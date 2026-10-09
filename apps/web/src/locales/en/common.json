@@ -334,7 +334,10 @@
       "logoRemove": "Remove logo",
       "logoRemoved": "Logo removed.",
       "trashRetentionDays": "Keep deleted items for (days)",
-      "trashRetentionHint": "Deleted songs, tracks and versions stay in the Trash this long, then they are deleted permanently and their space is freed."
+      "trashRetentionHint": "Deleted songs, tracks and versions stay in the Trash this long, then they are deleted permanently and their space is freed.",
+      "recording": "Recording",
+      "recordingMaxTakeMinutes": "Longest recording (minutes)",
+      "recordingMaxTakeHint": "A recording in the browser stops after this long (1–600 minutes)."
     },
     "import": {
       "tab": "Import",

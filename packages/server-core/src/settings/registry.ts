@@ -1,4 +1,9 @@
-import { ContentRoleSchema, LocaleSchema } from "@bandroom/shared";
+import {
+  ContentRoleSchema,
+  DEFAULT_MAX_TAKE_MINUTES,
+  LocaleSchema,
+  MaxTakeMinutesSchema,
+} from "@bandroom/shared";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "../db/connection";
@@ -53,6 +58,8 @@ export const SETTINGS = {
   "branding.logoPendingAssetId": { schema: z.string().nullable(), default: null },
   /** Days a deleted song, track or version stays in the Trash before it is purged (SPEC §26.3). */
   "trash.retentionDays": { schema: z.number().int().min(1).max(3650), default: 30 },
+  /** Longest take a browser recording may last, in minutes (SPEC §9); recording stops there. */
+  "recording.maxTakeMinutes": { schema: MaxTakeMinutesSchema, default: DEFAULT_MAX_TAKE_MINUTES },
   /** Instance default per-user quota (SPEC §15.1), 5 GB. */
   defaultQuotaBytes: { schema: z.number().int().min(0), default: 5 * 1024 ** 3 },
 } as const satisfies Record<string, { schema: z.ZodType; default: unknown }>;

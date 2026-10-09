@@ -29,5 +29,6 @@ export function registerMetaRoutes(
     ...instanceInfo(deps.db, deps),
     version: deps.version,
     locales: [...LOCALES],
+    recordingMaxTakeMinutes: getSetting(deps.db, "recording.maxTakeMinutes"),
   }));
 }

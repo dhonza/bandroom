@@ -26,6 +26,7 @@ export * from "./mixer";
 export * from "./multitrack";
 export * from "./notifications";
 export * from "./range";
+export * from "./recording";
 export * from "./permissions";
 export * from "./tempo";
 export * from "./tracks";

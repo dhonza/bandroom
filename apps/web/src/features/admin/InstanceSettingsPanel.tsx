@@ -45,6 +45,7 @@ function SettingsForm({ initial }: { initial: InstanceSettings }) {
       defaultProjectRoleMember: initial.defaultProjectRoleMember,
       defaultProjectRoleGuest: initial.defaultProjectRoleGuest,
       trashRetentionDays: initial.trashRetentionDays as number | string,
+      recordingMaxTakeMinutes: initial.recordingMaxTakeMinutes as number | string,
     },
   });
   const save = useMutation({
@@ -60,6 +61,8 @@ function SettingsForm({ initial }: { initial: InstanceSettings }) {
           defaultProjectRoleGuest: v.defaultProjectRoleGuest,
           // An emptied field keeps the stored value.
           trashRetentionDays: Number(v.trashRetentionDays) || initial.trashRetentionDays,
+          recordingMaxTakeMinutes:
+            Number(v.recordingMaxTakeMinutes) || initial.recordingMaxTakeMinutes,
         },
       }),
     onSuccess: () => {
@@ -122,6 +125,17 @@ function SettingsForm({ initial }: { initial: InstanceSettings }) {
             allowDecimal={false}
             data-testid="trash-retention"
             {...form.getInputProps("trashRetentionDays")}
+          />
+        </Section>
+        <Section title={t("admin.settings.recording")}>
+          <NumberInput
+            label={t("admin.settings.recordingMaxTakeMinutes")}
+            description={t("admin.settings.recordingMaxTakeHint")}
+            min={1}
+            max={600}
+            allowDecimal={false}
+            data-testid="recording-max-take"
+            {...form.getInputProps("recordingMaxTakeMinutes")}
           />
         </Section>
         <Group justify="flex-end">
