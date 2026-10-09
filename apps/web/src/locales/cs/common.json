@@ -1108,8 +1108,8 @@
     "atBar": "V taktu",
     "addTempoChange": "Přidat změnu tempa",
     "addMeterChange": "Přidat změnu taktu",
-    "tempoOn": "Změnit zde tempo",
-    "meterOn": "Změnit zde taktové označení",
+    "sigShort": "Metrum",
+    "rampTo": "Plynule na {{bpm}} BPM",
     "removeChange": "Odebrat tuto změnu",
     "errors": {
       "meter": "Zadejte taktové označení, např. 4/4 nebo 6/8.",

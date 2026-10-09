@@ -199,6 +199,9 @@ test("Tempo: MIDI import with markers, manual tempo, grid snapping, click and co
       .locator(".mantine-Modal-content")
       .evaluate((el) => el.scrollWidth - el.clientWidth);
     expect(wide).toBeLessThanOrEqual(0);
+    // Each change is one compact line, even at 360 px.
+    const box = await meterRow.boundingBox();
+    expect(box?.height).toBeLessThan(60);
   }
   await dialog.getByTestId("tempo-save").click();
   await expect(dialog).toHaveCount(0);
@@ -219,7 +222,10 @@ test("Tempo: MIDI import with markers, manual tempo, grid snapping, click and co
   if (phone) await page.getByTestId("tempo-button").click();
   else await page.getByTestId("signature-item").last().click();
   await expect(changes).toHaveCount(2);
+  await expect(dialog.getByTestId("tempo-changes-header")).toBeVisible();
   await expect(changes.nth(0).getByTestId("tempo-change-bar")).toHaveValue("4");
+  // An empty BPM means "no tempo change here".
+  await expect(changes.nth(0).getByTestId("tempo-change-bpm")).toHaveValue("");
   await expect(changes.nth(1).getByTestId("tempo-change-bpm")).toHaveValue("140");
   await changes.nth(1).getByRole("button", { name: "Remove this change" }).click();
   await fillMeter(dialog.getByTestId("tempo-meter"), "4/4");
