@@ -1692,6 +1692,11 @@ export function setRecordingMode(on: boolean): void {
   }
 }
 
+/** Keeps the screen on while recording is armed, whatever the wake lock setting (SPEC §9). */
+export function holdScreenForRecording(on: boolean): void {
+  wake?.setRecording(on);
+}
+
 /** The count-in before a take, when it is on (the same as before Play). */
 export function countInForRecording(): CountInSpec | null {
   return countInForPlay();
