@@ -475,6 +475,8 @@ function SongRow({
           to={`/songs/${song.id}`}
           p="sm"
           pl={0}
+          // The "..." menu follows and brings its own room.
+          pr={selecting ? "sm" : 0}
           style={{ flex: 1, minWidth: 0, WebkitTouchCallout: "none" }}
           {...longPress}
           onClick={(e) => {
@@ -486,9 +488,12 @@ function SongRow({
           data-testid="song-row-link"
         >
           <Group gap="sm" wrap="nowrap">
-            <Text c="dimmed" size="sm" w={24} ta="right" className="tabular-nums">
-              {index + 1}
-            </Text>
+            {/* Narrow rows give the number's room to the title. */}
+            {wide && (
+              <Text c="dimmed" size="sm" w={24} ta="right" className="tabular-nums">
+                {index + 1}
+              </Text>
+            )}
             <Stack gap={0} style={{ minWidth: 0 }}>
               <Text fw={600} truncate>
                 {song.title}
