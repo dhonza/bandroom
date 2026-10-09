@@ -1,13 +1,16 @@
 import {
   lengthsDiffer,
+  mapTime,
   multitrackTrackNames,
   parseCommentContext,
   scaleTempoMap,
+  shiftTimeMap,
   suggestMultitrackName,
   TempoMapSchema,
   uuidv7,
   type ContentRole,
   type MultitrackPreview,
+  type TimeMap,
 } from "@bandroom/shared";
 import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
 import type { Db } from "../db/connection";
@@ -169,8 +172,14 @@ function startShift(db: Db, trackIds: readonly string[]): number {
   return row.length === 0 ? 0 : Math.min(...row.map((r) => r.offsets));
 }
 
-const retime = (sec: number | null, shiftSec: number) =>
-  sec === null || shiftSec === 0 ? sec : Math.max(0, sec - shiftSec);
+/**
+ * A time through the timeline map (SPEC §24.4; a song's shift is a one-piece map). Times never go
+ * below 0; null when the map deleted it.
+ */
+const retime = (sec: number | null, map: TimeMap) => (sec === null ? null : mapTime(map, sec));
+/** Bar 1 through the map (may lie before 0); kept where the map deleted it. */
+const NO_SHIFT = shiftTimeMap(0);
+const retimeBar1 = (sec: number, map: TimeMap) => mapTime(map, sec, false) ?? sec;
 
 // ——— copying rows ——————————————————————————————————————————————————————————————————————
 
@@ -246,7 +255,7 @@ function copyComments(
   rows: readonly CommentRow[],
   songId: string,
   maps: IdMaps,
-  shiftSec: number,
+  time: TimeMap,
   now: number,
 ): number {
   if (rows.length === 0) return 0;
@@ -265,8 +274,8 @@ function copyComments(
         trackId: r.trackId === null ? null : (maps.tracks.get(r.trackId) ?? null),
         parentId,
         context: remapContext(r.context, maps),
-        startSec: retime(r.startSec, shiftSec),
-        endSec: retime(r.endSec, shiftSec),
+        startSec: retime(r.startSec, time),
+        endSec: retime(r.endSec, time),
       })
       .run();
   }
@@ -304,7 +313,7 @@ function copyMarkers(
   db: Db,
   fromSongId: string,
   songId: string,
-  shiftSec: number,
+  time: TimeMap,
   from: string | null,
   now: number,
   createdBy?: string,
@@ -324,8 +333,8 @@ function copyMarkers(
         id,
         songId,
         ...(createdBy !== undefined && { createdBy, createdAt: now }),
-        startSec: retime(m.startSec, shiftSec) ?? 0,
-        endSec: retime(m.endSec, shiftSec),
+        startSec: retime(m.startSec, time) ?? 0,
+        endSec: retime(m.endSec, time),
         note:
           from === null
             ? m.note
@@ -346,7 +355,7 @@ function copyTempo(
   db: Db,
   fromSongId: string,
   songId: string,
-  shiftSec: number,
+  time: TimeMap,
   maps: IdMaps,
   opts: { history: boolean; userId: string },
   now: number,
@@ -365,7 +374,7 @@ function copyTempo(
     const id = uuidv7(now);
     maps.revisions.set(r.id, id);
     db.insert(tempoMapRevisions)
-      .values({ ...r, id, songId, bar1OffsetSec: r.bar1OffsetSec - shiftSec })
+      .values({ ...r, id, songId, bar1OffsetSec: retimeBar1(r.bar1OffsetSec, time) })
       .run();
   }
   let revisionId = maps.revisions.get(row.revisionId);
@@ -379,7 +388,7 @@ function copyTempo(
         source: row.source,
         data: row.data,
         midiAssetId: row.midiAssetId,
-        bar1OffsetSec: row.bar1OffsetSec - shiftSec,
+        bar1OffsetSec: retimeBar1(row.bar1OffsetSec, time),
         createdBy: opts.userId,
         createdAt: now,
       })
@@ -389,7 +398,7 @@ function copyTempo(
     .values({
       ...row,
       songId,
-      bar1OffsetSec: row.bar1OffsetSec - shiftSec,
+      bar1OffsetSec: retimeBar1(row.bar1OffsetSec, time),
       revisionId,
       ...(!opts.history && { updatedBy: opts.userId, updatedAt: now }),
     })
@@ -457,7 +466,7 @@ export function makeMultitrackSong(
       db,
       g.tracks.map((t) => t.id),
     );
-    const shiftSec = shift / SAMPLE_RATE;
+    const time = shiftTimeMap(-shift / SAMPLE_RATE);
     const maps = newMaps();
     for (const t of g.tracks) {
       const f = final.get(t.id) ?? { name: t.name };
@@ -515,33 +524,17 @@ export function makeMultitrackSong(
         db.update(comments)
           .set({
             songId: song.id,
-            startSec: retime(c.startSec, shiftSec),
-            endSec: retime(c.endSec, shiftSec),
+            startSec: retime(c.startSec, time),
+            endSec: retime(c.endSec, time),
           })
           .where(eq(comments.id, c.id))
           .run();
       }
     }
     if (gi === 0)
-      copyTempo(
-        db,
-        g.song.id,
-        song.id,
-        shiftSec,
-        maps,
-        { history: false, userId: input.userId },
-        now,
-      );
-    if (input.mode === "copy")
-      copyComments(db, [...roots, ...replies], song.id, maps, shiftSec, now);
-    copyMarkers(
-      db,
-      g.song.id,
-      song.id,
-      shiftSec,
-      gi === 0 ? null : input.fromLabel(g.song.title),
-      now,
-    );
+      copyTempo(db, g.song.id, song.id, time, maps, { history: false, userId: input.userId }, now);
+    if (input.mode === "copy") copyComments(db, [...roots, ...replies], song.id, maps, time, now);
+    copyMarkers(db, g.song.id, song.id, time, gi === 0 ? null : input.fromLabel(g.song.title), now);
   });
   afterTimelineChange(db, song.id, now);
   const emptied: SongRow[] = [];
@@ -575,8 +568,11 @@ export function copyTimelineToBounce(
 ): { tempoRevisionId: string | null; markers: Pick<MarkerRow, "id" | "type" | "name">[] } {
   const maps = newMaps();
   const tempo =
-    opts.tempo && copyTempo(db, fromSongId, songId, 0, maps, { history: false, userId }, now);
-  const copied = opts.markers ? copyMarkers(db, fromSongId, songId, 0, null, now, userId) : [];
+    opts.tempo &&
+    copyTempo(db, fromSongId, songId, NO_SHIFT, maps, { history: false, userId }, now);
+  const copied = opts.markers
+    ? copyMarkers(db, fromSongId, songId, NO_SHIFT, null, now, userId)
+    : [];
   if (opts.rate !== undefined && opts.rate !== 1) scaleTimeline(db, songId, opts.rate);
   if (tempo || copied.length > 0) afterTimelineChange(db, songId, now);
   const revisionId = tempo
@@ -645,14 +641,14 @@ export function copySongTo(
     .get();
   const maps = newMaps();
   liveUserTracks(db, from.id).forEach((t, i) => copyTrack(db, t, song.id, i, 0, maps, now));
-  copyMarkers(db, from.id, song.id, 0, null, now);
-  copyTempo(db, from.id, song.id, 0, maps, { history: true, userId }, now);
+  copyMarkers(db, from.id, song.id, NO_SHIFT, null, now);
+  copyTempo(db, from.id, song.id, NO_SHIFT, maps, { history: true, userId }, now);
   copyComments(
     db,
     db.select().from(comments).where(eq(comments.songId, from.id)).all(),
     song.id,
     maps,
-    0,
+    NO_SHIFT,
     now,
   );
   return song;
