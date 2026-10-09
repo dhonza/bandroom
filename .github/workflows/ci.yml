@@ -130,6 +130,7 @@ jobs:
             -e INTERNAL_EVENTS_SECRET=ci-only-internal-secret-0123456789abcdef \
             bandroom:ci
           docker exec br ffmpeg -hide_banner -f lavfi -i sine=d=1 -af aresample=48000:resampler=soxr -c:a libopus -f null -
+          docker exec br ffmpeg -hide_banner -f lavfi -i sine=d=1 -c:a wavpack -sample_fmt fltp -f null -
           docker exec br node -e "require('/app/apps/worker/node_modules/sharp')"
           docker exec br pdftoppm -v
           docker exec br pdfinfo -v
