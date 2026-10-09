@@ -2103,6 +2103,8 @@
     "level": "Úroveň vstupu",
     "clip": "Přebuzení",
     "clipReset": "Vstup byl přebuzený. Klepnutím vynulujete.",
+    "inputGain": "Zesílení vstupu",
+    "inputGainHint": "Zvyšujte, dokud hlasité pasáže nedosahují do žluté.",
     "device": "Vstupní zařízení",
     "deviceN": "Vstup {{n}}",
     "stereo": "Stereo",

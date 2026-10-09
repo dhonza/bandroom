@@ -26,6 +26,18 @@ export function clampNudge(ms: number): number {
   return Math.max(-MAX_NUDGE_MS, Math.min(MAX_NUDGE_MS, Math.round(ms)));
 }
 
+/** The input gain's range and step in dB (digital gain before writing, SPEC §9). */
+export const INPUT_GAIN_MIN_DB = 0;
+export const INPUT_GAIN_MAX_DB = 40;
+export const INPUT_GAIN_STEP_DB = 0.5;
+
+/** An input gain within its range (0 for a non-number), to 0.01 dB. */
+export function clampInputGain(db: number): number {
+  if (!Number.isFinite(db)) return 0;
+  const v = Math.max(INPUT_GAIN_MIN_DB, Math.min(INPUT_GAIN_MAX_DB, db));
+  return Math.round(v * 100) / 100;
+}
+
 /** "Recording N" with the next free N among the track names (base = the localized word). */
 export function nextRecordingName(base: string, names: readonly string[]): string {
   const re = new RegExp(`^${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} (\\d+)$`, "i");

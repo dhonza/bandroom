@@ -21,6 +21,8 @@ import {
   resetPracticeForRecording,
   setRecordingMode,
 } from "../rehearse/controller";
+import { clampInputGain } from "./model";
+import { loadInputGain, saveInputGain } from "./prefs";
 
 /**
  * Recording on the song's engine (SPEC §9), for the record sheet: open the microphone, arm,
@@ -51,6 +53,8 @@ export interface RecorderState {
   clipped: boolean;
   /** Frames recorded so far (the timer). */
   recFrames: number;
+  /** Input gain in dB (remembered per input device). */
+  inputGainDb: number;
   latency: RecordingLatency | null;
   /** Warn: Bluetooth headphones or a large latency estimate. */
   bluetooth: boolean;
@@ -68,6 +72,7 @@ const initial = (): RecorderState => ({
   peaks: [0, 0],
   clipped: false,
   recFrames: 0,
+  inputGainDb: 0,
   latency: null,
   bluetooth: false,
   practiceReset: false,
@@ -133,6 +138,8 @@ export function placeFinishedTake(take: FinishedTake, nudgeMs: number): TakePlac
 interface Session {
   engine: Engine;
   stream: MediaStream;
+  /** The input device (the key of its remembered gain). */
+  deviceId: string;
   off: (() => void)[];
 }
 
@@ -163,8 +170,11 @@ export async function armRecorder(opts: {
   if (!engine) throw new Error("The song is not loaded in the player");
   if (session) disarmRecorder();
   const track = opts.stream.getAudioTracks()[0];
+  const deviceId = track?.getSettings().deviceId ?? "";
+  const gainDb = loadInputGain(deviceId);
   useRecorder.setState({
     ...initial(),
+    inputGainDb: gainDb,
     phase: "arming",
     channels: opts.channels,
     inputChannels: inputChannelsOf(opts.stream),
@@ -175,7 +185,7 @@ export async function armRecorder(opts: {
   useTimelineUi.setState({ loopOn: false });
   setRecordingAudioSession(true);
   holdScreenForRecording(true);
-  const s: Session = { engine, stream: opts.stream, off: [] };
+  const s: Session = { engine, stream: opts.stream, deviceId, off: [] };
   session = s;
   try {
     await engine.armRecording({
@@ -183,6 +193,7 @@ export async function armRecorder(opts: {
       channels: opts.channels,
       port: opts.port,
       maxFrames: maxTakeFrames(),
+      gainDb,
     });
   } catch (err) {
     if (session === s) disarmRecorder();
@@ -263,6 +274,19 @@ function onTake(take: RecordedTake) {
 /** The stop dialog took the take (saved or discarded). */
 export function clearTake(): void {
   useRecorder.setState({ take: null });
+}
+
+/**
+ * The input gain in dB (while armed or recording): the engine ramps to it, and it is remembered
+ * for the input device.
+ */
+export function setInputGain(db: number): void {
+  const gain = clampInputGain(db);
+  useRecorder.setState({ inputGainDb: gain });
+  const s = session;
+  if (!s) return;
+  s.engine.setRecordingGain(gain);
+  saveInputGain(s.deviceId, gain);
 }
 
 export function resetClip(): void {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  clampInputGain,
   clampNudge,
   estimateTakeBytes,
   formatOffset,
@@ -56,5 +57,15 @@ describe("helpers", () => {
     expect(meterPercent(1)).toBe(100);
     expect(meterPercent(0.001)).toBe(0);
     expect(Math.round(meterPercent(0.1))).toBe(67);
+  });
+});
+
+describe("clampInputGain", () => {
+  it("keeps the gain within 0…40 dB", () => {
+    expect(clampInputGain(12.5)).toBe(12.5);
+    expect(clampInputGain(-3)).toBe(0);
+    expect(clampInputGain(55)).toBe(40);
+    expect(clampInputGain(Number.NaN)).toBe(0);
+    expect(clampInputGain(6.0001)).toBe(6);
   });
 });

@@ -1945,6 +1945,8 @@
     "level": "Input level",
     "clip": "Clip",
     "clipReset": "The input clipped. Tap to reset.",
+    "inputGain": "Input gain",
+    "inputGainHint": "Raise it until loud parts reach the yellow.",
     "device": "Input device",
     "deviceN": "Input {{n}}",
     "stereo": "Stereo",

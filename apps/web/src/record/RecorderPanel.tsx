@@ -7,9 +7,11 @@ import {
   Button,
   Group,
   Loader,
+  NumberInput,
   Progress,
   SegmentedControl,
   Select,
+  Slider,
   Stack,
   Switch,
   Text,
@@ -33,7 +35,17 @@ import { useOnline } from "../offline/online";
 import { useClickSettings } from "../rehearse/ClickControls";
 import { recordingEngine, setClickSettings, setMaxTakeMinutes } from "../rehearse/controller";
 import { useTempoUi } from "../tempo/store";
-import { estimateTakeBytes, formatTakeTime, meterPercent, minutesThatFit } from "./model";
+import { formatGain, parseGain } from "../rehearse/VersionGain";
+import {
+  clampInputGain,
+  estimateTakeBytes,
+  formatTakeTime,
+  INPUT_GAIN_MAX_DB,
+  INPUT_GAIN_MIN_DB,
+  INPUT_GAIN_STEP_DB,
+  meterPercent,
+  minutesThatFit,
+} from "./model";
 import { recordingSupported } from "./opfs";
 import {
   armRecorder,
@@ -44,6 +56,7 @@ import {
   openInput,
   inputChannelsOf,
   resetClip,
+  setInputGain,
   startRecorder,
   stopRecorder,
   useRecorder,
@@ -107,6 +120,76 @@ function useTakeSpace(online: boolean) {
       ? Math.max(0, usage.data.quotaBytes - usage.data.usedBytes)
       : null;
   return { server, local };
+}
+
+/**
+ * The input gain (SPEC §9): a digital gain before writing, set with the slider or typed in dB.
+ * Usable while armed and while recording; the meter shows the result.
+ */
+function InputGain() {
+  const { t } = useTranslation();
+  const gain = useRecorder((s) => s.inputGainDb);
+  const [draft, setDraft] = useState<string | number | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const v = parseGain(draft);
+    setDraft(null);
+    if (v !== null) setInputGain(clampInputGain(v));
+  };
+  return (
+    <Stack gap={4}>
+      <Group justify="space-between" gap="xs" wrap="nowrap">
+        <Text size="sm" fw={500}>
+          {t("record.inputGain")}
+        </Text>
+        <Text size="xs" c="dimmed" ta="right">
+          {t("record.inputGainHint")}
+        </Text>
+      </Group>
+      <Group gap="sm" wrap="nowrap">
+        <Slider
+          style={{ flex: 1 }}
+          min={INPUT_GAIN_MIN_DB}
+          max={INPUT_GAIN_MAX_DB}
+          step={INPUT_GAIN_STEP_DB}
+          value={gain}
+          onChange={(v) => {
+            setDraft(null);
+            setInputGain(v);
+          }}
+          label={(v) => formatGain(v, t)}
+          thumbSize={20}
+          thumbProps={{ "aria-label": t("record.inputGain") }}
+          data-testid="record-gain-slider"
+        />
+        <NumberInput
+          w={96}
+          size="sm"
+          styles={{ input: { minHeight: 44 } }}
+          value={draft ?? gain}
+          onChange={setDraft}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") setDraft(null);
+          }}
+          min={INPUT_GAIN_MIN_DB}
+          max={INPUT_GAIN_MAX_DB}
+          step={INPUT_GAIN_STEP_DB}
+          decimalScale={2}
+          allowDecimal
+          allowNegative={false}
+          clampBehavior="none"
+          // The spin buttons would be far below 44 px (touch targets); arrow keys still step.
+          hideControls
+          inputMode="decimal"
+          suffix=" dB"
+          aria-label={t("record.inputGain")}
+          data-testid="record-gain-input"
+        />
+      </Group>
+    </Stack>
+  );
 }
 
 /**
@@ -327,7 +410,10 @@ export function RecorderPanel({
           </Text>
         </Group>
       ) : (
-        meters
+        <>
+          {meters}
+          <InputGain />
+        </>
       )}
 
       {!recording && (
