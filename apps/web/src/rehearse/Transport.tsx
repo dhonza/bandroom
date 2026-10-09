@@ -59,6 +59,8 @@ import { positionSec, retryAudio, seekSec, setPrefs, skip, usePlayerView } from 
 import type { QualityPref } from "./model";
 
 const QUALITIES: QualityPref[] = ["auto", "lossless", "high", "low"];
+/** Shown instead of the song length while it runs until Stop (not text to translate). */
+const NO_END = "–:––";
 const WAKE: ("off" | "playing" | "songOpen")[] = ["off", "playing", "songOpen"];
 
 /**
@@ -419,11 +421,10 @@ export function Transport({
               <BarBeatText size="xl" c="dimmed" />
               <MeterText size="md" c="dimmed" />
             </Group>
-            {!noEnd && (
-              <Text size="xs" c="dimmed" className="tabular-nums">
-                {formatClock(duration, false)}
-              </Text>
-            )}
+            {/* Kept when there is no end (the row keeps its height when tracks arrive). */}
+            <Text size="xs" c="dimmed" className="tabular-nums">
+              {noEnd ? NO_END : formatClock(duration, false)}
+            </Text>
           </Stack>
           <SectionReadout />
           {state}
