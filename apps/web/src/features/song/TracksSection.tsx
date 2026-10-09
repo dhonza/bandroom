@@ -24,6 +24,7 @@ import {
   type Song,
   type Track,
 } from "@bandroom/shared";
+import { frozenBy } from "./songLock";
 import { Alert, Button, Group, Loader, Stack, Text, ThemeIcon } from "@mantine/core";
 import { Dropzone } from "@mantine/dropzone";
 import {
@@ -88,6 +89,8 @@ export function TracksSection({ song }: { song: Song }) {
     [allUploads, song.id],
   );
   const canUpload = song.access.capabilities.includes("upload");
+  // An edit session freezes uploads (SPEC §24.7).
+  const editFrozen = frozenBy(song, "upload") === "editing";
 
   const list = tracks.data?.tracks ?? [];
   const user = useCurrentUser();
@@ -202,7 +205,7 @@ export function TracksSection({ song }: { song: Song }) {
           onDrop={(files) => {
             void uploadFiles(files);
           }}
-          disabled={!online}
+          disabled={!online || editFrozen}
           multiple
           radius="md"
           p="lg"
@@ -213,7 +216,11 @@ export function TracksSection({ song }: { song: Song }) {
             <IconUpload size={28} aria-hidden />
             <Stack gap={0}>
               <Text fw={500}>
-                {online ? t("tracks.dropHint") : t("offline.uploadNeedsNetwork")}
+                {editFrozen
+                  ? t("edit.editing")
+                  : online
+                    ? t("tracks.dropHint")
+                    : t("offline.uploadNeedsNetwork")}
               </Text>
               <Text size="xs" c="dimmed">
                 {t("tracks.dropFormats")}
@@ -228,7 +235,7 @@ export function TracksSection({ song }: { song: Song }) {
           {canPickFolder() && (
             <FolderButton
               label={t("tracks.uploadFolder")}
-              disabled={!online}
+              disabled={!online || editFrozen}
               testId="track-upload-folder"
               onFiles={(files) => {
                 void uploadFiles(files);

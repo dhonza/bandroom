@@ -1,6 +1,5 @@
 import {
   canActOn,
-  lockedOut,
   convertMarkers,
   createMarker,
   deleteMarker,
@@ -14,6 +13,7 @@ import {
   type UpdateMarker,
   uuidv7,
 } from "@bandroom/shared";
+import { frozenBy } from "../features/song/songLock";
 import { Button, Group, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -68,16 +68,17 @@ export function useSongMarkers(songId: string) {
 export function useMarkerPermissions(song: Song) {
   const userId = useOptionalUser()?.id ?? null;
   const caps = song.access.capabilities;
-  const locked = song.locked !== null;
+  // The song lock (SPEC §25.12) or an edit session (SPEC §24.7).
+  const lockReason = frozenBy(song, "annotate.own");
+  const locked = lockReason !== null;
   const mayCreate = caps.includes("annotate.own");
-  const canCreate = mayCreate && !lockedOut(locked, "annotate.own");
+  const canCreate = mayCreate && !locked;
   const canEdit = useCallback(
     (m: Marker) =>
-      !lockedOut(locked, "annotate.own") &&
-      canActOn(song.access.role, "annotate", userId !== null && m.createdBy === userId),
+      !locked && canActOn(song.access.role, "annotate", userId !== null && m.createdBy === userId),
     [song.access.role, userId, locked],
   );
-  return { canCreate, canEdit, mayCreate, locked };
+  return { canCreate, canEdit, mayCreate, locked, lockReason };
 }
 
 const UNDO_MS = 8000;

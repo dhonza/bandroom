@@ -1,10 +1,10 @@
-import { lockedOut, type Song, type SongTempo } from "@bandroom/shared";
+import { type Song, type SongTempo } from "@bandroom/shared";
 import { Badge, Button, Tabs, Text } from "@mantine/core";
 import { IconMetronome } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { create } from "zustand";
-import { LockedHint } from "../features/song/songLock";
+import { frozenBy, LockedHint } from "../features/song/songLock";
 import { usePlayerView } from "../rehearse/controller";
 import { ManualTempo } from "./ManualTempo";
 import { MidiImport } from "./MidiImport";
@@ -55,10 +55,12 @@ export function TempoButton({ song }: { song: Song }) {
     ) : null;
   }
   // The tempo map is frozen while the song is locked (SPEC §25.12).
-  const locked = lockedOut(song.locked !== null, "tempo.edit");
+  // ... and while the song is being edited (SPEC §24.7).
+  const lockReason = frozenBy(song, "tempo.edit");
+  const locked = lockReason !== null;
   return (
     <>
-      <LockedHint locked={locked}>
+      <LockedHint locked={locked} reason={lockReason}>
         <Button
           {...BTN}
           size="sm"

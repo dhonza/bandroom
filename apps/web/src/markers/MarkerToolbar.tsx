@@ -16,13 +16,13 @@ export const BTN = { size: "sm" as const, h: 44 };
 /** "+ Marker", "+ Section" and the snap mode (SPEC §7.4, §7.5). */
 export function MarkerToolbar({ song }: { song: Song }) {
   const { t } = useTranslation();
-  const { mayCreate, locked } = useMarkerPermissions(song);
+  const { mayCreate, locked, lockReason } = useMarkerPermissions(song);
   const addMarker = useAddMarker(song);
   const selection = useTimelineUi((s) => s.selection);
   return (
     <Group gap="xs" wrap="wrap" data-testid="marker-toolbar">
       {mayCreate && (
-        <LockedHint locked={locked}>
+        <LockedHint locked={locked} reason={lockReason}>
           <Group gap="xs" wrap="wrap">
             <Button
               {...BTN}

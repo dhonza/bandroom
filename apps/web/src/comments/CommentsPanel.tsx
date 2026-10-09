@@ -43,7 +43,7 @@ function useSongTrackList(songId: string): Track[] {
 export function SongComments({ song }: { song: Song }) {
   const { t } = useTranslation();
   const { comments, truncated } = useSongComments(song.id);
-  const { mayComment, locked } = useCommentPermissions(song);
+  const { mayComment, locked, lockReason } = useCommentPermissions(song);
   const n = openCount(comments);
   useCommentDeepLink(comments);
   const linkMode = useLinkMode((s) => s.token !== null);
@@ -66,7 +66,7 @@ export function SongComments({ song }: { song: Song }) {
           {t("comments.button", { count: n })}
         </Button>
         {mayComment && (
-          <LockedHint locked={locked}>
+          <LockedHint locked={locked} reason={lockReason}>
             <Button
               variant="default"
               h={44}
@@ -105,7 +105,7 @@ function CommentsPanel({
   const sort = useCommentsUi((s) => s.sort);
   const composer = useCommentsUi((s) => s.composer);
   const linkMode = useLinkMode((s) => s.token !== null);
-  const { canComment, userId, mayComment, locked } = useCommentPermissions(song);
+  const { canComment, userId, mayComment, locked, lockReason } = useCommentPermissions(song);
   const tracks = useSongTrackList(song.id);
   const users = useMentionable(song.id, canComment).data?.users;
   // Mentions of every user who can view the song are highlighted; viewers fall back to authors.
@@ -142,7 +142,7 @@ function CommentsPanel({
     <Stack gap="sm" pb="md">
       <Group gap="xs" wrap="wrap" justify="space-between">
         {mayComment && (
-          <LockedHint locked={locked}>
+          <LockedHint locked={locked} reason={lockReason}>
             <Button
               h={44}
               variant="light"

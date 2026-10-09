@@ -1,4 +1,5 @@
-import { lockedOut, type Marker, type Song } from "@bandroom/shared";
+import { type Marker, type Song } from "@bandroom/shared";
+import { frozenBy } from "../features/song/songLock";
 import { useCallback, useEffect, useState } from "react";
 import { useSongTempo } from "../tempo/queries";
 import { useTempoUi } from "../tempo/store";
@@ -90,8 +91,7 @@ export function useTimelineMarkers(
   const layout = useMarkerLayout(markers, grid !== null);
   // Tapping a time signature opens the tempo dialog (not while the song is locked, SPEC §25.12).
   const tempoEditable =
-    song.access.capabilities.includes("tempo.edit") &&
-    !lockedOut(song.locked !== null, "tempo.edit");
+    song.access.capabilities.includes("tempo.edit") && frozenBy(song, "tempo.edit") === null;
   const { comments: storedComments } = useSongComments(song.id);
   const comments = useRemappedComments(song.id, storedComments);
   // The comment lane shows only when the song has comments and it is not hidden (SPEC §11.3).

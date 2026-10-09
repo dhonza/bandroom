@@ -1,6 +1,5 @@
 import {
   canActOnComment,
-  lockedOut,
   createComment,
   deleteComment,
   listMentionableUsers,
@@ -16,6 +15,7 @@ import {
   type ReactionEmoji,
   type Song,
 } from "@bandroom/shared";
+import { frozenBy } from "../features/song/songLock";
 import { Button, Group, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -88,7 +88,9 @@ export function useCommentPermissions(song: Song) {
   const userId = useOptionalUser()?.id ?? "";
   // A locked song (SPEC §25.12) freezes all comment changes; `mayComment` keeps the buttons
   // visible (disabled, with the reason).
-  const locked = lockedOut(song.locked !== null, "comment");
+  // An edit session freezes them too (SPEC §24.7).
+  const lockReason = frozenBy(song, "comment");
+  const locked = lockReason !== null;
   const mayComment = song.access.capabilities.includes("comment");
   const canComment = mayComment && !locked;
   const canReact = canComment && !isLinkMode();
@@ -103,7 +105,7 @@ export function useCommentPermissions(song: Song) {
     (c: CommentReply) => userId !== "" && c.author.userId === userId,
     [userId],
   );
-  return { canComment, canReact, canModify, isOwn, userId, mayComment, locked };
+  return { canComment, canReact, canModify, isOwn, userId, mayComment, locked, lockReason };
 }
 
 const UNDO_MS = 8000;

@@ -380,7 +380,9 @@ export function replayNow(): Promise<void> {
       const result = await replayOutbox({
         db: s.db,
         isNetworkError,
-        isSongLocked: (err) => err instanceof ApiError && err.code === "SONG_LOCKED",
+        // The song lock and an edit session (SPEC §24.7) both refuse the queued change.
+        isSongLocked: (err) =>
+          err instanceof ApiError && (err.code === "SONG_LOCKED" || err.code === "SONG_EDITING"),
         onSent: (e) => {
           if (e.songId) songIds.add(e.songId);
         },

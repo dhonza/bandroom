@@ -1,4 +1,11 @@
-import { lockSong, unlockSong, type Song } from "@bandroom/shared";
+import {
+  editLockedOut,
+  lockedOut,
+  lockSong,
+  unlockSong,
+  type Capability,
+  type Song,
+} from "@bandroom/shared";
 import { ActionIcon, Alert, Tooltip } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { IconLock, IconLockOpen } from "@tabler/icons-react";
@@ -31,14 +38,36 @@ export function useLockLabel(song: Pick<Song, "locked">): string | null {
 }
 
 /**
- * Wraps a control that the lock disables: the tooltip explains why. The wrapper takes the hover,
- * since a disabled button gets no pointer events.
+ * Which lock disables a control needing `capability`: an open edit session (SPEC §24.7) or the
+ * song lock (SPEC §25.12); null when neither does.
  */
-export function LockedHint({ locked, children }: { locked: boolean; children: ReactNode }) {
+export function frozenBy(
+  song: Pick<Song, "locked" | "editing">,
+  capability: Capability,
+): "editing" | "locked" | null {
+  if (editLockedOut(!!song.editing, capability)) return "editing";
+  if (lockedOut(song.locked !== null, capability)) return "locked";
+  return null;
+}
+
+/**
+ * Wraps a control that a lock disables: the tooltip explains why (`reason`: the song lock or an
+ * edit session). The wrapper takes the hover, since a disabled button gets no pointer events.
+ */
+export function LockedHint({
+  locked,
+  reason = "locked",
+  children,
+}: {
+  locked: boolean;
+  reason?: "locked" | "editing" | null;
+  children: ReactNode;
+}) {
   const { t } = useTranslation();
   if (!locked) return children;
+  const label = reason === "editing" ? t("edit.editing") : t("songs.lock.locked");
   return (
-    <Tooltip label={t("songs.lock.locked")} events={{ hover: true, focus: true, touch: true }}>
+    <Tooltip label={label} events={{ hover: true, focus: true, touch: true }}>
       <span style={{ display: "inline-flex" }} data-testid="song-locked-hint">
         {children}
       </span>
@@ -71,6 +100,8 @@ export function SongLockButton({ song }: { song: Song }) {
     },
   });
   if (!canToggle && !locked) return null;
+  // An edit session freezes the song lock too (SPEC §24.7).
+  const editFrozen = !!song.editing;
   const icon = locked ? <IconLock size={20} /> : <IconLockOpen size={20} />;
   const tip = locked
     ? `${label ?? t("songs.lock.locked")}${canToggle ? ` · ${t("songs.lock.unlock")}` : ""}`
@@ -83,6 +114,7 @@ export function SongLockButton({ song }: { song: Song }) {
           variant={locked ? "light" : "default"}
           color={locked ? "yellow" : "gray"}
           loading={toggle.isPending}
+          disabled={editFrozen}
           aria-pressed={locked}
           aria-label={locked ? t("songs.lock.unlock") : t("songs.lock.lock")}
           onClick={() => {
