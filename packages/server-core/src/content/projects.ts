@@ -33,6 +33,7 @@ export function toProjectSummary(
     color: color.success ? color.data : "violet",
     imageHash,
     songCount,
+    createdAt: p.createdAt,
     updatedAt: p.updatedAt,
     archivedAt: p.archivedAt,
     visibility,
@@ -58,7 +59,6 @@ export function toProject(
     downloadPolicy: p.downloadPolicy,
     ownerId: p.ownerId,
     ownerDisplayName: owner?.name ?? null,
-    createdAt: p.createdAt,
   };
 }
 

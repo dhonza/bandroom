@@ -19,3 +19,4 @@ export * from "./transfer";
 export * from "./bounce";
 export * from "./songStats";
 export * from "./storageBytes";
+export * from "./projectUserState";

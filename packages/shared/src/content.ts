@@ -52,6 +52,7 @@ export const ProjectSummarySchema = z.object({
   name: z.string(),
   color: PaletteColorSchema,
   songCount: z.number(),
+  createdAt: z.number(),
   updatedAt: z.number(),
   archivedAt: z.number().nullable(),
   /** Blob hash of the 512 px WebP project image (null: none or still processing). */
@@ -67,12 +68,23 @@ export const ProjectSummarySchema = z.object({
 });
 export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
 
+/** A project in the user's Library (SPEC §11): the summary plus per-user state and its creator. */
+export const LibraryProjectSchema = ProjectSummarySchema.extend({
+  /** The user's favourite star: starred projects are pinned first. */
+  starred: z.boolean(),
+  /** When the user last opened the project, one of its songs or its queue (null: never). */
+  lastAccessedAt: z.number().nullable(),
+  /** Who created the project (null: the account was removed); "Mine" / "Shared with me". */
+  createdBy: z.string().nullable(),
+  createdByName: z.string().nullable(),
+});
+export type LibraryProject = z.infer<typeof LibraryProjectSchema>;
+
 export const ProjectSchema = ProjectSummarySchema.extend({
   description: z.string(),
   downloadPolicy: DownloadPolicySchema,
   ownerId: z.string(),
   ownerDisplayName: z.string().nullable(),
-  createdAt: z.number(),
 });
 export type Project = z.infer<typeof ProjectSchema>;
 

@@ -39,6 +39,9 @@ export const EVENT_ACTIONS = [
   "project.ownership_transferred",
   /** A project downloaded as a ZIP (SPEC §28.7), once per completed export. */
   "project.exported",
+  /** A user starred or unstarred a project in their Library (per-user favourite, SPEC §11). */
+  "project.starred",
+  "project.unstarred",
   "grant.changed",
   "song.created",
   "song.updated",

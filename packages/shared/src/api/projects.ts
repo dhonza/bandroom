@@ -2,10 +2,10 @@ import { z } from "zod";
 import {
   DescriptionSchema,
   GrantRowSchema,
+  LibraryProjectSchema,
   PaletteColorSchema,
   ProjectNameSchema,
   ProjectSchema,
-  ProjectSummarySchema,
   SongSummarySchema,
   SongTitleSchema,
 } from "../content";
@@ -21,8 +21,25 @@ export const listProjects = defineContract({
   method: "GET",
   path: "/projects",
   query: z.object({ archived: z.enum(["true", "false"]).optional() }),
-  response: z.object({ projects: z.array(ProjectSummarySchema) }),
+  response: z.object({ projects: z.array(LibraryProjectSchema) }),
   auth: { user: true },
+});
+
+/** Stars the project for the user (pinned first in the Library); idempotent. */
+export const starProject = defineContract({
+  method: "PUT",
+  path: "/projects/:id/star",
+  params: IdParams,
+  response: OkSchema,
+  auth: { capability: "view", scope: "project" },
+});
+
+export const unstarProject = defineContract({
+  method: "DELETE",
+  path: "/projects/:id/star",
+  params: IdParams,
+  response: OkSchema,
+  auth: { capability: "view", scope: "project" },
 });
 
 export const createProject = defineContract({

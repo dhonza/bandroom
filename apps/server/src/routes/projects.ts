@@ -14,6 +14,10 @@ import {
   noProcessing,
   processingBySong,
   projectImageHash,
+  projectUserStates,
+  recordProjectAccess,
+  setProjectStarRow,
+  userDisplayNames,
   removeProjectGrantRow,
   reorderSongRows,
   setProjectGrantRow,
@@ -38,7 +42,9 @@ import {
   removeProjectGrant,
   reorderSongs,
   setProjectGrant,
+  starProject,
   transferProjectOwnership,
+  unstarProject,
   updateProject,
   type EffectiveRole,
   getProjectExportPreview,
@@ -79,19 +85,50 @@ export function registerProjectRoutes(app: FastifyInstance, ctx: AppContext): vo
       db,
       visible.filter((v) => v.visibility === "full").map((v) => v.project.id),
     );
+    const states = projectUserStates(db, user.id);
+    const creators = userDisplayNames(
+      db,
+      visible.flatMap((v) => (v.project.createdBy ? [v.project.createdBy] : [])),
+    );
     return {
-      projects: visible.map((v) => ({
-        ...toProjectSummary(
-          v.project,
-          v.role,
-          v.visibility,
-          v.visibleSongCount,
-          projectImageHash(db, v.project),
-        ),
-        bytes: v.visibility === "full" ? (bytes.get(v.project.id) ?? 0) : null,
-      })),
+      projects: visible.map((v) => {
+        const state = states.get(v.project.id);
+        const createdBy = v.project.createdBy;
+        return {
+          ...toProjectSummary(
+            v.project,
+            v.role,
+            v.visibility,
+            v.visibleSongCount,
+            projectImageHash(db, v.project),
+          ),
+          bytes: v.visibility === "full" ? (bytes.get(v.project.id) ?? 0) : null,
+          starred: state?.starredAt != null,
+          lastAccessedAt: state?.lastAccessedAt ?? null,
+          createdBy,
+          createdByName: createdBy ? (creators.get(createdBy) ?? null) : null,
+        };
+      }),
     };
   });
+
+  // Per-user favourites (SPEC §11): events only when the star actually changes.
+  for (const [contract, starred] of [
+    [starProject, true],
+    [unstarProject, false],
+  ] as const) {
+    registerContract(app, contract, ({ user, access }, request) => {
+      if (setProjectStarRow(db, user.id, access.project.id, starred)) {
+        audit(db, request, {
+          action: starred ? "project.starred" : "project.unstarred",
+          projectId: access.project.id,
+          targetType: "project",
+          targetId: access.project.id,
+        });
+      }
+      return { ok: true as const };
+    });
+  }
 
   registerContract(app, createProject, ({ body, user }, request) => {
     const project = createProjectRow(db, { ...body, createdBy: user.id });
@@ -106,7 +143,9 @@ export function registerProjectRoutes(app: FastifyInstance, ctx: AppContext): vo
     return { project: projectDto(db, user, project, "manager", "full") };
   });
 
-  registerContract(app, getProject, ({ user, access }) => {
+  registerContract(app, getProject, ({ user, access }, request) => {
+    // Last accessed (Library sort, SPEC §11): people opening it, not scripts with an API key.
+    if (!request.apiKey) recordProjectAccess(db, user.id, access.project.id);
     return { project: projectDto(db, user, access.project, access.role, access.visibility) };
   });
 

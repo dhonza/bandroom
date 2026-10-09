@@ -3,6 +3,7 @@ import {
   listTrackVersions as listTrackVersionsRepo,
   listVisibleSongs,
   readySongIds,
+  recordProjectAccess,
   reorderTracks,
   reorderTrackVersions as reorderTrackVersionsRepo,
   setCurrentVersion,
@@ -271,7 +272,9 @@ export function registerVersionRoutes(app: FastifyInstance, ctx: AppContext): vo
     return { ok: true as const };
   });
 
-  registerContract(app, getProjectQueue, ({ user, access }) => {
+  registerContract(app, getProjectQueue, ({ user, access }, request) => {
+    // Last accessed (Library sort, SPEC §11): people opening it, not scripts with an API key.
+    if (!request.apiKey) recordProjectAccess(db, user.id, access.project.id);
     const songs = listVisibleSongs(db, user, access.project.id).map(({ song }) => song);
     const ready = readySongIds(
       db,

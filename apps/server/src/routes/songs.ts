@@ -4,6 +4,7 @@ import {
   getUserById,
   planBounce,
   projectImageHash,
+  recordProjectAccess,
   resolveProjectAccess,
   resolveSongAccess,
   removeSongGrantRow,
@@ -57,7 +58,9 @@ export function registerSongRoutes(app: FastifyInstance, ctx: AppContext): void 
     });
   };
 
-  registerContract(app, getSong, ({ user, access }) => {
+  registerContract(app, getSong, ({ user, access }, request) => {
+    // Last accessed (Library sort, SPEC §11): people opening it, not scripts with an API key.
+    if (!request.apiKey) recordProjectAccess(db, user.id, access.project.id);
     const projectRole = resolveProjectAccess(db, user, access.project.id)?.role ?? "none";
     return {
       song: {
