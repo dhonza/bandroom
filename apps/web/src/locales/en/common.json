@@ -940,6 +940,11 @@
   "markers": {
     "sections": "Sections",
     "markers": "Markers",
+    "signatures": "Time signature",
+    "lanes": "Lanes",
+    "lanesMenu": "Show or hide lanes",
+    "showAllLanes": "Show all lanes",
+    "hideAllLanes": "Hide all lanes",
     "sectionLabel": "Section {{name}}, {{start}}–{{end}}",
     "markerLabel": "Marker {{name}} at {{at}}",
     "selectionStart": "Selection start",

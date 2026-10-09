@@ -2,6 +2,7 @@ import type { Marker } from "@bandroom/shared";
 import { Box, Text } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
+import { useLaneVisibility } from "../timeline/laneVisibility";
 import { RULER_H } from "../timeline/Timeline";
 import type { View } from "../timeline/view";
 import { MarkerItem, SectionItem } from "./MarkerItems";
@@ -11,10 +12,14 @@ import { useTimelineUi } from "./store";
 
 export { makeSnapper, tapItem } from "./interaction";
 
-/** Lane heights: touch devices get 44 px section lanes (SPEC §11.1 touch targets). */
-export function useMarkerLayout(markers: readonly Marker[]) {
+/**
+ * Lane heights: touch devices get 44 px section lanes (SPEC §11.1 touch targets); lanes hidden on
+ * this device take no space. `signature`: the song has a tempo map (the time-signature lane).
+ */
+export function useMarkerLayout(markers: readonly Marker[], signature = false) {
   const coarse = useMediaQuery("(pointer: coarse)", false, { getInitialValueInEffect: false });
-  return layoutFor(markers, coarse);
+  const hidden = useLaneVisibility((s) => s.hidden);
+  return layoutFor(markers, coarse, { hidden, signature });
 }
 export type MarkerLayout = ReturnType<typeof useMarkerLayout>;
 
@@ -39,17 +44,21 @@ export function MarkersOverlay({
   const selection = useTimelineUi((s) => s.selection);
   const loopOn = useTimelineUi((s) => s.loopOn);
   const picked = useTimelineUi((s) => s.picked);
-  const markerTop = RULER_H + layout.sectionLanes * layout.sectionH;
+  const markerTop = RULER_H + layout.markersTop;
   const common = { view, markers, durationSec, onCommit };
+  // A hidden lane has no rows: its items are not drawn (sections keep their overview bands).
+  const shown = markers.filter((m) =>
+    m.type === "section" ? layout.sectionLanes > 0 : layout.markerH > 0,
+  );
   return (
     <>
-      {markers.map((m) =>
+      {shown.map((m) =>
         m.type === "section" ? (
           <SectionItem
             key={m.id}
             m={m}
             {...common}
-            top={RULER_H + m.lane * layout.sectionH}
+            top={RULER_H + layout.sectionsTop + m.lane * layout.sectionH}
             height={layout.sectionH}
             picked={picked === m.id}
             editable={canEdit(m)}
@@ -90,6 +99,7 @@ export function TopLaneLabels({
 }) {
   const { t } = useTranslation();
   const rows = [
+    { key: "signature", h: layout.signatureH, label: t("markers.signatures") },
     { key: "sections", h: layout.sectionLanes * layout.sectionH, label: t("markers.sections") },
     { key: "markers", h: layout.markerH, label: t("markers.markers") },
     { key: "comments", h: commentsHeight, label: t("comments.lane") },

@@ -2,6 +2,7 @@ import type { Marker, Song } from "@bandroom/shared";
 import { useCallback, useEffect, useState } from "react";
 import { useSongTempo } from "../tempo/queries";
 import { useTempoUi } from "../tempo/store";
+import { useLaneVisibility } from "../timeline/laneVisibility";
 import { RULER_H, type TimelineProps } from "../timeline/Timeline";
 import type { View } from "../timeline/view";
 import {
@@ -13,6 +14,7 @@ import {
   sectionMatching,
   type Range,
 } from "./model";
+import { LanesMenu } from "./LanesMenu";
 import { useMarkerActions, useMarkerPermissions, useSongMarkers } from "./queries";
 import { COMMENT_ITEM_PREFIX, commentLaneHeight, CommentsLane } from "../comments/CommentsLane";
 import { useSongComments } from "../comments/queries";
@@ -47,6 +49,7 @@ type TimelineMarkerProps = Pick<
   | "topLanesHeight"
   | "renderOverlay"
   | "renderTopHeader"
+  | "renderCorner"
   | "bands"
   | "guides"
   | "overviewRange"
@@ -75,8 +78,11 @@ export function useTimelineMarkers(
   const actions = useMarkerActions(song.id);
   const layout = useMarkerLayout(markers);
   const { comments } = useSongComments(song.id);
-  // The comment lane shows only when the song has comments (SPEC §11.3).
-  const commentH = comments.length > 0 ? commentLaneHeight(layout.coarse) : 0;
+  // The comment lane shows only when the song has comments and it is not hidden (SPEC §11.3).
+  const commentsHidden = useLaneVisibility((s) => s.hidden.comments);
+  const commentH = comments.length > 0 && !commentsHidden ? commentLaneHeight(layout.coarse) : 0;
+  // The lanes menu, once some top lane has items (shown or not).
+  const hasLaneItems = grid !== null || markers.length > 0 || comments.length > 0;
   const selection = useTimelineUi((s) => s.selection);
   const loopOn = useTimelineUi((s) => s.loopOn);
   const [menu, setMenu] = useState<TimelineMenuState | null>(null);
@@ -100,14 +106,17 @@ export function useTimelineMarkers(
     grid,
     topLanesHeight: layout.height + commentH,
     renderTopHeader: () => <TopLaneLabels layout={layout} commentsHeight={commentH} />,
+    ...(hasLaneItems && { renderCorner: () => <LanesMenu /> }),
     renderOverlay: (view: View) => (
       <>
-        <CommentsLane
-          view={view}
-          comments={comments}
-          top={RULER_H + layout.height}
-          height={commentH}
-        />
+        {commentH > 0 && (
+          <CommentsLane
+            view={view}
+            comments={comments}
+            top={RULER_H + layout.height}
+            height={commentH}
+          />
+        )}
         <MarkersOverlay
           view={view}
           markers={markers}

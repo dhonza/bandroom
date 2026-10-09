@@ -43,6 +43,7 @@ import {
   CountInCountdown,
   LoopCountInOptions,
 } from "./ClickControls";
+import { LaneMenuItems } from "../markers/LanesMenu";
 import { LoopButton, SectionReadout } from "../markers/SongMarkers";
 import { goNext, goPrev, playPause, setHelpOpen, setSnap, useTimelineUi } from "../markers/store";
 import { positionSec, retryAudio, seekSec, setPrefs, skip, usePlayerView } from "./controller";
@@ -281,6 +282,9 @@ export function Transport({
                 setClickSettingsOpen(true);
               }}
             />
+            {/* The timeline corner is narrow on phones: the lanes menu is here too. */}
+            <Menu.Divider />
+            <LaneMenuItems />
           </>
         )}
         <Menu.Divider />

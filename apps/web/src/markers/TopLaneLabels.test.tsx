@@ -16,15 +16,19 @@ beforeAll(async () => {
 const marker = { type: "marker", lane: 0 } as Marker;
 const section = { type: "section", lane: 0 } as Marker;
 
-function labels(markers: Marker[], commentsHeight: number) {
+function labels(
+  markers: Marker[],
+  commentsHeight: number,
+  opts: Parameters<typeof layoutFor>[2] = {},
+) {
   const view = render(
     <I18nextProvider i18n={i18n}>
       <MantineProvider>
-        <TopLaneLabels layout={layoutFor(markers, false)} commentsHeight={commentsHeight} />
+        <TopLaneLabels layout={layoutFor(markers, false, opts)} commentsHeight={commentsHeight} />
       </MantineProvider>
     </I18nextProvider>,
   );
-  const shown = ["sections", "markers", "comments"].filter(
+  const shown = ["signature", "sections", "markers", "comments"].filter(
     (k) => screen.queryByTestId(`lane-label-${k}`) !== null,
   );
   view.unmount();
@@ -37,5 +41,18 @@ describe("top lane labels (SPEC §11.3)", () => {
     expect(labels([section], 0)).toEqual(["sections"]);
     expect(labels([section, marker], 28)).toEqual(["sections", "markers", "comments"]);
     expect(labels([], 0)).toEqual([]);
+  });
+
+  it("puts the time-signature lane first, when there is a tempo map", () => {
+    expect(labels([section], 0, { signature: true })).toEqual(["signature", "sections"]);
+  });
+
+  it("has no label for a hidden lane", () => {
+    expect(
+      labels([section, marker], 0, {
+        signature: true,
+        hidden: { sections: true, signature: true },
+      }),
+    ).toEqual(["markers"]);
   });
 });

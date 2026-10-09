@@ -219,9 +219,12 @@ describe("taps and edits", () => {
 describe("timeline items", () => {
   it("sizes lanes for touch and counts section lanes", () => {
     expect(layoutFor(song, false)).toEqual({
+      signatureH: 0,
       sectionH: 30,
       markerH: 24,
       sectionLanes: 2,
+      sectionsTop: 0,
+      markersTop: 60,
       height: 84,
       coarse: false,
     });
@@ -230,7 +233,7 @@ describe("timeline items", () => {
         song.filter((m) => m.type !== "section"),
         true,
       ),
-    ).toEqual({
+    ).toMatchObject({
       sectionH: 44,
       markerH: 36,
       sectionLanes: 0,
@@ -240,7 +243,7 @@ describe("timeline items", () => {
   });
 
   it("gives empty lanes no height", () => {
-    expect(layoutFor([], true)).toEqual({
+    expect(layoutFor([], true)).toMatchObject({
       sectionH: 44,
       markerH: 0,
       sectionLanes: 0,
@@ -256,6 +259,23 @@ describe("timeline items", () => {
       markerH: 0,
       sectionLanes: 2,
       height: 60,
+    });
+  });
+
+  it("puts the signature lane first and gives hidden lanes no height", () => {
+    expect(layoutFor(song, false, { signature: true })).toMatchObject({
+      signatureH: 24,
+      sectionsTop: 24,
+      markersTop: 84,
+      height: 108,
+    });
+    expect(
+      layoutFor(song, false, { signature: true, hidden: { signature: true, sections: true } }),
+    ).toMatchObject({ signatureH: 0, sectionLanes: 0, markersTop: 0, markerH: 24, height: 24 });
+    expect(layoutFor(song, true, { hidden: { markers: true } })).toMatchObject({
+      sectionLanes: 2,
+      markerH: 0,
+      height: 88,
     });
   });
 

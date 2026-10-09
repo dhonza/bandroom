@@ -968,6 +968,11 @@
   "markers": {
     "sections": "Části",
     "markers": "Značky",
+    "signatures": "Takt",
+    "lanes": "Řádky",
+    "lanesMenu": "Zobrazit nebo skrýt řádky",
+    "showAllLanes": "Zobrazit všechny řádky",
+    "hideAllLanes": "Skrýt všechny řádky",
     "sectionLabel": "Část {{name}}, {{start}}–{{end}}",
     "markerLabel": "Značka {{name}} v {{at}}",
     "selectionStart": "Začátek výběru",
