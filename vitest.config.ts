@@ -11,6 +11,8 @@ export default defineConfig({
       thresholds: {
         "packages/shared/src/permissions/**": { lines: 100, branches: 100, functions: 100 },
         "packages/shared/src/tempo/**": { lines: 100, branches: 100, functions: 100 },
+        // SPEC §24.17: the edit model and the timeline remap.
+        "packages/shared/src/edit/**": { lines: 100, functions: 100 },
         "packages/audio-engine/src/tempo.ts": { lines: 100, branches: 100, functions: 100 },
         "apps/web/src/tempo/model.ts": { lines: 100, branches: 100, functions: 100 },
         "packages/shared/src/instruments.ts": { lines: 100, functions: 100 },

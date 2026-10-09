@@ -12,6 +12,7 @@ export * from "./comments";
 export * from "./commentExport";
 export * from "./content";
 export * from "./documents";
+export * from "./edit";
 export * from "./errors";
 export * from "./events";
 export * from "./ids";
