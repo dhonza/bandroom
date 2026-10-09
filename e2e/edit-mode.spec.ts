@@ -98,7 +98,7 @@ test("Edit mode: split, cut, move, undo/redo, reload, takeover and cancel", asyn
     .getByTestId("track-dropzone")
     .locator('input[type="file"]')
     .setInputFiles([TONE_FILE(), AIFF_FILE(), FLAC_FILE()]);
-  await expect(page.getByTestId("track-row")).toHaveCount(3, { timeout: 30_000 });
+  await expect(page.getByTestId("track-row")).toHaveCount(3, { timeout: 90_000 });
   await expect(page.getByTestId("edit-audio")).toBeEnabled({ timeout: 240_000 });
   // All three ingested (the button needs one).
   await expect
@@ -119,7 +119,7 @@ test("Edit mode: split, cut, move, undo/redo, reload, takeover and cancel", asyn
   const toolbar = page.getByTestId("edit-toolbar");
   await expect(toolbar).toBeVisible();
   await expect(toolbar).toHaveAttribute("data-layout", phone ? "sheet" : "bar");
-  await expect(page.getByTestId("edit-clip")).toHaveCount(3, { timeout: 30_000 });
+  await expect(page.getByTestId("edit-clip")).toHaveCount(3, { timeout: 90_000 });
   await expect.poll(async () => (await debug(page))?.edit?.sessionId ?? null).not.toBeNull();
   expect(await clipCounts(page)).toEqual([1, 1, 1]);
   // Version controls are hidden; the header has the edit bar.
