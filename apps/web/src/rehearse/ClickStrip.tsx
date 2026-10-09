@@ -5,16 +5,19 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PanelPopover } from "../components/ResponsivePanel";
 import { trackTint } from "../timeline/render";
-import { ClickSettingsForm, useClickSettings } from "./ClickControls";
+import {
+  CLICK_FADER_MAX,
+  CLICK_FADER_MIN,
+  ClickSettingsForm,
+  clickDbLabel,
+  useClickSettings,
+} from "./ClickControls";
 import { setClickSettings, usePlayerView } from "./controller";
 import { headerButtonSize, headerTier } from "./headerTier";
 import { CLICK_PAINT_ID, paintProps } from "./paintToggle";
 
 /** The click lane's colour (SPEC §11.3): grape, like the transport's Click toggle. */
 export const CLICK_LANE_COLOR = "grape";
-/** The click volume's range, as in the click settings (SPEC §6.7). */
-export const CLICK_FADER_MIN = -40;
-export const CLICK_FADER_MAX = 6;
 
 /**
  * The click's header in the Mixer (SPEC §11.3, DECISIONS 2026-10-07), laid out like a track's
@@ -88,7 +91,7 @@ export function ClickStrip({ height, compact = false }: { height: number; compac
       onChange={(v) => {
         setClickSettings({ gainDb: v });
       }}
-      label={(v) => t("rehearse.db", { value: v > 0 ? `+${v}` : String(v) })}
+      label={(v) => clickDbLabel(t, v)}
       thumbSize={20}
       color={CLICK_LANE_COLOR}
       thumbLabel={t("click.volume")}
@@ -145,7 +148,8 @@ export function ClickStrip({ height, compact = false }: { height: number; compac
           {fader}
         </div>
       )}
-      <ClickSettingsForm />
+      {/* The volume is the strip's fader (inline, or here above), never a second one. */}
+      <ClickSettingsForm hideVolume />
     </Stack>
   );
 

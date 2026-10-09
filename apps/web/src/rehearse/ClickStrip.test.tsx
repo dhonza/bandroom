@@ -87,7 +87,10 @@ describe("ClickStrip (SPEC §11.3, DECISIONS 2026-10-07)", () => {
     expect(screen.queryByTestId("click-fader")).toBeNull();
     await userEvent.click(screen.getByTestId("click-strip-settings"));
     expect(await screen.findByTestId("click-settings")).toBeInTheDocument();
-    expect(screen.getByRole("slider", { name: "Click volume" })).toBeInTheDocument();
+    // Exactly one click volume fader in the panel: the strip's, not the form's as well.
+    expect(screen.getAllByRole("slider", { name: "Click volume" })).toHaveLength(1);
+    expect(screen.getAllByText("Click volume")).toHaveLength(1);
+    expect(screen.getByTestId("click-fader")).toBeInTheDocument();
     expect(document.querySelector("[data-sheet='true']")).not.toBeNull();
     setPhoneViewport(false);
   });

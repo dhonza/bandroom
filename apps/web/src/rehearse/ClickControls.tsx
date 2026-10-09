@@ -16,6 +16,7 @@ import {
 import { IconCheck, IconMetronome, IconSettings } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { AppModal, PanelPopover } from "../components/ResponsivePanel";
 import { useTempoUi } from "../tempo/store";
 import { countInNow, setClickSettings, usePlayerView } from "./controller";
@@ -33,8 +34,20 @@ function useHasTempo(): boolean {
   return useTempoUi((s) => s.grid !== null && s.songId === songId);
 }
 
-/** The full settings form (SPEC §6.7): volume, sound, subdivision, accent, compound, solo. */
-export function ClickSettingsForm() {
+/** The click volume's range, as in the click settings (SPEC §6.7). */
+export const CLICK_FADER_MIN = -40;
+export const CLICK_FADER_MAX = 6;
+
+/** The click fader's value label: "-6 dB", "0 dB", "+6 dB". */
+export function clickDbLabel(t: TFunction, v: number): string {
+  return t("rehearse.db", { value: v > 0 ? `+${v}` : String(v) });
+}
+
+/**
+ * The full settings form (SPEC §6.7): volume, sound, subdivision, accent, compound, solo.
+ * `hideVolume` leaves out the volume fader where the host shows its own (the Mixer's click lane).
+ */
+export function ClickSettingsForm({ hideVolume = false }: { hideVolume?: boolean }) {
   const { t } = useTranslation();
   const c = useClickSettings();
   return (
@@ -47,23 +60,26 @@ export function ClickSettingsForm() {
         }}
         data-testid="click-enabled"
       />
-      <Box>
-        <Text size="sm" mb={4}>
-          {t("click.volume")}
-        </Text>
-        <Slider
-          min={-40}
-          max={6}
-          step={1}
-          value={c.gainDb}
-          label={(v) => t("rehearse.db", { value: v })}
-          onChange={(v) => {
-            setClickSettings({ gainDb: v });
-          }}
-          aria-label={t("click.volume")}
-          thumbSize={22}
-        />
-      </Box>
+      {!hideVolume && (
+        <Box>
+          <Text size="sm" mb={4}>
+            {t("click.volume")}
+          </Text>
+          <Slider
+            min={CLICK_FADER_MIN}
+            max={CLICK_FADER_MAX}
+            step={1}
+            value={Math.max(CLICK_FADER_MIN, c.gainDb)}
+            label={(v) => clickDbLabel(t, v)}
+            onChange={(v) => {
+              setClickSettings({ gainDb: v });
+            }}
+            aria-label={t("click.volume")}
+            thumbLabel={t("click.volume")}
+            thumbSize={22}
+          />
+        </Box>
+      )}
       <Stack gap={4}>
         <Text size="sm">{t("click.sound")}</Text>
         <SegmentedControl
