@@ -381,7 +381,7 @@ function BounceBody({
           leftSection={<IconFileExport size={16} />}
           data-testid="edit-bounce-confirm"
         >
-          {songs
+          {songs && candidates
             ? t("edit.bounceDialog.confirmSongs", { count: titled.length })
             : t("edit.bounceDialog.confirm")}
         </Button>

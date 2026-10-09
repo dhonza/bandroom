@@ -44,12 +44,15 @@ export const editKeys = {
 /** Autosave delay after the last change (SPEC §24.7). */
 export const AUTOSAVE_MS = 1000;
 const RETRY_MS = 5000;
+const APPLY_POLL_MS = 5000;
 
 export function useEditSessionQuery(songId: string, enabled = true) {
   return useQuery({
     queryKey: editKeys.session(songId),
     queryFn: ({ signal }) => api(getEditSession, { params: { id: songId } }, { signal }),
     enabled,
+    // While Apply/Bounce renders, `edit.changed` brings the progress; polling covers a missed one.
+    refetchInterval: (q) => (q.state.data?.session?.status === "applying" ? APPLY_POLL_MS : false),
   });
 }
 
