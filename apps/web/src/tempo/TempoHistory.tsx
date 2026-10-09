@@ -41,7 +41,9 @@ export function TempoHistory({ song, tempo }: { song: Song; tempo: SongTempo | n
               <Text size="xs" c="dimmed" truncate>
                 {r.source === "midi"
                   ? t("tempo.history.midi", { file: r.midiFileName ?? "MIDI" })
-                  : t("tempo.history.manual")}
+                  : r.source === "edit"
+                    ? t("tempo.history.edit")
+                    : t("tempo.history.manual")}
                 {" · "}
                 {new Date(r.createdAt).toLocaleString(i18n.language)}
                 {r.createdByName ? ` · ${r.createdByName}` : ""}

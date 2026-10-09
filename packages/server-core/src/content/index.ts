@@ -21,3 +21,4 @@ export * from "./songStats";
 export * from "./storageBytes";
 export * from "./projectUserState";
 export * from "./editSessions";
+export * from "./visibleVersions";

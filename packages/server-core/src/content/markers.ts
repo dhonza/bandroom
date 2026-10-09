@@ -15,6 +15,7 @@ import {
 import { and, asc, count, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { comments, markers, songs, songVisits, tracks, trackVersions, users } from "../db/schema";
+import { visibleVersion } from "./visibleVersions";
 
 export type MarkerRow = typeof markers.$inferSelect;
 
@@ -341,7 +342,7 @@ export function songWhatsNew(db: Db, userId: string, songId: string): WhatsNew {
       and(
         eq(tracks.songId, songId),
         isNull(tracks.deletedAt),
-        isNull(trackVersions.deletedAt),
+        visibleVersion(),
         gt(trackVersions.createdAt, since),
         byOthers(trackVersions.uploadedBy),
       ),

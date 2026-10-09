@@ -72,7 +72,7 @@ export const TrackVersionSchema = z.object({
   offsetSamples: z.number(),
   /** Gain of this version in dB, before the fader and pan (SPEC §25.6). */
   gainDb: z.number(),
-  source: z.enum(["upload", "recording", "import", "render"]),
+  source: z.enum(["upload", "recording", "import", "render", "edit"]),
   createdAt: z.number(),
   uploadedBy: z.string().nullable(),
   uploaderName: z.string().nullable(),

@@ -6,7 +6,7 @@ import { defineContract } from "./contract";
 
 const IdParams = z.object({ id: z.string().min(1).max(64) });
 
-export const TEMPO_SOURCES = ["midi", "manual"] as const;
+export const TEMPO_SOURCES = ["midi", "manual", "edit"] as const;
 export const TempoSourceSchema = z.enum(TEMPO_SOURCES);
 export type TempoSource = z.infer<typeof TempoSourceSchema>;
 

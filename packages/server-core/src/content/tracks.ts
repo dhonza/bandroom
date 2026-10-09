@@ -21,6 +21,7 @@ import {
 import { assetProbe, type AssetRow } from "../media/assets";
 import type { Probe } from "../media/probe";
 import { touchProject } from "./projects";
+import { visibleVersion } from "./visibleVersions";
 
 export type TrackRow = typeof tracks.$inferSelect;
 export type TrackVersionRow = typeof trackVersions.$inferSelect;
@@ -37,7 +38,7 @@ export function getTrackVersionRow(db: Db, id: string): TrackVersionRow | undefi
   return db
     .select()
     .from(trackVersions)
-    .where(and(eq(trackVersions.id, id), isNull(trackVersions.deletedAt)))
+    .where(and(eq(trackVersions.id, id), visibleVersion()))
     .get();
 }
 
@@ -234,7 +235,7 @@ export function listSongTracks(db: Db, songId: string): TrackListItem[] {
     const versionCount = db
       .select({ id: trackVersions.id })
       .from(trackVersions)
-      .where(and(eq(trackVersions.trackId, track.id), isNull(trackVersions.deletedAt)))
+      .where(and(eq(trackVersions.trackId, track.id), visibleVersion()))
       .all().length;
     const version = track.currentVersionId
       ? getTrackVersionRow(db, track.currentVersionId)
@@ -294,7 +295,7 @@ export function listTrackVersions(db: Db, trackId: string): TrackListVersion[] {
   return db
     .select()
     .from(trackVersions)
-    .where(and(eq(trackVersions.trackId, trackId), isNull(trackVersions.deletedAt)))
+    .where(and(eq(trackVersions.trackId, trackId), visibleVersion()))
     .orderBy(desc(trackVersions.stackOrder), desc(trackVersions.number))
     .all()
     .flatMap((v) => {
@@ -364,7 +365,7 @@ export function softDeleteTrackVersion(
       const next = db
         .select({ id: trackVersions.id })
         .from(trackVersions)
-        .where(and(eq(trackVersions.trackId, v.trackId), isNull(trackVersions.deletedAt)))
+        .where(and(eq(trackVersions.trackId, v.trackId), visibleVersion()))
         .orderBy(desc(trackVersions.number))
         .get();
       track = db
@@ -440,7 +441,7 @@ export function readySongIds(db: Db, songIds: readonly string[]): Set<string> {
         and(
           inArray(tracks.songId, [...songIds]),
           isNull(tracks.deletedAt),
-          isNull(trackVersions.deletedAt),
+          visibleVersion(),
           eq(assets.status, "ready"),
         ),
       )

@@ -1,9 +1,10 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { projects, songs } from "./content";
 import { users } from "./identity";
 
-// Edit mode (SPEC §24.2): one session per editing of a song. Renders come with M18.
+// Edit mode (SPEC §24.2): one session per editing of a song, one render per output of an
+// Apply/Bounce.
 
 export const editSessions = sqliteTable(
   "edit_sessions",
@@ -50,5 +51,49 @@ export const editSessions = sqliteTable(
     uniqueIndex("edit_sessions_active_idx")
       .on(t.songId)
       .where(sql`${t.status} IN ('open', 'applying')`),
+  ],
+);
+
+export const editRenders = sqliteTable(
+  "edit_renders",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => editSessions.id, { onDelete: "cascade" }),
+    /** `<trackId>`, or `<rangeId>:<trackId>` for split into songs. Unique per session. */
+    outputKey: text("output_key").notNull(),
+    /** The edited (source) track. */
+    trackId: text("track_id").notNull(),
+    /** Split into songs: the range (its id) and its index in timeline order. */
+    rangeId: text("range_id"),
+    rangeIndex: integer("range_index"),
+    /** The output track's name and (split into songs) the new song's title. */
+    title: text("title").notNull(),
+    songTitle: text("song_title"),
+    /** Track and song the commit put the version into (new tracks/songs); null before. */
+    targetTrackId: text("target_track_id"),
+    targetSongId: text("target_song_id"),
+    /** The hidden version (`track_versions.edit_session_id` set) and its asset. */
+    versionId: text("version_id"),
+    assetId: text("asset_id"),
+    status: text("status", { enum: ["queued", "running", "done", "failed", "skipped"] }).notNull(),
+    /** JSON `EditClip[]` of this output, frozen when Apply/Bounce was requested. */
+    clips: text("clips").notNull(),
+    /** Timeline position of the output (its first clip) and its length, 48 kHz frames. */
+    offsetSamples: integer("offset_samples").notNull(),
+    lengthFrames: integer("length_frames").notNull(),
+    /** Whether any clip's source is lossy (the render is marked `derivedFromLossy`). */
+    lossySource: integer("lossy_source", { mode: "boolean" }).notNull().default(false),
+    /** True peak of the render, dBTP. */
+    peakDb: real("peak_db"),
+    error: text("error"),
+    attempts: integer("attempts").notNull().default(0),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("edit_renders_output_idx").on(t.sessionId, t.outputKey),
+    index("edit_renders_asset_idx").on(t.assetId),
   ],
 );

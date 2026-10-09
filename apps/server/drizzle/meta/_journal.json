@@ -176,6 +176,13 @@
       "when": 1791578295770,
       "tag": "0024_edit_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1791583255780,
+      "tag": "0025_edit_renders",
+      "breakpoints": true
     }
   ]
 }

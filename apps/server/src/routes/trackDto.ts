@@ -84,7 +84,8 @@ export function toTrackVersion(
           channels: p.channels,
           bitDepth: p.bitDepth,
           codec: p.codec,
-          lossless: p.lossless,
+          // A render of a lossy source keeps the lossy badge (SPEC §24.2).
+          lossless: p.lossless && p.derivedFromLossy !== true,
           dualMono: p.dualMono ?? false,
           integratedLufs: p.loudness?.integratedLufs ?? null,
           truePeakDbtp: p.loudness?.truePeakDbtp ?? null,

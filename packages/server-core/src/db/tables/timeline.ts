@@ -41,7 +41,7 @@ export const tempoMaps = sqliteTable("tempo_maps", {
   songId: text("song_id")
     .primaryKey()
     .references(() => songs.id, { onDelete: "cascade" }),
-  source: text("source", { enum: ["midi", "manual"] }).notNull(),
+  source: text("source", { enum: ["midi", "manual", "edit"] }).notNull(),
   /** JSON `{ segments }`, validated with Zod on read and write. */
   data: text("data").notNull(),
   /** The imported MIDI file (SPEC §7.2), kept as an asset. */
@@ -61,7 +61,7 @@ export const tempoMapRevisions = sqliteTable(
     songId: text("song_id")
       .notNull()
       .references(() => songs.id, { onDelete: "cascade" }),
-    source: text("source", { enum: ["midi", "manual"] }).notNull(),
+    source: text("source", { enum: ["midi", "manual", "edit"] }).notNull(),
     data: text("data").notNull(),
     midiAssetId: text("midi_asset_id").references(() => assets.id, { onDelete: "set null" }),
     bar1OffsetSec: real("bar1_offset_sec").notNull().default(0),

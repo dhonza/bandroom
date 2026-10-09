@@ -60,7 +60,9 @@ export const trackVersions = sqliteTable(
     offsetSamples: integer("offset_samples").notNull().default(0),
     /** Gain of this version in dB, before the fader and pan (SPEC §25.6); any finite number. */
     gainDb: real("gain_db").notNull().default(0),
-    source: text("source", { enum: ["upload", "recording", "import", "render"] }).notNull(),
+    source: text("source", {
+      enum: ["upload", "recording", "import", "render", "edit"],
+    }).notNull(),
     uploadedBy: text("uploaded_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: integer("created_at").notNull(),
     deletedAt: integer("deleted_at"),
@@ -72,8 +74,14 @@ export const trackVersions = sqliteTable(
     archivedBy: text("archived_by").references(() => users.id, { onDelete: "set null" }),
     /** Why (SPEC §28.2–28.3): "removed", "upload" or "reencode"; null for older rows = removed. */
     archivedReason: text("archived_reason", { enum: ["removed", "upload", "reencode"] }),
+    /**
+     * Set while the version is the render of an Apply/Bounce that is not committed yet (SPEC
+     * §24.2): such versions are hidden from every list, DTO, count, mix and download.
+     */
+    editSessionId: text("edit_session_id"),
   },
   (t) => [
+    index("track_versions_edit_idx").on(t.editSessionId),
     index("track_versions_track_idx").on(t.trackId, t.number),
     index("track_versions_asset_idx").on(t.assetId),
   ],

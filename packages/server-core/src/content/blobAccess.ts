@@ -2,6 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { assetVariants, projects, tracks, trackVersions } from "../db/schema";
 import { documentReferrersOfAsset } from "./documents";
+import { visibleVersion } from "./visibleVersions";
 
 /**
  * Track-version variants that carry the lossless audio (or rebuild it): fetchable only with
@@ -39,13 +40,7 @@ export function blobReferrers(db: Db, hash: string): BlobReferrer[] {
       .select({ songId: tracks.songId })
       .from(trackVersions)
       .innerJoin(tracks, eq(tracks.id, trackVersions.trackId))
-      .where(
-        and(
-          eq(trackVersions.assetId, v.assetId),
-          isNull(trackVersions.deletedAt),
-          isNull(tracks.deletedAt),
-        ),
-      )
+      .where(and(eq(trackVersions.assetId, v.assetId), visibleVersion(), isNull(tracks.deletedAt)))
       .all()) {
       out.push({ kind: "song", songId: r.songId, variant: v.variant });
     }

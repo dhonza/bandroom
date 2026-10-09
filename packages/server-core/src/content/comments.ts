@@ -21,6 +21,7 @@ import {
 } from "../db/schema";
 import type { UserRow } from "../auth/users";
 import { resolveSongAccess } from "./access";
+import { visibleVersion } from "./visibleVersions";
 
 export type CommentRow = typeof comments.$inferSelect;
 
@@ -237,7 +238,7 @@ export function captureCommentContext(
           db
             .select({ id: trackVersions.id, trackId: trackVersions.trackId })
             .from(trackVersions)
-            .where(and(inArray(trackVersions.id, wanted), isNull(trackVersions.deletedAt)))
+            .where(and(inArray(trackVersions.id, wanted), visibleVersion()))
             .all()
             .map((v) => [v.id, v.trackId]),
         );
@@ -408,7 +409,7 @@ export function songUploaderIds(db: Db, songId: string): string[] {
     .selectDistinct({ u: trackVersions.uploadedBy })
     .from(trackVersions)
     .innerJoin(tracks, eq(tracks.id, trackVersions.trackId))
-    .where(and(eq(tracks.songId, songId), isNull(trackVersions.deletedAt)))
+    .where(and(eq(tracks.songId, songId), visibleVersion()))
     .all()
     .map((r) => r.u)
     .filter((u): u is string => u !== null);

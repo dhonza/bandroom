@@ -1203,6 +1203,7 @@
       "empty": "Zatím žádné změny tempa.",
       "midi": "MIDI: {{file}}",
       "manual": "Zadáno ručně",
+      "edit": "Posunuto úpravou",
       "current": "Aktuální",
       "restore": "Obnovit",
       "restored": "Tempová mapa obnovena"

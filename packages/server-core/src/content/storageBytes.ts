@@ -15,7 +15,8 @@ const SONG_TRACK_ASSETS = (item: string, where: string) => `
     FROM track_versions v
     JOIN tracks t ON t.id = v.track_id
     JOIN songs s ON s.id = t.song_id
-   WHERE ${where} AND s.deleted_at IS NULL AND t.deleted_at IS NULL AND v.deleted_at IS NULL`;
+   WHERE ${where} AND s.deleted_at IS NULL AND t.deleted_at IS NULL AND v.deleted_at IS NULL
+     AND v.edit_session_id IS NULL`;
 
 /** Tempo MIDI files (current map and history) of live songs. */
 const SONG_MIDI_ASSETS = (item: string, where: string) => `

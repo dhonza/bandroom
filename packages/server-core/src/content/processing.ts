@@ -2,6 +2,7 @@ import type { Processing } from "@bandroom/shared";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { assets, jobs, songs, tracks, trackVersions } from "../db/schema";
+import { visibleVersion } from "./visibleVersions";
 
 /**
  * Jobs that work on a track version's file: a bounce renders it before the ingest (SPEC §5.5); a
@@ -37,7 +38,7 @@ export function processingBySong(db: Db, projectId?: string): Map<string, Proces
       and(
         isNull(tracks.deletedAt),
         isNull(songs.deletedAt),
-        isNull(trackVersions.deletedAt),
+        visibleVersion(),
         inArray(assets.status, ["queued", "processing", "failed"]),
         projectId === undefined ? undefined : eq(songs.projectId, projectId),
       ),

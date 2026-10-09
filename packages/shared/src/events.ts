@@ -102,6 +102,18 @@ export const EVENT_ACTIONS = [
   "edit.session_taken_over",
   /** The session ended without changes (details: ops, by the owner or not). */
   "edit.session_cancelled",
+  /** Apply/Bounce was requested: the session renders (details: kind, outputs). */
+  "edit.render_requested",
+  /** Apply committed (details: tracks, replaced and new version ids). */
+  "edit.applied",
+  /** Bounce committed (details: kind, new version/track/song ids). */
+  "edit.bounced",
+  /** A render or its ingest failed; the session is open again (details: render, error). */
+  "edit.failed",
+  /** The failed renders were queued again. */
+  "edit.retried",
+  /** Markers, sections, comments and the tempo map followed an applied edit (SPEC §24.4). */
+  "timeline.remapped",
   // documents (SPEC §10, §14.1)
   "document.created",
   "document.updated",

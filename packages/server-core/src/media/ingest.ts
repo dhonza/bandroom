@@ -7,7 +7,7 @@ import { recordEvent } from "../events/record";
 import { PermanentJobError, type JobContext, type JobHandler } from "../jobs/types";
 import { getSetting } from "../settings/registry";
 import { audioMd5, detectDualMono, measureLoudness } from "./analysis";
-import { assetIngestOptions, getAsset, setAssetProbe, setAssetStatus } from "./assets";
+import { assetIngestOptions, assetProbe, getAsset, setAssetProbe, setAssetStatus } from "./assets";
 import { encodeFlac, encodeOpus, encodeWavPack } from "./encode";
 import { flacSeekIndex } from "./flacIndex";
 import { opusKbpsFor } from "./opusRates";
@@ -103,7 +103,9 @@ export const audioIngestHandler: JobHandler<
     const signal = withTimeLimit(ctx.signal, mediaTimeLimitMs(probe.durationSec));
     const dualMono =
       probe.lossless && probe.channels === 2 ? await detectDualMono(src, 2, tools, signal) : false;
-    probe = { ...probe, dualMono };
+    // A render of a lossy source stays marked as such (SPEC §24.2).
+    const derived = assetProbe(asset)?.derivedFromLossy === true;
+    probe = { ...probe, dualMono, ...(derived && { derivedFromLossy: true }) };
     setAssetProbe(db, assetId, probe);
     ctx.progress(0.1, "classified");
 

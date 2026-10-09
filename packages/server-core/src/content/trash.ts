@@ -21,6 +21,7 @@ import type { ProjectRow, SongRow } from "./access";
 import type { DocumentRow } from "./documents";
 import { touchProject } from "./projects";
 import { touchSongOfTrack, type TrackRow, type TrackVersionRow } from "./tracks";
+import { visibleVersion } from "./visibleVersions";
 
 // The Trash (SPEC §26.3): restore, list, and purge soft-deleted songs, tracks and versions, and
 // deleted projects and documents.
@@ -54,7 +55,8 @@ export function resolveItem(db: Db, kind: TrashKind, id: string): ResolvedItem |
   let songId: string;
   if (kind === "version") {
     version = db.select().from(trackVersions).where(eq(trackVersions.id, id)).get() ?? null;
-    if (!version) return undefined;
+    // A hidden render of an Apply/Bounce is no item (SPEC §24.2).
+    if (!version || version.editSessionId !== null) return undefined;
     track = db.select().from(tracks).where(eq(tracks.id, version.trackId)).get() ?? null;
     if (!track) return undefined;
     songId = track.songId;
@@ -197,7 +199,7 @@ export function restoreTrackVersionRow(
     ? db
         .select()
         .from(trackVersions)
-        .where(and(eq(trackVersions.id, track.currentVersionId), isNull(trackVersions.deletedAt)))
+        .where(and(eq(trackVersions.id, track.currentVersionId), visibleVersion()))
         .get()
     : undefined;
   const becameCurrent = !current || current.number < v.number;

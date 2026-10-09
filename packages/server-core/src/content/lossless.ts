@@ -18,6 +18,7 @@ import { assetProbe, type AssetRow } from "../media/assets";
 import { opusKbpsFor, standardOpusKbps } from "../media/opusRates";
 import { removeVariant } from "../media/variants";
 import type { TrackRow, TrackVersionRow } from "./tracks";
+import { visibleVersion } from "./visibleVersions";
 
 // Remove full quality (SPEC §26.4): drop the flac, original, wavmeta and wavpack variants of
 // versions, keep Opus and peaks, and mark the versions archived.
@@ -56,7 +57,7 @@ function expandItem(db: Db, kind: TrashKind, id: string): LosslessTarget[] {
           : kind === "track"
             ? eq(tracks.id, id)
             : eq(trackVersions.id, id),
-        isNull(trackVersions.deletedAt),
+        visibleVersion(),
         isNull(tracks.deletedAt),
         isNull(songs.deletedAt),
       ),
@@ -225,7 +226,7 @@ export function planLosslessRemoval(
       : db
           .select({ id: trackVersions.id })
           .from(trackVersions)
-          .where(and(inArray(trackVersions.assetId, assetIds), isNull(trackVersions.deletedAt)))
+          .where(and(inArray(trackVersions.assetId, assetIds), visibleVersion()))
           .all()
           .filter((r) => !targetIds.has(r.id)).length;
 
@@ -272,7 +273,7 @@ export function planForAsset(db: Db, assetId: string): LosslessPlan {
   const versions = db
     .select({ id: trackVersions.id })
     .from(trackVersions)
-    .where(and(eq(trackVersions.assetId, assetId), isNull(trackVersions.deletedAt)))
+    .where(and(eq(trackVersions.assetId, assetId), visibleVersion()))
     .all();
   return planLosslessRemoval(
     db,
@@ -385,6 +386,7 @@ export function lossyBySong(db: Db, projectId: string): Map<string, SongLossy> {
       songId: tracks.songId,
       archivedAt: trackVersions.archivedAt,
       lossless: sql<number | null>`json_extract(${assets.probe}, '$.lossless')`,
+      derived: sql<number | null>`json_extract(${assets.probe}, '$.derivedFromLossy')`,
     })
     .from(tracks)
     .innerJoin(songs, eq(songs.id, tracks.songId))
@@ -395,7 +397,7 @@ export function lossyBySong(db: Db, projectId: string): Map<string, SongLossy> {
         eq(songs.projectId, projectId),
         isNull(songs.deletedAt),
         isNull(tracks.deletedAt),
-        isNull(trackVersions.deletedAt),
+        visibleVersion(),
         eq(assets.status, "ready"),
       ),
     )
@@ -403,7 +405,7 @@ export function lossyBySong(db: Db, projectId: string): Map<string, SongLossy> {
   const flags = new Map<string, boolean[]>();
   for (const r of rows) {
     const list = flags.get(r.songId) ?? [];
-    list.push(r.archivedAt !== null || r.lossless === 0);
+    list.push(r.archivedAt !== null || r.lossless === 0 || r.derived === 1);
     flags.set(r.songId, list);
   }
   return new Map([...flags].map(([songId, f]) => [songId, songLossyOf(f)]));

@@ -13,6 +13,7 @@ import {
   type TrackVersionRow,
 } from "../tracks";
 import { linkPolicyOf, type LinkRow } from "./core";
+import { visibleVersion } from "../visibleVersions";
 
 /** The live project of a link (undefined when it was deleted). */
 export function linkProject(db: Db, link: LinkRow): ProjectRow | undefined {
@@ -95,13 +96,7 @@ function locateVersion(db: Db, versionId: string): VersionLocation | undefined {
     .select({ version: trackVersions, track: tracks })
     .from(trackVersions)
     .innerJoin(tracks, eq(tracks.id, trackVersions.trackId))
-    .where(
-      and(
-        eq(trackVersions.id, versionId),
-        isNull(trackVersions.deletedAt),
-        isNull(tracks.deletedAt),
-      ),
-    )
+    .where(and(eq(trackVersions.id, versionId), visibleVersion(), isNull(tracks.deletedAt)))
     .get();
   return row;
 }
@@ -159,7 +154,7 @@ export function linkCoversBlob(
       .select({ id: trackVersions.id, songId: tracks.songId })
       .from(trackVersions)
       .innerJoin(tracks, eq(tracks.id, trackVersions.trackId))
-      .where(and(eq(trackVersions.assetId, v.assetId), isNull(trackVersions.deletedAt)))
+      .where(and(eq(trackVersions.assetId, v.assetId), visibleVersion()))
       .all();
     const restricted = DOWNLOAD_ONLY_VARIANTS.has(v.variant);
     const covered = versions.some(

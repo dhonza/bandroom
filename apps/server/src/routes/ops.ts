@@ -323,7 +323,7 @@ export function registerOpsRoutes(app: FastifyInstance, ctx: AppContext): void {
          JOIN projects p ON p.id = s.project_id
          JOIN assets a ON a.id = v.asset_id
          LEFT JOIN users u ON u.id = v.uploaded_by
-         WHERE v.created_at >= ?
+         WHERE v.created_at >= ? AND v.edit_session_id IS NULL
          ORDER BY v.created_at DESC LIMIT ?`,
       )
       .all(since, query.limit) as {

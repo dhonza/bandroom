@@ -46,6 +46,11 @@ export const ProbeSchema = z.object({
   /** BWF bext TimeReference (samples since midnight), if present. */
   timeReference: z.number().nullable(),
   dualMono: z.boolean().optional(),
+  /**
+   * The file was rendered from a lossy source (an edit of an MP3, SPEC §24.2): lossless itself,
+   * but shown with the lossy badge.
+   */
+  derivedFromLossy: z.boolean().optional(),
   loudness: z
     .object({
       integratedLufs: z.number().nullable(),
