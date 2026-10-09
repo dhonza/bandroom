@@ -140,15 +140,21 @@ export function registerVersionRoutes(app: FastifyInstance, ctx: AppContext): vo
     const v = getTrackVersionRow(db, access.targetId);
     const track = v && getTrackRow(db, v.trackId);
     if (!v || !track) throw new AppError("NOT_FOUND", "Version not found");
-    const { gainDb, ...text } = body;
+    const { gainDb, offsetSamples, ...text } = body;
     const textChanges = Object.keys(text);
+    const ownVersion = v.uploadedBy === user.id;
+    const ownTrack = track.createdBy === user.id;
     // Label and notes belong to the version's uploader; gain is part of the track's sound, so it
-    // follows the track's edit rule (SPEC §25.6).
-    if (textChanges.length > 0 && !canActOn(access.role, "edit", v.uploadedBy === user.id))
+    // follows the track's edit rule (SPEC §25.6). The position ("Adjust position", SPEC §9) is
+    // the uploader's (a recorded take) or the track's.
+    if (textChanges.length > 0 && !canActOn(access.role, "edit", ownVersion))
       throw new AppError("FORBIDDEN", "Not allowed");
-    if (gainDb !== undefined && !canActOn(access.role, "edit", track.createdBy === user.id))
+    if (gainDb !== undefined && !canActOn(access.role, "edit", ownTrack))
+      throw new AppError("FORBIDDEN", "Not allowed");
+    if (offsetSamples !== undefined && !canActOn(access.role, "edit", ownVersion || ownTrack))
       throw new AppError("FORBIDDEN", "Not allowed");
     const gainChanged = gainDb !== undefined && gainDb !== v.gainDb;
+    const offsetChanged = offsetSamples !== undefined && offsetSamples !== v.offsetSamples;
     db.transaction(() => {
       updateTrackVersionRepo(db, v.id, body);
       const scope = {
@@ -162,6 +168,17 @@ export function registerVersionRoutes(app: FastifyInstance, ctx: AppContext): vo
           action: "version.updated",
           ...scope,
           details: { changes: textChanges },
+        });
+      if (offsetChanged)
+        audit(db, request, {
+          action: "version.updated",
+          ...scope,
+          details: {
+            changes: ["offsetSamples"],
+            trackId: track.id,
+            before: v.offsetSamples,
+            after: offsetSamples,
+          },
         });
       if (gainChanged) {
         audit(db, request, {

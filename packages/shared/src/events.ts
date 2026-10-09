@@ -81,6 +81,8 @@ export const EVENT_ACTIONS = [
   "version.gain_changed",
   "version.deleted",
   "version.uploaded",
+  /** A take recorded in the browser was uploaded (SPEC §9; details as `version.uploaded`). */
+  "version.recorded",
   "version.retried",
   /** The worker attached a rendered file to its version (a bounce, SPEC §5.5). */
   "version.rendered",

@@ -12,6 +12,8 @@ import {
   type UserRow,
 } from "@bandroom/server-core";
 import {
+  canUploadAudio,
+  canUploadNewSong,
   hasGlobalCapability,
   hasScope,
   UploadTargetSchema,
@@ -122,9 +124,21 @@ export function authorizeTarget(
         throw new AppError("FORBIDDEN", "Missing capability admin.access");
       return null;
     case "newTrack":
-      return checkScope(ctx.db, user, "song", target.songId, "upload");
+      return requireAudioUpload(
+        checkScope(ctx.db, user, "song", target.songId, "upload"),
+        target.source === "recording",
+      );
     case "newVersion":
-      return checkScope(ctx.db, user, "track", target.trackId, "upload");
+      return requireAudioUpload(
+        checkScope(ctx.db, user, "track", target.trackId, "upload"),
+        target.source === "recording",
+      );
+    case "newSong": {
+      const access = checkScope(ctx.db, user, "project", target.projectId, "song.create");
+      if (!canUploadNewSong(access.role, target.source === "recording"))
+        throw new AppError("FORBIDDEN", "Missing capability upload or record on the project");
+      return access;
+    }
     case "projectImage":
       return checkScope(ctx.db, user, "project", target.projectId, "settings.manage");
     case "newDocument":
@@ -136,6 +150,13 @@ export function authorizeTarget(
       return access;
     }
   }
+}
+
+/** A recorded take (SPEC §9) also needs `record`, checked by the central permissions module. */
+function requireAudioUpload(access: ScopeAccess, recording: boolean): ScopeAccess {
+  if (!canUploadAudio(access.role, recording))
+    throw new AppError("FORBIDDEN", "Missing capability record");
+  return access;
 }
 
 export function parseTarget(upload: Upload): { target: UploadTarget; filename: string } {

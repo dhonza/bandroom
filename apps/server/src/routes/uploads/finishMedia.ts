@@ -3,6 +3,7 @@ import type { Upload } from "@tus/server";
 import {
   addTrackVersion,
   createOriginalAsset,
+  createSongRow,
   createTrackWithVersion,
   enqueueAudioIngest,
   enqueueLogoIngest,
@@ -17,12 +18,13 @@ import {
   recordEvent,
   setSetting,
   updateProjectRow,
+  type SongRow,
   type UserRow,
 } from "@bandroom/server-core";
 import type { UploadResult, UploadTarget } from "@bandroom/shared";
 import type { AppContext } from "../../context";
 import { AppError } from "../../http/errors";
-import { notifyQuotaFor, notifyVersionUploaded } from "../../notify";
+import { notifyNewSong, notifyQuotaFor, notifyVersionUploaded } from "../../notify";
 import { effectiveQuota, QUOTA_OVERHEAD } from "../../quota";
 import { finishDocumentUpload } from "./finishDocument";
 import {
@@ -99,10 +101,9 @@ export async function finishUpload(
 
   const kind = target.type === "projectImage" ? "image" : "audio";
   // Lossy on upload and the Opus preset (SPEC §28.2), kept on the asset for retries.
-  const options =
-    target.type === "newTrack" || target.type === "newVersion" ? target.options : undefined;
+  const options = target.type === "projectImage" ? undefined : target.options;
   const now = Date.now();
-  const commit = (): UploadResult & { projectId: string; songId: string | null } => {
+  const commit = (): CommitResult => {
     const asset = createOriginalAsset(
       db,
       {
@@ -131,40 +132,56 @@ export async function finishUpload(
         trackVersionId: null,
         projectId: target.projectId,
         songId: null,
+        newSong: null,
       };
     }
-    if (access.scope !== "song" && access.scope !== "track")
-      throw new AppError("INTERNAL", "Unexpected scope");
+    // A recorded take keeps its source and timeline position (SPEC §9).
+    const version = {
+      assetId: asset.id,
+      uploadedBy: user.id,
+      ...(target.source && { source: target.source }),
+      ...(target.offsetSamples !== undefined && { offsetSamples: target.offsetSamples }),
+    };
+    let newSong: SongRow | null = null;
+    let songId: string;
     let trackId: string;
     let versionId: string;
-    if (target.type === "newTrack") {
-      const { track, version } = createTrackWithVersion(
+    if (target.type === "newSong") {
+      newSong = createSongRow(
         db,
-        {
-          songId: target.songId,
-          name: target.name,
-          assetId: asset.id,
-          uploadedBy: user.id,
-        },
+        { projectId: access.project.id, title: target.title, createdBy: user.id },
         now,
       );
-      trackId = track.id;
-      versionId = version.id;
+      const created = createTrackWithVersion(
+        db,
+        { songId: newSong.id, name: target.trackName, ...version },
+        now,
+      );
+      songId = newSong.id;
+      trackId = created.track.id;
+      versionId = created.version.id;
+    } else if (target.type === "newTrack") {
+      if (access.scope !== "song") throw new AppError("INTERNAL", "Unexpected scope");
+      const created = createTrackWithVersion(
+        db,
+        { songId: target.songId, name: target.name, ...version },
+        now,
+      );
+      songId = access.song.id;
+      trackId = created.track.id;
+      versionId = created.version.id;
     } else {
+      if (access.scope !== "track") throw new AppError("INTERNAL", "Unexpected scope");
       const track = getTrackRow(db, target.trackId);
       if (!track) throw new AppError("NOT_FOUND", "Track not found");
-      const version = addTrackVersion(
-        db,
-        { trackId: track.id, assetId: asset.id, uploadedBy: user.id },
-        now,
-      );
+      songId = access.song.id;
       trackId = track.id;
-      versionId = version.id;
+      versionId = addTrackVersion(db, { trackId: track.id, ...version }, now).id;
     }
     enqueueAudioIngest(db, {
       assetId: asset.id,
       projectId: access.project.id,
-      songId: access.song.id,
+      songId,
       trackVersionId: versionId,
       createdBy: user.id,
     });
@@ -173,11 +190,12 @@ export async function finishUpload(
       trackId,
       trackVersionId: versionId,
       projectId: access.project.id,
-      songId: access.song.id,
+      songId,
+      newSong,
     };
   };
   // The event is part of the change (review M14).
-  let result: ReturnType<typeof commit>;
+  let result: CommitResult;
   try {
     result = db.transaction(() => {
       const r = commit();
@@ -189,7 +207,9 @@ export async function finishUpload(
     throw err;
   }
 
-  if ((access.scope === "song" || access.scope === "track") && result.trackVersionId) {
+  if (result.newSong) {
+    notifyNewSong(ctx, { actor: user, project: access.project, song: result.newSong });
+  } else if ((access.scope === "song" || access.scope === "track") && result.trackVersionId) {
     notifyVersionUploaded(ctx, {
       actor: user,
       project: access.project,
@@ -198,7 +218,10 @@ export async function finishUpload(
     });
   }
   notifyQuotaFor(ctx, user);
-  const { projectId, songId, ...body } = result;
+  const { projectId, songId, newSong, ...body } = result;
+  if (newSong) {
+    ctx.hub.publish({ type: "song.created", projectId, songId, data: { songId } });
+  }
   ctx.hub.publish({
     type: target.type === "projectImage" ? "project.updated" : "version.created",
     projectId,
@@ -208,12 +231,19 @@ export async function finishUpload(
   return body;
 }
 
+type CommitResult = UploadResult & {
+  projectId: string;
+  songId: string | null;
+  /** The song a `newSong` upload created. */
+  newSong: SongRow | null;
+};
+
 // The tus hooks have no Fastify request, so events are recorded directly.
 function recordUploadEvent(
   ctx: AppContext,
   req: Request,
   user: UserRow,
-  r: UploadResult & { projectId: string; songId: string | null },
+  r: CommitResult,
   target: UploadTarget,
 ): void {
   const common = {
@@ -233,16 +263,30 @@ function recordUploadEvent(
       details: { changes: ["image"] },
     });
   } else {
+    if (r.newSong) {
+      recordEvent(ctx.db, {
+        ...common,
+        action: "song.created",
+        targetType: "song",
+        targetId: r.newSong.id,
+        details: { title: r.newSong.title },
+      });
+    }
+    const audio =
+      target.type === "newTrack" || target.type === "newVersion" || target.type === "newSong"
+        ? target
+        : null;
+    const recording = audio?.source === "recording";
     recordEvent(ctx.db, {
       ...common,
-      action: "version.uploaded",
+      action: recording ? "version.recorded" : "version.uploaded",
       targetType: "trackVersion",
       targetId: r.trackVersionId,
       details: {
         trackId: r.trackId,
         assetId: r.assetId,
-        ...((target.type === "newTrack" || target.type === "newVersion") &&
-          target.options && { options: target.options }),
+        ...(audio?.options && { options: audio.options }),
+        ...(audio?.offsetSamples !== undefined && { offsetSamples: audio.offsetSamples }),
       },
     });
   }

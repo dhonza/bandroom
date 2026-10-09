@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PaletteColorSchema } from "../content";
 import {
+  OffsetSamplesSchema,
   VersionGainSchema,
   QueueItemSchema,
   StackVersionSchema,
@@ -57,7 +58,8 @@ export const listTrackVersions = defineContract({
 
 /**
  * Label and notes: uploader (contributor+) or editor (SPEC §3.2 edit.own/any). Gain (SPEC §25.6):
- * whoever may edit the track (its creator, or an editor); any finite number of dB.
+ * whoever may edit the track (its creator, or an editor); any finite number of dB. Timeline
+ * position ("Adjust position", SPEC §9): the version's uploader, the track's creator or an editor.
  */
 export const updateTrackVersion = defineContract({
   method: "PATCH",
@@ -68,6 +70,7 @@ export const updateTrackVersion = defineContract({
       label: z.string().trim().max(120),
       notes: z.string().max(5000),
       gainDb: VersionGainSchema,
+      offsetSamples: OffsetSamplesSchema,
     })
     .partial(),
   response: OkSchema,

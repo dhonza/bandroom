@@ -266,6 +266,21 @@ export function canAddSongsTo(role: EffectiveRole): boolean {
   return hasCapability(role, "song.create") && hasCapability(role, "upload");
 }
 
+// --- Audio uploads and recorded takes (SPEC §5.1, §9) -----------------------------------------
+
+/** An audio upload to a song or track: `upload`, and `record` when the file is a recorded take. */
+export function canUploadAudio(role: EffectiveRole, recording: boolean): boolean {
+  return hasCapability(role, "upload") && (!recording || hasCapability(role, "record"));
+}
+
+/**
+ * An audio upload that creates a song (a take recorded on the project page, SPEC §9): adding a
+ * song (`song.create` and `upload`, as for copies) and the audio upload rule.
+ */
+export function canUploadNewSong(role: EffectiveRole, recording: boolean): boolean {
+  return canAddSongsTo(role) && canUploadAudio(role, recording);
+}
+
 // --- Bounce (SPEC §5.5) ---------------------------------------------------------------------------
 
 /** The capability a bounce needs on the source song, and the one it needs on its project. */

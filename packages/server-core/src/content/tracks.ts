@@ -63,6 +63,8 @@ export function createTrackWithVersion(
     assetId: string;
     uploadedBy: string;
     source?: TrackVersionRow["source"];
+    /** Timeline position in samples at 48 kHz (a recorded take, SPEC §9); default 0. */
+    offsetSamples?: number;
     /** Stored instrument (SPEC §30.3), e.g. `mix` for a bounce; default: guessed at read time. */
     instrument?: Instrument | null;
   },
@@ -98,14 +100,7 @@ export function createTrackWithVersion(
       })
       .returning()
       .get();
-    const version = insertVersion(
-      db,
-      track.id,
-      input.assetId,
-      input.uploadedBy,
-      input.source ?? "upload",
-      now,
-    );
+    const version = insertVersion(db, track.id, input, now);
     const updated = db
       .update(tracks)
       .set({ currentVersionId: version.id })
@@ -125,18 +120,13 @@ export function addTrackVersion(
     assetId: string;
     uploadedBy: string;
     source?: TrackVersionRow["source"];
+    /** Timeline position in samples at 48 kHz (a recorded take, SPEC §9); default 0. */
+    offsetSamples?: number;
   },
   now: number = Date.now(),
 ): TrackVersionRow {
   return db.transaction(() => {
-    const version = insertVersion(
-      db,
-      input.trackId,
-      input.assetId,
-      input.uploadedBy,
-      input.source ?? "upload",
-      now,
-    );
+    const version = insertVersion(db, input.trackId, input, now);
     const track = db
       .update(tracks)
       .set({ currentVersionId: version.id })
@@ -151,9 +141,12 @@ export function addTrackVersion(
 function insertVersion(
   db: Db,
   trackId: string,
-  assetId: string,
-  uploadedBy: string,
-  source: TrackVersionRow["source"],
+  input: {
+    assetId: string;
+    uploadedBy: string;
+    source?: TrackVersionRow["source"];
+    offsetSamples?: number;
+  },
   now: number,
 ): TrackVersionRow {
   const last = db
@@ -169,9 +162,10 @@ function insertVersion(
       trackId,
       number,
       stackOrder: number,
-      assetId,
-      source,
-      uploadedBy,
+      assetId: input.assetId,
+      source: input.source ?? "upload",
+      offsetSamples: input.offsetSamples ?? 0,
+      uploadedBy: input.uploadedBy,
       createdAt: now,
     })
     .returning()

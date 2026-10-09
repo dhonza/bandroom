@@ -8,6 +8,8 @@ import {
   canRestoreContainer,
   canAddSongsTo,
   canBounce,
+  canUploadAudio,
+  canUploadNewSong,
   canCopyContent,
   canMoveContent,
   canRemoveLossless,
@@ -396,6 +398,29 @@ describe("Trash and batch rights (SPEC §26.3, §26.6)", () => {
         canMoveContent(role, "track", false),
         canCopyContent(role),
         canAddSongsTo(role),
+      ]).toEqual(want[role]);
+    }
+  });
+});
+
+describe("audio uploads and recorded takes (SPEC §5.1, §9)", () => {
+  it("needs upload, record for a take, and song.create for a new song", () => {
+    // [upload, record a take, new song with upload, new song with a take]
+    const want: Record<EffectiveRole, readonly boolean[]> = {
+      none: [false, false, false, false],
+      viewer: [false, false, false, false],
+      commenter: [false, false, false, false],
+      contributor: [true, true, false, false],
+      editor: [true, true, true, true],
+      manager: [true, true, true, true],
+      admin: [true, true, true, true],
+    };
+    for (const role of [...CONTENT_ROLES, "admin"] as const) {
+      expect([
+        canUploadAudio(role, false),
+        canUploadAudio(role, true),
+        canUploadNewSong(role, false),
+        canUploadNewSong(role, true),
       ]).toEqual(want[role]);
     }
   });

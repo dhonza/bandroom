@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { AudioQualitySchema, UploadOptionsSchema } from "./audioQuality";
-import { PaletteColorSchema } from "./content";
+import { PaletteColorSchema, SongTitleSchema } from "./content";
 import { FormantModeSchema, InstrumentSchema, VoiceRangeSchema } from "./instruments";
 import { VersionArchivedSchema } from "./lossless";
 
@@ -117,19 +117,34 @@ export const TrackSchema = z.object({
 });
 export type Track = z.infer<typeof TrackSchema>;
 
+/** A version's timeline position bound: 24 h at 48 kHz (SPEC §6.5). */
+export const MAX_OFFSET_SAMPLES = 24 * 3600 * 48_000;
+/** A version's timeline position in samples at 48 kHz (SPEC §6.5, §9). */
+export const OffsetSamplesSchema = z.number().int().min(0).max(MAX_OFFSET_SAMPLES);
+
+/**
+ * Audio upload fields of recorded takes (SPEC §9): `source: "recording"` marks a take (it needs
+ * the `record` capability) and `offsetSamples` places it on the timeline. Both are optional.
+ */
+const audioTargetFields = {
+  /** Lossy on upload and the Opus preset (SPEC §28.2); absent = keep full quality. */
+  options: UploadOptionsSchema.optional(),
+  source: z.literal("recording").optional(),
+  offsetSamples: OffsetSamplesSchema.optional(),
+};
+
 /** Where a finished upload goes (tus `Upload-Metadata` field `target`, JSON; SPEC §5.1). */
 export const UploadTargetSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("newTrack"),
     songId: z.string(),
     name: z.string().trim().min(1).max(120),
-    /** Lossy on upload and the Opus preset (SPEC §28.2); absent = keep full quality. */
-    options: UploadOptionsSchema.optional(),
+    ...audioTargetFields,
   }),
   z.object({
     type: z.literal("newVersion"),
     trackId: z.string(),
-    options: UploadOptionsSchema.optional(),
+    ...audioTargetFields,
     /**
      * SHA-256 (lowercase hex) of the file, computed by the client: equal to the current
      * version's original → `DUPLICATE_VERSION`, nothing is uploaded (SPEC §29.5).
@@ -138,6 +153,17 @@ export const UploadTargetSchema = z.discriminatedUnion("type", [
       .string()
       .regex(/^[0-9a-f]{64}$/)
       .optional(),
+  }),
+  /**
+   * A new song with the file as its first track (a take recorded on the project page, SPEC §9):
+   * needs `song.create` and `upload` on the project.
+   */
+  z.object({
+    type: z.literal("newSong"),
+    projectId: z.string(),
+    title: SongTitleSchema,
+    trackName: z.string().trim().min(1).max(120),
+    ...audioTargetFields,
   }),
   z.object({ type: z.literal("projectImage"), projectId: z.string() }),
   /** A new document on the project (SPEC §10, §28.4). */
