@@ -148,6 +148,7 @@ describe("recorded takes (SPEC §9)", () => {
     const created = listEvents(t.db, { action: "song.created" }).at(-1);
     const song = getSongRow(t.db, created?.targetId ?? "");
     expect(song).toMatchObject({ projectId, title: "Recording 2026-10-09 19:30" });
+    expect(result.songId).toBe(song?.id);
     expect(created?.songId).toBe(song?.id);
     const recorded = listEvents(t.db, { action: "version.recorded", targetId: version?.id });
     expect(recorded[0]?.songId).toBe(song?.id);

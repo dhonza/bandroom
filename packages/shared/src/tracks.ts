@@ -185,6 +185,8 @@ export const UploadResultSchema = z.object({
   trackVersionId: z.string().nullable(),
   documentId: z.string().nullable().optional(),
   documentVersionId: z.string().nullable().optional(),
+  /** The song a `newSong` upload created (SPEC §9: the recorder opens it). */
+  songId: z.string().nullable().optional(),
 });
 export type UploadResult = z.infer<typeof UploadResultSchema>;
 

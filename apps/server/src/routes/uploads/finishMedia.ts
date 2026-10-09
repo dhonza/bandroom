@@ -228,7 +228,7 @@ export async function finishUpload(
     songId,
     data: { ...body },
   });
-  return body;
+  return newSong ? { ...body, songId } : body;
 }
 
 type CommitResult = UploadResult & {
