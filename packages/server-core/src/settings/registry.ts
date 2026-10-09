@@ -1,8 +1,10 @@
 import {
   ContentRoleSchema,
   DEFAULT_MAX_TAKE_MINUTES,
+  DEFAULT_PEAK_TARGET_DB,
   LocaleSchema,
   MaxTakeMinutesSchema,
+  PeakTargetDbSchema,
 } from "@bandroom/shared";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -60,6 +62,8 @@ export const SETTINGS = {
   "trash.retentionDays": { schema: z.number().int().min(1).max(3650), default: 30 },
   /** Longest take a browser recording may last, in minutes (SPEC §9); recording stops there. */
   "recording.maxTakeMinutes": { schema: MaxTakeMinutesSchema, default: DEFAULT_MAX_TAKE_MINUTES },
+  /** Where auto level puts a recorded take's loudest peak, in dBFS (SPEC §9). */
+  "recording.peakTargetDb": { schema: PeakTargetDbSchema, default: DEFAULT_PEAK_TARGET_DB },
   /** Instance default per-user quota (SPEC §15.1), 5 GB. */
   defaultQuotaBytes: { schema: z.number().int().min(0), default: 5 * 1024 ** 3 },
 } as const satisfies Record<string, { schema: z.ZodType; default: unknown }>;

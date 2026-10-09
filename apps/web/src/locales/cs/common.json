@@ -343,7 +343,9 @@
       "trashRetentionHint": "Smazané písně, stopy a verze zůstanou v koši tak dlouho, pak se smažou natrvalo a uvolní se jejich místo.",
       "recording": "Nahrávání",
       "recordingMaxTakeMinutes": "Nejdelší nahrávka (minuty)",
-      "recordingMaxTakeHint": "Nahrávání v prohlížeči se po této době zastaví (1–600 minut)."
+      "recordingMaxTakeHint": "Nahrávání v prohlížeči se po této době zastaví (1–600 minut).",
+      "recordingPeakTarget": "Cílová úroveň nahrávky (špička)",
+      "recordingPeakTargetHint": "Při uložení nahrávky se nastaví úroveň tak, aby nejhlasitější špička dosáhla této hodnoty (−24 až 0 dBFS). U každé nahrávky lze změnit."
     },
     "import": {
       "tab": "Import",

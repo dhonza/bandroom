@@ -3,6 +3,7 @@ import { AudioQualitySchema, UploadOptionsSchema } from "./audioQuality";
 import { PaletteColorSchema, SongTitleSchema } from "./content";
 import { FormantModeSchema, InstrumentSchema, VoiceRangeSchema } from "./instruments";
 import { VersionArchivedSchema } from "./lossless";
+import { UploadGainDbSchema } from "./recording";
 
 export const DOWNLOAD_FORMATS = ["original", "flac", "wav", "opus"] as const;
 export type DownloadFormat = (typeof DOWNLOAD_FORMATS)[number];
@@ -124,13 +125,16 @@ export const OffsetSamplesSchema = z.number().int().min(0).max(MAX_OFFSET_SAMPLE
 
 /**
  * Audio upload fields of recorded takes (SPEC §9): `source: "recording"` marks a take (it needs
- * the `record` capability) and `offsetSamples` places it on the timeline. Both are optional.
+ * the `record` capability), `offsetSamples` places it on the timeline and `gainDb` sets its
+ * version gain. All are optional.
  */
 const audioTargetFields = {
   /** Lossy on upload and the Opus preset (SPEC §28.2); absent = keep full quality. */
   options: UploadOptionsSchema.optional(),
   source: z.literal("recording").optional(),
   offsetSamples: OffsetSamplesSchema.optional(),
+  /** The version gain in dB (auto level of a recorded take); absent = 0. */
+  gainDb: UploadGainDbSchema.optional(),
 };
 
 /** Where a finished upload goes (tus `Upload-Metadata` field `target`, JSON; SPEC §5.1). */

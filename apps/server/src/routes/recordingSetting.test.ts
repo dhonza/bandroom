@@ -34,3 +34,27 @@ describe("recording.maxTakeMinutes (SPEC §9)", () => {
     });
   });
 });
+
+describe("recording.peakTargetDb (SPEC §9)", () => {
+  it("defaults to −6 dBFS, is exposed to clients and editable by admins in −24–0", async () => {
+    const meta = async () =>
+      (await call(t, getMeta, undefined)).json<{ recordingPeakTargetDb: number }>()
+        .recordingPeakTargetDb;
+    expect(await meta()).toBe(-6);
+    const update = (value: unknown, cookie = admin) =>
+      call(t, adminUpdateSettings, { body: { recordingPeakTargetDb: value } }, cookie);
+    for (const bad of [0.5, -24.5, "-3"]) expect((await update(bad)).statusCode).toBe(400);
+    expect((await update(-3, member)).statusCode).toBe(403);
+    expect((await update(-1.5)).statusCode).toBe(200);
+    expect(await meta()).toBe(-1.5);
+    expect((await call(t, adminGetSettings, {}, admin)).json()).toMatchObject({
+      settings: { recordingPeakTargetDb: -1.5 },
+    });
+    expect(
+      details(listEvents(t.db, { action: "settings.changed" }).at(-1) ?? { details: null }),
+    ).toMatchObject({
+      before: { recordingPeakTargetDb: -6 },
+      after: { recordingPeakTargetDb: -1.5 },
+    });
+  });
+});

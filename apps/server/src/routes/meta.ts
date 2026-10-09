@@ -30,5 +30,6 @@ export function registerMetaRoutes(
     version: deps.version,
     locales: [...LOCALES],
     recordingMaxTakeMinutes: getSetting(deps.db, "recording.maxTakeMinutes"),
+    recordingPeakTargetDb: getSetting(deps.db, "recording.peakTargetDb"),
   }));
 }

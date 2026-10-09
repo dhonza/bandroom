@@ -337,7 +337,9 @@
       "trashRetentionHint": "Deleted songs, tracks and versions stay in the Trash this long, then they are deleted permanently and their space is freed.",
       "recording": "Recording",
       "recordingMaxTakeMinutes": "Longest recording (minutes)",
-      "recordingMaxTakeHint": "A recording in the browser stops after this long (1–600 minutes)."
+      "recordingMaxTakeHint": "A recording in the browser stops after this long (1–600 minutes).",
+      "recordingPeakTarget": "Recording level target (peak)",
+      "recordingPeakTargetHint": "When a take is saved, its level is set so the loudest peak reaches this (−24 to 0 dBFS). Can be changed per take."
     },
     "import": {
       "tab": "Import",

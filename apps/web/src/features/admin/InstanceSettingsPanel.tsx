@@ -46,6 +46,7 @@ function SettingsForm({ initial }: { initial: InstanceSettings }) {
       defaultProjectRoleGuest: initial.defaultProjectRoleGuest,
       trashRetentionDays: initial.trashRetentionDays as number | string,
       recordingMaxTakeMinutes: initial.recordingMaxTakeMinutes as number | string,
+      recordingPeakTargetDb: initial.recordingPeakTargetDb as number | string,
     },
   });
   const save = useMutation({
@@ -63,6 +64,11 @@ function SettingsForm({ initial }: { initial: InstanceSettings }) {
           trashRetentionDays: Number(v.trashRetentionDays) || initial.trashRetentionDays,
           recordingMaxTakeMinutes:
             Number(v.recordingMaxTakeMinutes) || initial.recordingMaxTakeMinutes,
+          // 0 dBFS is a valid target: only an emptied field keeps the stored value.
+          recordingPeakTargetDb:
+            v.recordingPeakTargetDb === ""
+              ? initial.recordingPeakTargetDb
+              : Number(v.recordingPeakTargetDb),
         },
       }),
     onSuccess: () => {
@@ -136,6 +142,18 @@ function SettingsForm({ initial }: { initial: InstanceSettings }) {
             allowDecimal={false}
             data-testid="recording-max-take"
             {...form.getInputProps("recordingMaxTakeMinutes")}
+          />
+          <NumberInput
+            label={t("admin.settings.recordingPeakTarget")}
+            description={t("admin.settings.recordingPeakTargetHint")}
+            min={-24}
+            max={0}
+            step={0.5}
+            decimalScale={1}
+            allowNegative
+            suffix=" dBFS"
+            data-testid="recording-peak-target"
+            {...form.getInputProps("recordingPeakTargetDb")}
           />
         </Section>
         <Group justify="flex-end">

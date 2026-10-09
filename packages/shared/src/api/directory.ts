@@ -2,7 +2,7 @@ import { z } from "zod";
 import { DirectoryUserSchema } from "../content";
 import { ContentRoleSchema } from "../permissions/content";
 import { LocaleSchema } from "../locales";
-import { MaxTakeMinutesSchema } from "../recording";
+import { MaxTakeMinutesSchema, PeakTargetDbSchema } from "../recording";
 import { defineContract } from "./contract";
 
 /** Active band members and guests (not for guests themselves). */
@@ -22,6 +22,8 @@ export const InstanceSettingsSchema = z.object({
   trashRetentionDays: z.number().int().min(1).max(3650),
   /** Longest browser recording in minutes (SPEC §9). */
   recordingMaxTakeMinutes: MaxTakeMinutesSchema,
+  /** Auto-level peak target of recorded takes in dBFS (SPEC §9). */
+  recordingPeakTargetDb: PeakTargetDbSchema,
 });
 export type InstanceSettings = z.infer<typeof InstanceSettingsSchema>;
 
