@@ -1,4 +1,5 @@
 import { SAMPLE_RATE } from "./constants";
+import { trackLayout } from "./clips";
 import { Emitter } from "./emitter";
 import type {
   CountInState,
@@ -276,8 +277,7 @@ export class Engine {
     const mixer: MixerTrackConfig[] = song.tracks.map((t, i) => ({
       id: t.id,
       source: 1,
-      channels: t.clips[0]?.variant.channels ?? 2,
-      dualMono: t.clips[0]?.variant.dualMono ?? false,
+      ...trackLayout(t.clips),
       clips: mixerClips(t.clips, this.stretches[i], length),
       gainDb: t.gainDb,
       pan: t.pan,
@@ -591,6 +591,13 @@ export class Engine {
 
   get loopRange(): ClipRange | null {
     return this.loop;
+  }
+
+  /** Clips per track id of the loaded song (debug state, SPEC §24.5). */
+  get clipsPerTrack(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const t of this.song?.tracks ?? []) out[t.id] = t.clips.length;
+    return out;
   }
 
   /** The current loop is served from the loop cache (debug state). */

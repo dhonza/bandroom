@@ -1,5 +1,12 @@
 import fs from "node:fs/promises";
-import { createTestDb, getBlob, getVariant, insertUser, makeTempDir } from "@bandroom/server-core";
+import {
+  createTestDb,
+  getBlob,
+  getVariant,
+  insertUser,
+  makeTempDir,
+  readOggOpus,
+} from "@bandroom/server-core";
 import {
   addOriginal,
   createHarness,
@@ -87,6 +94,31 @@ export class IngestedFixtures {
           totalFrames: m.durationSamples48k ?? 0,
           sampleRate: 48_000,
         };
+  }
+
+  /**
+   * An Ogg Opus file served as is (not ingested) under `mem://raw/<name>`, with a seek index read
+   * from its pages like the ingest's (one entry per second). Several names may share one file.
+   */
+  async rawOpus(file: string, names: string[]): Promise<EngineVariant[]> {
+    const bytes = new Uint8Array(await fs.readFile(file));
+    const info = await readOggOpus(file);
+    const index = new TextEncoder().encode(JSON.stringify(info.seekIndex));
+    return names.map((name) => {
+      const url = `mem://raw/${name}`;
+      this.files.set(url, bytes);
+      this.files.set(`${url}/index`, index);
+      return {
+        kind: "opus",
+        hash: `raw-${name}`,
+        url,
+        seekIndexUrl: `${url}/index`,
+        channels: 1,
+        preSkip: info.preSkip,
+        totalFrames: info.totalSamples,
+        sampleRate: 48_000,
+      };
+    });
   }
 
   /** In-memory HTTP with Range support, delivering 16 kB pieces asynchronously. */

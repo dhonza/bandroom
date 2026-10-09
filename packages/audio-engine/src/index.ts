@@ -15,8 +15,20 @@ export {
 } from "./mixer/capture";
 export { CLICK_SOUNDS, type ClickSound, type ClickTrack, type CountInSpec } from "./mixer/click";
 export {
+  addClip,
+  applyEnvelope,
+  clipEnvelope,
+  defaultFetch,
+  fadeInGain,
+  fadeOutGain,
+  trackLayout,
+  type TrackLayout,
+} from "./clips";
+export {
   clipRanges,
+  WINDOWED_OPUS_FRAMES,
   type EngineClip,
+  type FadeShape,
   type EnginePractice,
   type EngineTrack,
   type EngineVariant,

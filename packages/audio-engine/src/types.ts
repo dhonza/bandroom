@@ -20,17 +20,43 @@ export interface EngineVariant {
   /** Source frames: Opus decodable samples at 48 kHz, FLAC frames at `sampleRate`. */
   totalFrames: number;
   sampleRate: number;
+  /**
+   * How the file is fetched (SPEC §24.5): `whole` downloads it progressively and keeps it,
+   * `window` reads Range blocks on demand and drops those behind the playhead. Omitted: Opus
+   * `whole` (switching to `window` when bigger than its share of the budget), FLAC `window`.
+   * Opus versions longer than {@link WINDOWED_OPUS_FRAMES} are read in windows from the start.
+   */
+  fetch?: "whole" | "window";
 }
 
+/** Opus versions longer than this (20 min at 48 kHz) are fetched in windows (SPEC §24.5). */
+export const WINDOWED_OPUS_FRAMES = 20 * 60 * 48_000;
+
+/** The shape of a clip's fade: `linear` (gain t, sums to unity across a crossfade) or sin/cos. */
+export type FadeShape = "linear" | "equalPower";
+
 /**
- * A clip on the timeline (SPEC §6.3). v1 has one clip per track: the listened version at its
- * `offsetSamples`. Source frame `sourceOffsetFrame + (t − startFrame)` plays at timeline frame t.
+ * A clip on the timeline (SPEC §6.3, §24.5): a piece of one version's file. Source frame
+ * `sourceOffsetFrame + (t − startFrame)` plays at timeline frame t. Outside edit mode a track has
+ * one clip (the listened version at its `offsetSamples`); in edit mode it may have several, from
+ * different versions (each clip has its own `variant`), overlapping (they are summed) or with
+ * gaps (silence).
  */
 export interface EngineClip {
   startFrame: number;
   sourceOffsetFrame: number;
   lengthFrames: number;
   variant: EngineVariant;
+  /** Clip gain in dB (default 0). */
+  gainDb?: number;
+  /** Fade-in over the clip's first frames (default 0 = hard edge). */
+  fadeInFrames?: number;
+  /** Fade-out over the clip's last frames (default 0 = hard edge). */
+  fadeOutFrames?: number;
+  /** Default `linear`. */
+  fadeInShape?: FadeShape;
+  /** Default `linear`. */
+  fadeOutShape?: FadeShape;
 }
 
 export interface EngineTrack {
@@ -96,8 +122,19 @@ export interface SongTimeline {
   openEnd?: boolean;
 }
 
-export function clipRanges(clips: EngineClip[]): ClipRange[] {
-  return clips.map((c) => ({ start: c.startFrame, end: c.startFrame + c.lengthFrames }));
+/** The timeline ranges with audio: the union of the clips, sorted and merged. */
+export function clipRanges(clips: readonly EngineClip[]): ClipRange[] {
+  const sorted = clips
+    .filter((c) => c.lengthFrames > 0)
+    .map((c) => ({ start: c.startFrame, end: c.startFrame + c.lengthFrames }))
+    .sort((a, b) => a.start - b.start);
+  const out: ClipRange[] = [];
+  for (const r of sorted) {
+    const last = out[out.length - 1];
+    if (last && r.start <= last.end) last.end = Math.max(last.end, r.end);
+    else out.push(r);
+  }
+  return out;
 }
 
 export interface WorkerTrackSpec {

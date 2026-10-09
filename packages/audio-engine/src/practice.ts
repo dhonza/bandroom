@@ -1,3 +1,4 @@
+import { trackLayout } from "./clips";
 import type { ClipRange } from "./mixer/types";
 import {
   clipRanges,
@@ -69,7 +70,7 @@ export function workerStretch(
     voiceBaseHz: p.voiceBaseHz,
     formant: p.formant,
     formantShift: shift,
-    channels: clips[0]?.variant.channels ?? 2,
+    channels: trackLayout(clips).channels,
     silent: muted,
     timelineFrames,
   };

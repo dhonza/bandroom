@@ -19,7 +19,7 @@ describe("SparseFile", () => {
     expect(f.nextMissing(8)).toBe(16);
     f.size = 16;
     expect(f.complete).toBe(false);
-    f.evictBefore(9);
+    f.retain([{ start: 9, end: Infinity }]);
     expect(f.has(0)).toBe(false);
     expect(f.has(10)).toBe(true);
     expect(f.stored).toBe(8); // only 0–1 dropped (8–9 ends after 9)
@@ -48,10 +48,25 @@ describe("SparseFile", () => {
     f.add(26, new Uint8Array(10).fill(5)); // fills 26–29 up to the next piece
     expect(f.nextMissing(0)).toBe(25);
     expect(f.nextMissing(26)).toBe(34);
-    f.evictBefore(26);
+    f.retain([{ start: 26, end: Infinity }]);
     expect(f.stored).toBe(8);
     expect(f.has(24)).toBe(false);
     expect(f.has(26)).toBe(true);
+  });
+
+  it("retains only the pieces near the given ranges", () => {
+    const f = new SparseFile();
+    for (const at of [0, 100, 200, 300]) f.add(at, new Uint8Array(10).fill(1));
+    f.retain([
+      { start: 105, end: 106 },
+      { start: 290, end: 400 },
+    ]);
+    expect(f.stored).toBe(20);
+    expect([0, 100, 200, 300].map((at) => f.has(at))).toEqual([false, true, false, true]);
+    f.retain([{ start: 0, end: 1000 }]); // nothing to drop
+    expect(f.stored).toBe(20);
+    f.retain([]);
+    expect(f.stored).toBe(0);
   });
 });
 

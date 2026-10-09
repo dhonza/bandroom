@@ -2,15 +2,14 @@ import path from "node:path";
 import { FIXTURES_DIR, generateFixtures } from "@bandroom/fixtures";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FlacCodec } from "../decode/streams";
-import { createFlacCodec, createOpusCodec } from "../decode/wasm";
+import { createFlacCodec } from "../decode/wasm";
 import { applyMixerCommand } from "../mixer/apply";
-import { LAPS_PER_SEEK, MixerCore, type MixerEvent, type MixerTrackConfig } from "../mixer/core";
-import { loadStretch } from "@bandroom/stretch/node";
-import { mixerClips, playbackLength, workerStretch } from "../practice";
+import { LAPS_PER_SEEK } from "../mixer/core";
+import { workerStretch } from "../practice";
 import { IngestedFixtures } from "../testing/ingested";
+import { Rig } from "../testing/rig";
 import type { EngineClip, EnginePractice, EngineVariant, TrackStretchPolicy } from "../types";
 import type { FetchLike, FileFetcher } from "./bytes";
-import { DecodeScheduler } from "./scheduler";
 
 /**
  * Decoder worker + mixer end to end in Node: in-memory HTTP (with Range), real WASM decoders,
@@ -47,154 +46,12 @@ const clip = (variant: EngineVariant, startFrame = 0): EngineClip => ({
   variant,
 });
 
-/** Output recorded per timeline position (lap, frame) → samples of channel `ch`. */
-class Rig {
-  events: MixerEvent[] = [];
-  core = new MixerCore((e) => {
-    this.events.push(structuredClone(e));
-    // The worklet forwards loop changes to the decoder worker.
-    if (e.type === "retime") this.sched.retime(e.fromLap, e.frame, e.base, e.loop, e.cache);
-  });
-  sched: DecodeScheduler;
-
-  /** `fetch` wraps the in-memory server (to stall or fail requests). */
-  constructor(
-    private readonly fetch: FetchLike = fx.fetch,
-    budget: { cacheBytes: number; minWholeBytes?: number } = { cacheBytes: 256 * 1024 * 1024 },
-    flacCodec: () => Promise<FlacCodec> = createFlacCodec,
-  ) {
-    this.sched = new DecodeScheduler(
-      {
-        fetch: (url, init) => this.fetch(url, init),
-        opusCodec: createOpusCodec,
-        flacCodec,
-        stretch: loadStretch,
-        toMixer: (msg) => {
-          applyMixerCommand(this.core, msg);
-        },
-        toMain: (msg) => {
-          if (msg.t === "error") this.errors.push(msg.index);
-        },
-        yieldNow: () => new Promise((r) => setTimeout(r, 0)),
-        retry: { baseMs: 10, attempts: 3 },
-        ...(budget.minWholeBytes !== undefined ? { minWholeBytes: budget.minWholeBytes } : {}),
-      },
-      budget.cacheBytes,
-      4 * 48_000,
-    );
-  }
-
-  heard = new Map<number, { l: Float32Array; r: Float32Array }>(); // lap → timeline samples
-  /** Tracks the decoder reported as failed. */
-  errors: number[] = [];
-  private length = 0;
-
-  /** Loads tracks; with `practice`, positions are playback frames (the engine converts). */
-  load(
-    clips: EngineClip[][],
-    practice?: EnginePractice,
-    opts: { policies?: TrackStretchPolicy[]; muted?: boolean[] } = {},
-  ) {
-    const timeline = Math.max(...clips.flat().map((c) => c.startFrame + c.lengthFrames));
-    this.length = playbackLength(timeline, practice?.rate ?? 1);
-    const stretches = clips.map((cs, i) =>
-      practice
-        ? workerStretch(practice, opts.policies?.[i], opts.muted?.[i] ?? false, cs, timeline)
-        : null,
-    );
-    const mixer: MixerTrackConfig[] = clips.map((cs, i) => ({
-      id: `t${i}`,
-      source: 1,
-      channels: cs[0]?.variant.channels ?? 2,
-      clips: mixerClips(cs, stretches[i], this.length),
-      gainDb: 0,
-      pan: 0,
-      mute: opts.muted?.[i] ?? false,
-      solo: false,
-    }));
-    this.heard.clear();
-    this.sched.load(
-      1,
-      clips.map((cs, index) => ({ index, source: 1, clips: cs, stretch: stretches[index] })),
-      this.length,
-      mixer,
-    );
-    this.core.startFrames = 24_000;
-  }
-
-  seek(frame: number, lap: number) {
-    this.sched.seek(frame, lap);
-    this.core.seek(frame, lap);
-  }
-
-  /** Renders until `frames` were played (paced by the decoder), recording what was heard. */
-  async play(frames: number, timeoutMs = 60_000) {
-    this.core.play();
-    const l = new Float32Array(128);
-    const r = new Float32Array(128);
-    const deadline = Date.now() + timeoutMs;
-    let played = 0;
-    while (played < frames) {
-      if (Date.now() > deadline) throw new Error(`timeout after ${played} frames`);
-      const pos = this.core.position;
-      if (pos.state === "stopped") break;
-      // Producers stop short of a full window; near the end every remaining frame is needed.
-      const need = Math.min(this.sched.windowFrames - 2048, this.length - pos.frame);
-      const ahead = this.sched.ahead().filter((_, i) => !this.errors.includes(i));
-      if (pos.state === "playing" && Math.min(...ahead) < need) {
-        await new Promise((res) => setTimeout(res, 1));
-        continue;
-      }
-      if (pos.state === "buffering") await new Promise((res) => setTimeout(res, 1));
-      this.core.mixBlock(l, r, 128, 0);
-      const after = this.core.position;
-      if (pos.state === "playing" && after.lap === pos.lap) {
-        let buf = this.heard.get(pos.lap);
-        if (!buf) {
-          buf = { l: new Float32Array(this.length), r: new Float32Array(this.length) };
-          this.heard.set(pos.lap, buf);
-        }
-        const n = Math.min(128, after.frame - pos.frame);
-        buf.l.set(l.subarray(0, n), pos.frame);
-        buf.r.set(r.subarray(0, n), pos.frame);
-        played += n;
-      }
-      this.sched.position(after.frame, after.lap);
-    }
-  }
-
-  peak(lap: number, ch: "l" | "r", around: number, window = 300): number {
-    const buf = this.heard.get(lap)?.[ch];
-    if (!buf) return -1;
-    let best = -1;
-    let bestAbs = -1;
-    for (let i = around - window; i < around + window; i++) {
-      const a = Math.abs(buf[i] ?? 0);
-      if (a > bestAbs) {
-        bestAbs = a;
-        best = i;
-      }
-    }
-    return best;
-  }
-
-  get underruns() {
-    return this.events.flatMap((e) =>
-      e.type === "report" ? [...e.underruns].filter((frames) => frames > 0) : [],
-    );
-  }
-
-  dispose() {
-    this.sched.dispose();
-  }
-}
-
 describe("decoder worker + mixer", () => {
   it(
     "plays Opus and resampled FLAC tracks sample-aligned with a clip offset",
     { timeout: 120_000 },
     async () => {
-      const rig = new Rig();
+      const rig = new Rig(fx.fetch);
       const a = await fx.variant(mono48, "opus"); // mono: left gain cos(π/4)
       const b = await fx.variant(stereo44, "flac"); // 44.1 kHz → resampled
       rig.load([[clip(a)], [clip(b, 1000)]]);
@@ -214,7 +71,7 @@ describe("decoder worker + mixer", () => {
   );
 
   it("seeks near the end right after loading", { timeout: 120_000 }, async () => {
-    const rig = new Rig();
+    const rig = new Rig(fx.fetch);
     const v = await fx.variant(long44, "opus");
     rig.load([[clip(v)]]);
     const target = 60 * 48_000 - 24_000;
@@ -227,7 +84,7 @@ describe("decoder worker + mixer", () => {
   });
 
   it("drops mixer messages about an earlier song load", async () => {
-    const rig = new Rig();
+    const rig = new Rig(fx.fetch);
     const v = await fx.variant(mono48, "opus");
     rig.load([[clip(v)]]); // load id 1
     const position = vi.spyOn(rig.sched, "position");
@@ -446,7 +303,7 @@ describe("decoder worker + mixer", () => {
   );
 
   it("switches quality mid-song without losing sync", { timeout: 120_000 }, async () => {
-    const rig = new Rig();
+    const rig = new Rig(fx.fetch);
     const opus = await fx.variant(stereo44, "opus");
     const flac = await fx.variant(stereo44, "flac");
     rig.load([[clip(opus)]]);
@@ -459,7 +316,7 @@ describe("decoder worker + mixer", () => {
   });
 
   it("loops lap after lap with the impulse at the same frame", { timeout: 120_000 }, async () => {
-    const rig = new Rig();
+    const rig = new Rig(fx.fetch);
     const v = await fx.variant(mono48, "opus");
     rig.load([[clip(v)]]);
     const loop = { start: 100_000, end: 160_000 };
@@ -478,7 +335,7 @@ describe("decoder worker + mixer", () => {
     "plays loop repeats from the loop cache after one decoded lap",
     { timeout: 120_000 },
     async () => {
-      const rig = new Rig();
+      const rig = new Rig(fx.fetch);
       const a = await fx.variant(mono48, "opus");
       const b = await fx.variant(stereo44, "flac");
       rig.load([[clip(a)], [clip(b, 1000)]]);
@@ -502,7 +359,7 @@ describe("decoder worker + mixer", () => {
   );
 
   it("sets and moves a loop while playing, keeping sync", { timeout: 120_000 }, async () => {
-    const rig = new Rig();
+    const rig = new Rig(fx.fetch);
     const v = await fx.variant(mono48, "opus");
     rig.load([[clip(v)]]);
     rig.seek(120_000, LAPS_PER_SEEK);
@@ -536,7 +393,7 @@ describe("decoder worker + mixer with practice speed and pitch (SPEC §30.5)", (
     async (rate) => {
       // One track per rig: in a shared mix the other track's impulse can be the louder peak.
       const at = async (variant: EngineVariant, offset: number, ch: "l" | "r") => {
-        const rig = new Rig();
+        const rig = new Rig(fx.fetch);
         rig.load([[clip(variant, offset)]], { rate, semitones: 0, quality: "high" });
         await rig.play(Math.floor((6 * 48_000 + offset) / rate));
         expect(rig.underruns).toEqual([]);
@@ -560,7 +417,7 @@ describe("decoder worker + mixer with practice speed and pitch (SPEC §30.5)", (
   );
 
   it("transposes without moving the impulses at 100 %", { timeout: 180_000 }, async () => {
-    const rig = new Rig();
+    const rig = new Rig(fx.fetch);
     const a = await fx.variant(mono48, "opus");
     rig.load([[clip(a)]], { rate: 1, semitones: -3, quality: "economy" });
     await rig.play(6 * 48_000);
@@ -570,8 +427,8 @@ describe("decoder worker + mixer with practice speed and pitch (SPEC §30.5)", (
   });
 
   it("keeps a track that is not transposed bit-identical at 100 %", async () => {
-    const plain = new Rig();
-    const practice = new Rig();
+    const plain = new Rig(fx.fetch);
+    const practice = new Rig(fx.fetch);
     const a = await fx.variant(mono48, "opus");
     plain.load([[clip(a)]]);
     const drums: TrackStretchPolicy = {
@@ -590,7 +447,7 @@ describe("decoder worker + mixer with practice speed and pitch (SPEC §30.5)", (
   });
 
   it("plays a formant shift alone at 100 % with the impulses in place", async () => {
-    const rig = new Rig();
+    const rig = new Rig(fx.fetch);
     const a = await fx.variant(mono48, "opus");
     const voice: TrackStretchPolicy = {
       transpose: true,
@@ -608,7 +465,7 @@ describe("decoder worker + mixer with practice speed and pitch (SPEC §30.5)", (
   });
 
   it("seeks at 75 % to the stretched position", { timeout: 180_000 }, async () => {
-    const rig = new Rig();
+    const rig = new Rig(fx.fetch);
     const a = await fx.variant(mono48, "opus");
     rig.load([[clip(a)]], { rate: 0.75, semitones: 0, quality: "high" });
     const p = Math.round(120_000 / 0.75);
@@ -624,7 +481,7 @@ describe("decoder worker + mixer with practice speed and pitch (SPEC §30.5)", (
     "loops at 50 % with the impulse on the same frame every lap (cache %s)",
     { timeout: 240_000 },
     async (cache) => {
-      const rig = new Rig();
+      const rig = new Rig(fx.fetch);
       const a = await fx.variant(mono48, "opus");
       rig.load([[clip(a)]], { rate: 0.5, semitones: -1, quality: "high" });
       const loop = { start: 200_000, end: 320_000 }; // 100 000…160 000 on the timeline
@@ -644,7 +501,7 @@ describe("decoder worker + mixer with practice speed and pitch (SPEC §30.5)", (
   );
 
   it("plays a muted track as silence and switches it back in when unmuted", async () => {
-    const rig = new Rig();
+    const rig = new Rig(fx.fetch);
     const a = await fx.variant(mono48, "opus");
     const practice: EnginePractice = { rate: 0.75, semitones: 0, quality: "high" };
     rig.load([[clip(a)]], practice, { muted: [true] });

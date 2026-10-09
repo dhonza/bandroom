@@ -5,6 +5,7 @@ import type { FlacCodec, OpusCodec } from "../decode/streams";
 import type { ClipRange, MixerTrackConfig } from "../mixer/core";
 import type { MixerCommand, ToDecoder } from "../mixer/protocol";
 import type { StretchModule } from "@bandroom/stretch";
+import { fetchModeOf, trackLayout } from "../clips";
 import { mixerClips } from "../practice";
 import type {
   EngineClip,
@@ -32,6 +33,8 @@ export interface SchedulerDeps {
   retry?: RetryPolicy;
   /** Files up to this size are always kept whole (default 8 MB; tests lower it). */
   minWholeBytes?: number;
+  /** Bytes kept per window-read file before far blocks are dropped (default 16 MB; tests). */
+  windowKeepBytes?: number;
 }
 
 /** Lead before a version/quality switch takes effect, so the new source is decoded in time. */
@@ -176,8 +179,7 @@ export class DecodeScheduler {
       lap++;
       frame = l.start + (frame - l.end);
     }
-    const channels = clips[0]?.variant.channels ?? 2;
-    const dualMono = clips[0]?.variant.dualMono ?? false;
+    const { channels, dualMono } = trackLayout(clips);
     this.deps.toMixer(
       {
         t: "source",
@@ -244,6 +246,9 @@ export class DecodeScheduler {
       opusCodec: (ch) => this.deps.opusCodec(ch),
       flacCodec: () => this.deps.flacCodec(),
       stretch: () => this.deps.stretch(),
+      ...(this.deps.windowKeepBytes !== undefined && {
+        windowKeepBytes: this.deps.windowKeepBytes,
+      }),
     };
     const emit = (chunk: { lap: number; frame: number; data: Float32Array[] }) => {
       this.deps.toMixer(
@@ -276,7 +281,7 @@ export class DecodeScheduler {
       const fetcher = new FileFetcher(
         v.url,
         new SparseFile(),
-        v.kind === "opus" ? "whole" : "window",
+        fetchModeOf(v),
         this.deps.fetch,
         () => {
           this.wake();

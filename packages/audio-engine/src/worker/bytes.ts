@@ -89,16 +89,17 @@ export class SparseFile {
     return this.size !== null && this.nextMissing(0) >= this.size;
   }
 
-  /** Drops pieces that end before `offset` (FLAC blocks behind the playhead). */
-  evictBefore(offset: number): void {
-    // Pieces are sorted and disjoint: the ones ending before `offset` are a prefix.
-    let n = 0;
-    for (const p of this.pieces) {
-      if (p.start + p.bytes.length > offset) break;
-      this.stored -= p.bytes.length;
-      n++;
-    }
-    this.pieces.splice(0, n);
+  /**
+   * Keeps only the pieces that overlap one of `ranges` (`[start, end)` byte ranges; a window file
+   * read at several places, SPEC §24.5).
+   */
+  retain(ranges: readonly { start: number; end: number }[]): void {
+    const kept = this.pieces.filter((p) =>
+      ranges.some((r) => p.start < r.end && p.start + p.bytes.length > r.start),
+    );
+    if (kept.length === this.pieces.length) return;
+    this.pieces = kept;
+    this.stored = kept.reduce((n, p) => n + p.bytes.length, 0);
   }
 
   clear(): void {
@@ -138,7 +139,8 @@ export const WINDOW_BLOCK = 2 * 1024 * 1024;
 
 /**
  * One fetch at a time per file. `whole` mode (Opus) streams the file progressively and then fills
- * gaps left by seeks; `window` mode (FLAC) reads 2 MB Range blocks on demand. A `whole` file
+ * gaps left by seeks; `window` mode (FLAC, and Opus versions over 20 min) reads 2 MB Range blocks
+ * on demand. A `whole` file
  * larger than `wholeLimit` (a long recording) switches to `window` once its size is known, so the
  * current song's compressed bytes stay within the cache budget (SPEC §6.4). Network errors and
  * HTTP 5xx are retried with backoff; a 4xx or too many failures in a row are final (`error`) until
