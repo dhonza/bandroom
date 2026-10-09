@@ -217,15 +217,15 @@ describe("taps and edits", () => {
 });
 
 describe("timeline items", () => {
-  it("sizes lanes for touch and counts section lanes", () => {
+  it("sizes lanes for touch (compact with a mouse) and counts section lanes", () => {
     expect(layoutFor(song, false)).toEqual({
       signatureH: 0,
-      sectionH: 30,
-      markerH: 24,
+      sectionH: 22,
+      markerH: 20,
       sectionLanes: 2,
       sectionsTop: 0,
-      markersTop: 60,
-      height: 84,
+      markersTop: 44,
+      height: 64,
       coarse: false,
     });
     expect(
@@ -258,20 +258,20 @@ describe("timeline items", () => {
     ).toMatchObject({
       markerH: 0,
       sectionLanes: 2,
-      height: 60,
+      height: 44,
     });
   });
 
   it("puts the signature lane first and gives hidden lanes no height", () => {
     expect(layoutFor(song, false, { signature: true })).toMatchObject({
-      signatureH: 24,
-      sectionsTop: 24,
-      markersTop: 84,
-      height: 108,
+      signatureH: 20,
+      sectionsTop: 20,
+      markersTop: 64,
+      height: 84,
     });
     expect(
       layoutFor(song, false, { signature: true, hidden: { signature: true, sections: true } }),
-    ).toMatchObject({ signatureH: 0, sectionLanes: 0, markersTop: 0, markerH: 24, height: 24 });
+    ).toMatchObject({ signatureH: 0, sectionLanes: 0, markersTop: 0, markerH: 20, height: 20 });
     expect(layoutFor(song, true, { hidden: { markers: true } })).toMatchObject({
       sectionLanes: 2,
       markerH: 0,

@@ -145,6 +145,7 @@ export function SectionItem(props: ItemProps) {
       <Text
         size="xs"
         fw={700}
+        lh={1.2}
         truncate
         c={`var(--mantine-color-${m.color}-light-color)`}
         style={{ pointerEvents: "none" }}
@@ -198,6 +199,7 @@ export function MarkerItem(props: ItemProps) {
       <Text
         size="xs"
         fw={600}
+        lh={1.3}
         truncate
         px={4}
         style={{

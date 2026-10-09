@@ -7,9 +7,9 @@ import { secToX, type View } from "../timeline/view";
 import { authorColor, initials, laneComments } from "./model";
 import { useCommentsUi } from "./store";
 
-/** Comment lane height: 44 px on touch devices (SPEC §11.1 touch targets). */
+/** Comment lane height: 44 px on touch devices (SPEC §11.1 touch targets), compact with a mouse. */
 export function commentLaneHeight(coarse: boolean): number {
-  return coarse ? 44 : 28;
+  return coarse ? 44 : 20;
 }
 
 /** Prefix of comment ids in `data-timeline-item` (taps arrive via the timeline's onItemTap). */
@@ -33,7 +33,7 @@ export function CommentsLane({
   const { t } = useTranslation();
   const showResolved = useCommentsUi((s) => s.filters.showResolved);
   const highlighted = useCommentsUi((s) => s.highlighted);
-  const size = Math.min(height - 6, 24);
+  const size = Math.min(height - 4, 24);
   const ink = useInkOnColor();
   return (
     <>
@@ -101,7 +101,7 @@ export function CommentsLane({
                 pointerEvents: "none",
               }}
             >
-              <Text size="10px" fw={700} c={ink(color)} lh={1}>
+              <Text size={size < 18 ? "9px" : "10px"} fw={700} c={ink(color)} lh={1}>
                 {initials(c.author.name || "?")}
               </Text>
             </Box>

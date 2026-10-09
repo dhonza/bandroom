@@ -117,7 +117,7 @@ export function TopLaneLabels({
             style={{ display: "flex", alignItems: "center", minWidth: 0 }}
             data-testid={`lane-label-${r.key}`}
           >
-            <Text size="xs" c="dimmed" truncate="end">
+            <Text size="xs" lh={1.1} c="dimmed" truncate="end">
               {r.label}
             </Text>
           </Box>
