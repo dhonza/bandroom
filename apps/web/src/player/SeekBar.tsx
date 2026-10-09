@@ -1,5 +1,5 @@
 import { Box, Group, Slider, Text } from "@mantine/core";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   playingDurationSec,
@@ -48,6 +48,7 @@ export function SeekBar({ thin = false }: { thin?: boolean }) {
   const { pos, dur } = usePlayhead();
   // While dragging the slider shows the finger; the song seeks when it is let go.
   const [drag, setDrag] = useState<number | null>(null);
+  const latest = useRef<number | null>(null);
   const value = drag ?? pos;
   const slider = (
     <Slider
@@ -60,10 +61,18 @@ export function SeekBar({ thin = false }: { thin?: boolean }) {
       thumbSize={thin ? 10 : 12}
       label={null}
       thumbLabel={t("listen.seek")}
-      onChange={setDrag}
+      onChange={(v) => {
+        latest.current = v;
+        setDrag(v);
+      }}
+      // Mantine moves the value on an animation frame but may end a quick tap before it: the
+      // seek waits a frame for the tapped value.
       onChangeEnd={(v) => {
-        seekPlayingSec(v);
-        setDrag(null);
+        requestAnimationFrame(() => {
+          seekPlayingSec(latest.current ?? v);
+          latest.current = null;
+          setDrag(null);
+        });
       }}
       // Arrow keys step 5 s rather than the drag step.
       onKeyDownCapture={(e) => {
