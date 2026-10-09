@@ -18,9 +18,10 @@ import type { Db } from "../db/connection";
 import { editSessions, users } from "../db/schema";
 import { durationSamples48k } from "../media/ingest";
 import { assetProbe } from "../media/assets";
+import { editRenderProgress, parseOutcome } from "./editRenders";
 import { listSongTracks } from "./tracks";
 
-/** Edit sessions (SPEC §24.2, §24.7). Apply and Bounce come with M18. */
+/** Edit sessions (SPEC §24.2, §24.7); Apply and Bounce are in `editRenders.ts`. */
 
 export type EditSessionRow = typeof editSessions.$inferSelect;
 
@@ -134,8 +135,12 @@ export function sessionState(row: EditSessionRow): EditSessionState {
   };
 }
 
-/** The DTO (SPEC §24.11): the editing state only for its owner (`full`). */
+/**
+ * The DTO (SPEC §24.11): the editing state only for its owner (`full`); the running or last
+ * Apply/Bounce with its render progress and error for everyone who sees the session.
+ */
 export function toEditSession(db: Db, row: EditSessionRow, full: boolean): EditSession {
+  const outcome = parseOutcome(row.outcome);
   const summary: EditSession = {
     id: row.id,
     songId: row.songId,
@@ -143,6 +148,17 @@ export function toEditSession(db: Db, row: EditSessionRow, full: boolean): EditS
     owner: { id: row.ownerId, name: nameOf(db, row.ownerId) },
     since: row.ownerSince,
     updatedAt: row.updatedAt,
+    outcome: outcome && {
+      kind: outcome.kind,
+      by: outcome.by,
+      at: outcome.at,
+      keepEditing: outcome.keepEditing,
+      ...(outcome.versionIds && { versionIds: outcome.versionIds }),
+      ...(outcome.trackIds && { trackIds: outcome.trackIds }),
+      ...(outcome.songIds && { songIds: outcome.songIds }),
+    },
+    renders: editRenderProgress(db, row.id),
+    error: row.error,
   };
   if (!full) return summary;
   return { ...summary, ...sessionState(row), rev: row.rev };

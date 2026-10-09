@@ -36,6 +36,7 @@ import { touchProject } from "./projects";
 import { createSongRow, softDeleteSong } from "./songs";
 import type { ResolvedItem } from "./trash";
 import type { TrackRow } from "./tracks";
+import { visibleVersion } from "./visibleVersions";
 
 // Make multitrack song, copy and move (SPEC §26.5, §26.6). Rows only: copies point at the same
 // assets (usage stays with the uploader and is counted once), and no audio is re-encoded.
@@ -167,7 +168,7 @@ function startShift(db: Db, trackIds: readonly string[]): number {
   const row = db
     .select({ offsets: trackVersions.offsetSamples })
     .from(trackVersions)
-    .where(and(inArray(trackVersions.trackId, [...trackIds]), isNull(trackVersions.deletedAt)))
+    .where(and(inArray(trackVersions.trackId, [...trackIds]), visibleVersion()))
     .all();
   return row.length === 0 ? 0 : Math.min(...row.map((r) => r.offsets));
 }
@@ -207,7 +208,7 @@ function copyTrack(
   const versions = db
     .select()
     .from(trackVersions)
-    .where(and(eq(trackVersions.trackId, track.id), isNull(trackVersions.deletedAt)))
+    .where(and(eq(trackVersions.trackId, track.id), visibleVersion()))
     .orderBy(asc(trackVersions.number))
     .all();
   db.insert(tracks)
@@ -686,4 +687,21 @@ export function moveSongTo(
 export function tracksLeftAfter(db: Db, songId: string, trackIds: readonly string[]): number {
   const leaving = new Set(trackIds);
   return liveUserTracks(db, songId).filter((t) => !leaving.has(t.id)).length;
+}
+
+/**
+ * Copies comment threads (with reactions and mentions) into another song as they are given: the
+ * caller has set their new times (split into songs, SPEC §24.9). Comments on tracks map through
+ * `trackIds` (old → new; others become song-wide). In the caller's transaction.
+ */
+export function copyCommentRowsInto(
+  db: Db,
+  rows: readonly CommentRow[],
+  songId: string,
+  trackIds: ReadonlyMap<string, string>,
+  now: number = Date.now(),
+): number {
+  const maps = newMaps();
+  for (const [from, to] of trackIds) maps.tracks.set(from, to);
+  return copyComments(db, rows, songId, maps, NO_SHIFT, now);
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { TrackClips } from "./ops";
 import type { EditClip } from "./schema";
 import {
+  clipsInRange,
   DEFAULT_EDIT_SONG_NAMING,
   editSongRanges,
   editSongTitle,
@@ -104,5 +105,27 @@ describe("naming", () => {
     expect(editSongTrackName({ name: "" }, "Guitar", { ...n, trackNames: "rangePrefix" })).toBe(
       "Guitar",
     );
+  });
+});
+
+describe("clipsInRange", () => {
+  it("cuts clips to the range with fades at the cut edges and moves them to 0", () => {
+    const a = clip(0, 100);
+    const b = { ...clip(150, 100), fadeOutFrames: 10 };
+    const c = clip(300, 50);
+    const out = clipsInRange([c, b, a], 50, 200, { fadeIn: 4, fadeOut: 6 });
+    expect(out.map((x) => [x.id, x.startFrame, x.sourceStartFrame, x.lengthFrames])).toEqual([
+      ["c0", 0, 50, 50],
+      ["c150", 100, 0, 50],
+    ]);
+    expect(out.map((x) => [x.fadeInFrames, x.fadeOutFrames])).toEqual([
+      [4, 0],
+      [0, 6],
+    ]);
+  });
+
+  it("clamps the edge fades to half the piece", () => {
+    const [x] = clipsInRange([clip(0, 100)], 90, 95, { fadeIn: 50, fadeOut: 50 });
+    expect([x?.lengthFrames, x?.fadeInFrames, x?.fadeOutFrames]).toEqual([5, 2, 2]);
   });
 });

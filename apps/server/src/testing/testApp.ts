@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   audioBounceHandler,
+  audioRenderHandler,
+  editCommitHandler,
   audioReencodeHandler,
   audioIngestHandler,
   claimJob,
@@ -243,6 +245,8 @@ export async function runQueuedJobs(t: TestApp): Promise<string[]> {
   const handlers = handlerRegistry([
     audioIngestHandler,
     audioBounceHandler,
+    audioRenderHandler,
+    editCommitHandler,
     audioReencodeHandler,
     imageIngestHandler,
     documentIngestHandler,
@@ -256,6 +260,8 @@ export async function runQueuedJobs(t: TestApp): Promise<string[]> {
       [
         "audio.ingest",
         "audio.bounce",
+        "audio.render",
+        "edit.commit",
         "audio.reencode",
         "image.ingest",
         "document.ingest",

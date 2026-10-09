@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { editAssetSettled } from "../content/editRenders";
 import type { Db } from "../db/connection";
 import { getAsset, setAssetStatus } from "../media/assets";
 import { DEFAULT_TOOLS, ToolTimeoutError, type ToolPaths } from "../media/tools";
@@ -143,6 +144,8 @@ export async function executeJob(
     // A job cancelled while it ran is not "done": no asset.ready for it.
     if (!completeJob(db, job.id, result)) return "failed";
     const assetId = assetIdOf(payload);
+    // A rendered edit's file is ready: its session may commit now (SPEC §24.10).
+    if (assetId) editAssetSettled(db, assetId);
     emit({
       type: "asset.ready",
       projectId: scope.projectId ?? null,
@@ -168,6 +171,8 @@ export async function executeJob(
     const assetId = assetIdOf(payload);
     if (status === "failed" && assetId && getAsset(db, assetId)) {
       setAssetStatus(db, assetId, "failed", message.slice(0, 500));
+      // A rendered edit's ingest failed: its session fails (SPEC §24.14).
+      editAssetSettled(db, assetId);
       const scope = (payload ?? {}) as {
         projectId?: string | null;
         songId?: string | null;

@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { clipEnd } from "./clips";
+import { clampFades, clipEnd, headOf, sortClips, tailOf } from "./clips";
 import type { TrackClips } from "./ops";
-import { EDIT_SAMPLE_RATE, FrameSchema } from "./schema";
+import { EDIT_SAMPLE_RATE, FrameSchema, type EditClip, type EditFades } from "./schema";
 
 /**
  * Split into songs (SPEC §24.9): the candidate ranges on the edited timeline and the naming of
@@ -140,4 +140,28 @@ export function editSongTrackName(
   const name = range.name.trim();
   if (naming.trackNames === "keep" || name === "") return trackName;
   return `${name} – ${trackName}`.slice(0, 120);
+}
+
+/**
+ * A track's clips cut to `[start, end)` and moved so the range starts at 0 (a new song of split
+ * into songs, SPEC §24.9). Clips cut at a range edge get the session's fade-in / fade-out there
+ * (like a cut at the song start or end, SPEC §24.3).
+ */
+export function clipsInRange(
+  clips: readonly EditClip[],
+  start: number,
+  end: number,
+  fades: Pick<EditFades, "fadeIn" | "fadeOut">,
+): EditClip[] {
+  const out: EditClip[] = [];
+  for (const c of clips) {
+    if (clipEnd(c) <= start || c.startFrame >= end) continue;
+    let x = c;
+    if (x.startFrame < start)
+      x = { ...tailOf(x, start, x.id), fadeInFrames: fades.fadeIn, fadeInShape: "equalPower" };
+    if (clipEnd(x) > end)
+      x = { ...headOf(x, end, x.id), fadeOutFrames: fades.fadeOut, fadeOutShape: "equalPower" };
+    out.push(clampFades({ ...x, startFrame: x.startFrame - start }));
+  }
+  return sortClips(out);
 }

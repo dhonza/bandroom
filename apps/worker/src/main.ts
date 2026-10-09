@@ -5,8 +5,10 @@ import { setTimeout as sleep } from "node:timers/promises";
 import {
   audioBounceHandler,
   audioIngestHandler,
+  audioRenderHandler,
   audioReencodeHandler,
   blobGcHandler,
+  editCommitHandler,
   claimJob,
   createLogger,
   executeJob,
@@ -31,6 +33,8 @@ const HEARTBEAT_MS = 30_000;
 const HANDLERS = handlerRegistry([
   audioIngestHandler,
   audioBounceHandler,
+  audioRenderHandler,
+  editCommitHandler,
   audioReencodeHandler,
   imageIngestHandler,
   documentIngestHandler,

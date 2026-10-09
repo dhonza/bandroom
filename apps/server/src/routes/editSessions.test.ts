@@ -339,6 +339,9 @@ describe("edit session lifecycle (SPEC §24.7)", () => {
       owner: { id: edaId, name: "Eda" },
       since: expect.any(Number) as number,
       updatedAt: expect.any(Number) as number,
+      outcome: null,
+      renders: [],
+      error: null,
     });
   });
 

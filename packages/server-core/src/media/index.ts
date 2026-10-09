@@ -18,3 +18,5 @@ export * from "./ingestJobs";
 export * from "./zipStream";
 export * from "./opusRates";
 export * from "./reencode";
+export * from "./renderGraph";
+export * from "./render";

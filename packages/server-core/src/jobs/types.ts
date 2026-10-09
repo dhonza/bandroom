@@ -8,6 +8,8 @@ export interface JobEvent {
   type: string;
   projectId?: string | null;
   songId?: string | null;
+  /** User-targeted events (`notification`) reach only this user. */
+  userId?: string | null;
   data: Record<string, unknown>;
 }
 
