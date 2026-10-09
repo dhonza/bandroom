@@ -31,6 +31,7 @@ import {
   type TrashKind,
 } from "@bandroom/shared";
 import { AppError } from "./errors";
+import { checkNotEditing } from "./scope";
 
 /** One checked batch item with the user's role on its song. */
 export type BatchItem = ResolvedItem & { role: EffectiveRole };
@@ -68,6 +69,15 @@ const RULE: Record<BatchAction, (role: EffectiveRole, kind: TrashKind, own: bool
   copy: (role) => canCopyContent(role),
   inspect: () => true,
 };
+
+/** Batch actions that change the items' songs, refused while a song is edited (SPEC §24.7). */
+const EDIT_FROZEN_ACTIONS: ReadonlySet<BatchAction> = new Set<BatchAction>([
+  "delete",
+  "restore",
+  "purge",
+  "removeLossless",
+  "move",
+]);
 
 /**
  * The target of a copy or move (SPEC §26.6): an existing project needs `song.create` and
@@ -228,5 +238,9 @@ export function checkBatch(
   if (action === "move") forbidden.push(...emptiedWithoutRight(db, user, items));
   if (forbidden.length > 0)
     throw new AppError("FORBIDDEN_ITEMS", "Not allowed for some items", idsParam(forbidden));
+  // An edit session freezes its song (SPEC §24.7): nothing in it is deleted, restored, purged,
+  // moved or stripped of full quality. Copies and inspections only read.
+  if (EDIT_FROZEN_ACTIONS.has(action))
+    for (const songId of new Set(items.map((i) => i.song.id))) checkNotEditing(db, songId);
   return { scope: "batch", action, items, containers, target: checkTarget(db, user, body) };
 }

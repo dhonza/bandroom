@@ -1,9 +1,11 @@
-import { schema, type JobContext } from "@bandroom/server-core";
+import { schema, songIsEditing, type JobContext } from "@bandroom/server-core";
 import { uuidv7 } from "@bandroom/shared";
 import { and, isNull, sql } from "drizzle-orm";
 import type { SamplyComment } from "./api";
 import type { Reporter } from "./report";
 import { liveLocal, liveLocalOfRun, recordMapping } from "./store";
+
+export const EDITING_REASON = "The song is being edited (SONG_EDITING)";
 
 export function importComments(
   ctx: JobContext,
@@ -53,6 +55,11 @@ export function importComments(
     }
     if (opts.dry || !opts.songId) {
       rep.item({ kind: "comment", name, outcome: "planned", reason: null });
+      continue;
+    }
+    // An edit session freezes the song's comments (SPEC §24.7); a later run imports them.
+    if (songIsEditing(db, opts.songId)) {
+      rep.item({ kind: "comment", name, outcome: "failed", reason: EDITING_REASON });
       continue;
     }
     const parentId = c.parentid ? liveLocal(db, "comment", c.parentid, "comment") : null;

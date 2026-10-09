@@ -23,7 +23,7 @@ import {
 } from "@bandroom/shared";
 import type { AppContext } from "../../context";
 import { AppError } from "../../http/errors";
-import { checkScope, type ScopeAccess } from "../../http/scope";
+import { checkNotEditing, checkScope, songOfAccess, type ScopeAccess } from "../../http/scope";
 import { bearerToken, SESSION_COOKIE } from "../../http/session";
 
 export const UPLOAD_EXPIRY_MS = 24 * 60 * 60 * 1000;
@@ -125,11 +125,13 @@ export function authorizeTarget(
       return null;
     case "newTrack":
       return requireAudioUpload(
+        ctx,
         checkScope(ctx.db, user, "song", target.songId, "upload"),
         target.source === "recording",
       );
     case "newVersion":
       return requireAudioUpload(
+        ctx,
         checkScope(ctx.db, user, "track", target.trackId, "upload"),
         target.source === "recording",
       );
@@ -159,10 +161,15 @@ export function authorizeTarget(
   }
 }
 
-/** A recorded take (SPEC §9) also needs `record`, checked by the central permissions module. */
-function requireAudioUpload(access: ScopeAccess, recording: boolean): ScopeAccess {
+/**
+ * A recorded take (SPEC §9) also needs `record`, checked by the central permissions module. An
+ * edit session freezes the song's tracks (SPEC §24.7), at the start and at the end of an upload.
+ */
+function requireAudioUpload(ctx: AppContext, access: ScopeAccess, recording: boolean): ScopeAccess {
   if (!canUploadAudio(access.role, recording))
     throw new AppError("FORBIDDEN", "Missing capability record");
+  const song = songOfAccess(access);
+  if (song) checkNotEditing(ctx.db, song.id);
   return access;
 }
 

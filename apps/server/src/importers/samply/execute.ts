@@ -15,11 +15,12 @@ import {
   updateTrackVersion,
   type Db,
   type JobContext,
+  songIsEditing,
 } from "@bandroom/server-core";
 import type { ImportNode, ImportProject, ImportVersion } from "@bandroom/shared";
 import type { SamplyClient } from "./api";
 import { importArtwork } from "./artwork";
-import { importComments } from "./comments";
+import { EDITING_REASON, importComments } from "./comments";
 import {
   computeTotals,
   documentKind,
@@ -306,6 +307,12 @@ async function importVersions(rc: RunContext, pc: ProjectContext): Promise<void>
       }
       const songId = pc.ensureSong(task.song);
       if (!songId || !projectId) return;
+      // An edit session freezes the song's tracks (SPEC §24.7); a later run imports the file.
+      if (songIsEditing(db, songId)) {
+        rep.item({ kind: "version", name, outcome: "failed", reason: EDITING_REASON });
+        rep.log(`Skipped: ${name}: ${EDITING_REASON}`);
+        return;
+      }
       const dl = result.value;
       const blob = await storeFile(db, ctx.storage, dl.dest, dl.sha256);
       const asset = createOriginalAsset(
