@@ -99,15 +99,24 @@ export async function openMixer(page: Page): Promise<void> {
 }
 
 /**
- * Closes the Mixer and waits for the Player, which needs a track ready to play: the Player always
- * plays the tracks through the engine (SPEC §27.4).
+ * The Player has a track ready to play (it shows without tracks too, SPEC §9: a hint says there
+ * are none yet).
+ */
+export async function tracksReady(page: Page, timeout = 120_000): Promise<void> {
+  await expect(page.getByTestId("rehearse-play")).toBeEnabled({ timeout });
+  await expect(page.getByTestId("rehearse-no-tracks")).toHaveCount(0, { timeout });
+}
+
+/**
+ * Closes the Mixer and waits for the Player with a track ready to play: the Player always plays
+ * the tracks through the engine (SPEC §27.4).
  */
 export async function closeMixer(page: Page, timeout = 120_000): Promise<void> {
   const toggle = page.getByTestId("mixer-toggle");
   await toggle.waitFor({ timeout });
   if ((await toggle.getAttribute("aria-pressed")) === "true") await toggle.click();
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByTestId("rehearse-play")).toBeEnabled({ timeout });
+  await tracksReady(page, timeout);
   await expect(page.getByTestId("track-strip")).toHaveCount(0);
 }
 

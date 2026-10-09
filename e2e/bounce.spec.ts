@@ -1,7 +1,7 @@
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { FIXTURES_DIR, generateFixtures } from "@bandroom/fixtures";
-import { isMobile, loginAsNewUser, openMixer, uniqueUsername } from "./helpers";
+import { isMobile, loginAsNewUser, openMixer, tracksReady, uniqueUsername } from "./helpers";
 
 /**
  * Bounce (SPEC §5.5, §27.5): the mix the user hears (here with one track muted) becomes a new
@@ -152,7 +152,7 @@ test("bounce a mix with a muted track into a new song that plays", async ({
   expect(newMarkers.markers.map((m) => [m.name, m.startSec])).toEqual([["Break", 2.5]]);
 
   // It plays in the Player.
-  await expect(page.getByTestId("rehearse-play")).toBeEnabled({ timeout: 60_000 });
+  await tracksReady(page, 60_000);
   await page.getByTestId("rehearse-play").click();
   await expect.poll(async () => (await debug(page))?.status, { timeout: 30_000 }).toBe("playing");
   expect((await debug(page))?.tracks).toHaveLength(1);

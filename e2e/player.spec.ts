@@ -1,6 +1,13 @@
 import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { AIFF_FILE, generateFixtures, TONE_FILE } from "@bandroom/fixtures";
-import { isMobile, loginAsNewUser, openMixer, TAP_NAME, uniqueUsername } from "./helpers";
+import {
+  isMobile,
+  loginAsNewUser,
+  openMixer,
+  TAP_NAME,
+  tracksReady,
+  uniqueUsername,
+} from "./helpers";
 
 test.beforeAll(async () => {
   await generateFixtures();
@@ -39,9 +46,7 @@ async function songWithTrack(page: Page, testInfo: TestInfo): Promise<void> {
   await page.getByTestId("track-dropzone").locator('input[type="file"]').setInputFiles(TONE_FILE());
   // One worker processes every test's uploads on this server, so under full-suite load this can
   // take minutes.
-  await expect(page.getByTestId("rehearse-panel").getByTestId("rehearse-play")).toBeEnabled({
-    timeout: 420_000,
-  });
+  await tracksReady(page, 420_000);
   await expect(page.getByTestId("mixer-toggle")).toHaveAttribute("aria-pressed", "false");
 }
 
