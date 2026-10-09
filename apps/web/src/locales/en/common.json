@@ -1052,6 +1052,7 @@
   "tempo": {
     "pickup": "pickup {{beat}}",
     "barBeat": "Bar and beat",
+    "meterNow": "Time signature at the playhead",
     "summary": "{{bpm}} BPM · {{meter}}",
     "summaryPractice": "{{summary}} · {{rate}} %",
     "set": "Set tempo",

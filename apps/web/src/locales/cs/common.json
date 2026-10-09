@@ -969,7 +969,7 @@
     "sections": "Části",
     "markers": "Značky",
     "signatures": "Takt",
-    "signatureLabel": "Takt {{meter}} od {{bar}}. taktu",
+    "signatureLabel": "Druh taktu {{meter}} od {{bar}}. taktu",
     "lanes": "Řádky",
     "lanesMenu": "Zobrazit nebo skrýt řádky",
     "showAllLanes": "Zobrazit všechny řádky",
@@ -1082,6 +1082,7 @@
   "tempo": {
     "pickup": "předtakt {{beat}}",
     "barBeat": "Takt a doba",
+    "meterNow": "Druh taktu na pozici přehrávání",
     "summary": "{{bpm}} BPM · {{meter}}",
     "summaryPractice": "{{summary}} · {{rate}} %",
     "set": "Nastavit tempo",

@@ -56,7 +56,7 @@ import {
   useRehearse,
 } from "./controller";
 import { CountInCountdown } from "./ClickControls";
-import { BarBeatText } from "../tempo/readout";
+import { BarBeatText, MeterText } from "../tempo/readout";
 import { touchMinLaneHeight } from "./headerTier";
 import { BounceModal } from "./BounceModal";
 import { MixerTools } from "./MixerTools";
@@ -267,6 +267,7 @@ export function RehearsePanel({
             >
               <CountInCountdown />
               <BarBeatText size="lg" c="dimmed" />
+              <MeterText size="sm" c="dimmed" />
               <SectionReadout />
               <TransportState />
               {/* Always there, at the right end (it wraps to its own line when needed). */}

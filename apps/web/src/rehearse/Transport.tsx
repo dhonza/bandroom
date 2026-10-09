@@ -34,7 +34,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { formatClock } from "../player/format";
 import { musicalSnap, SNAP_MODES } from "../markers/model";
-import { BarBeatText } from "../tempo/readout";
+import { BarBeatText, MeterText } from "../tempo/readout";
 import { useTempoUi } from "../tempo/store";
 import {
   ClickMenuItems,
@@ -395,6 +395,7 @@ export function Transport({
             <Group gap="xs" wrap="nowrap">
               <PositionText size="xl" />
               <BarBeatText size="xl" c="dimmed" />
+              <MeterText size="md" c="dimmed" />
             </Group>
             <Text size="xs" c="dimmed" className="tabular-nums">
               {formatClock(duration, false)}
