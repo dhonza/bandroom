@@ -126,6 +126,32 @@ describe("recorder (SPEC §9)", () => {
     expect(rec.inputConstraints({})).not.toHaveProperty("deviceId");
   });
 
+  it("opens the microphone in the play-and-record session (WebKit refuses capture otherwise)", async () => {
+    const { stream: s, stopped } = stream();
+    const order: string[] = [];
+    const getUserMedia = vi.fn(() => {
+      order.push(`gum after ${String(sessions.at(-1))}`);
+      return Promise.resolve(s);
+    });
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    try {
+      expect(await rec.openInput({ channels: 2 })).toBe(s);
+      expect(order).toEqual(["gum after true"]);
+      // Never armed (e.g. the song was not ready): back to playback.
+      rec.closeInput(s);
+      expect(stopped).toEqual(["MacBook Pro Microphone"]);
+      expect(sessions).toEqual([true, false]);
+
+      getUserMedia.mockImplementationOnce(() =>
+        Promise.reject(new DOMException("no", "NotAllowedError")),
+      );
+      await expect(rec.openInput()).rejects.toThrow("no");
+      expect(sessions).toEqual([true, false, true, false]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("arms: practice notice, loop off, play-and-record, screen on, max take length", async () => {
     useTimelineUi.setState({ loopOn: true });
     const { stream: s } = stream();

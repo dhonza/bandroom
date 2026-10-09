@@ -40,6 +40,7 @@ import {
   clearTake,
   disarmRecorder,
   listInputs,
+  closeInput,
   openInput,
   inputChannelsOf,
   resetClip,
@@ -174,7 +175,7 @@ export function RecorderPanel({
       return;
     }
     if (run !== arming.current || !(await waitForEngine()) || run !== arming.current) {
-      for (const tr of stream.getTracks()) tr.stop();
+      closeInput(stream);
       if (run === arming.current) setError(t("record.errors.notLoaded"));
       return;
     }
@@ -183,6 +184,7 @@ export function RecorderPanel({
       await armRecorder({ stream, channels: ch, port: newTakePort() });
       armedOnce.current = true;
     } catch (err) {
+      closeInput(stream);
       if (run === arming.current) setError(micErrorText(t, err));
       return;
     }

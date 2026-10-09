@@ -35,7 +35,7 @@ function server(port: number, appUrl: string, name: string, samplyMockPort: numb
 
 /**
  * Chromium gets a fake microphone (a beep) without the permission prompt, for the recording
- * spec (SPEC §9); WebKit has no such switch, recording is tested on devices there.
+ * spec (SPEC §9). Playwright's WebKit has a mock microphone; it only needs the permission.
  */
 const FAKE_MIC = {
   launchOptions: {
@@ -61,7 +61,10 @@ export default defineConfig({
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"], ...FAKE_MIC, baseURL: ROOT_URL } },
-    { name: "webkit", use: { ...devices["Desktop Safari"], baseURL: ROOT_URL } },
+    {
+      name: "webkit",
+      use: { ...devices["Desktop Safari"], permissions: ["microphone"], baseURL: ROOT_URL },
+    },
     { name: "iphone", use: { ...devices["iPhone 15"], baseURL: ROOT_URL } },
     { name: "pixel", use: { ...devices["Pixel 7"], ...FAKE_MIC, baseURL: ROOT_URL } },
     {

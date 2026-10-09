@@ -3,15 +3,19 @@ import { isMobile, loginAsNewUser, uniqueUsername } from "./helpers";
 
 /**
  * Recording (SPEC §9) with Chromium's fake microphone (a beep, see playwright.config.ts). WebKit
- * and the phone projects have no fake microphone: recording is tested on devices there.
+ * has a mock microphone but no OPFS in Playwright's private sessions, so it only checks that the
+ * microphone opens; full recording and the phone projects are tested on devices.
  */
+
+const MIC_OPENS = "The microphone opens and arms";
 
 const CSRF = { "X-Requested-With": "bandroom" };
 
 test.beforeEach(({ browserName }, testInfo) => {
   test.skip(
-    browserName !== "chromium" || isMobile(testInfo),
-    "fake microphone: desktop Chromium only",
+    isMobile(testInfo) ||
+      !(browserName === "chromium" || (browserName === "webkit" && testInfo.title === MIC_OPENS)),
+    "fake microphone: desktop Chromium (WebKit: arming only)",
   );
   test.setTimeout(240_000);
 });
@@ -67,6 +71,15 @@ async function recordFor(page: Page, seconds: number) {
     timeout: 60_000,
   });
 }
+
+// WebKit refuses capture while the audio session is "playback" (set by the Player).
+test(MIC_OPENS, async ({ page, request }, testInfo) => {
+  await loginAsNewUser(page, request, testInfo);
+  const { songId } = await projectWithSong(page, testInfo, true);
+  await page.goto(`songs/${songId}`);
+  await openRecorder(page);
+  await expect(page.getByTestId("record-start")).toBeEnabled();
+});
 
 test("Song page: record a take, save it as a new track, then adjust its position", async ({
   page,

@@ -96,11 +96,27 @@ export async function listInputs(): Promise<MediaDeviceInfo[]> {
   return all.filter((d) => d.kind === "audioinput");
 }
 
-/** Opens the microphone (asks for permission the first time). */
-export function openInput(
+/**
+ * Opens the microphone (asks for permission the first time). The audio session switches to
+ * `play-and-record` first: WebKit refuses capture while it is `playback` ("AudioSession category
+ * is not compatible with audio capture"), which the Player sets.
+ */
+export async function openInput(
   opts: { deviceId?: string; channels?: 1 | 2 } = {},
 ): Promise<MediaStream> {
-  return navigator.mediaDevices.getUserMedia({ audio: inputConstraints(opts) });
+  setRecordingAudioSession(true);
+  try {
+    return await navigator.mediaDevices.getUserMedia({ audio: inputConstraints(opts) });
+  } catch (err) {
+    if (!session) setRecordingAudioSession(false);
+    throw err;
+  }
+}
+
+/** Closes a stream from `openInput` that was never armed (back to the playback session). */
+export function closeInput(stream: MediaStream): void {
+  for (const t of stream.getTracks()) t.stop();
+  if (!session) setRecordingAudioSession(false);
 }
 
 /** Channels the stream's input delivers (1 when the browser does not say). */
