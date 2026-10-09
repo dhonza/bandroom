@@ -112,4 +112,23 @@ describe("normalizeSegments (SPEC §7.1 rules)", () => {
       segments: [{ startBeat: 0, bpm: 97.5, meter: m(6, 8), barIndex: 0 }],
     });
   });
+
+  it("restarts the bar grid at a new-bar segment, counting a cut-short bar (SPEC §24.4)", () => {
+    const four = m(4, 4);
+    const r = normalizeSegments([
+      { startBeat: 0, bpm: 120, meter: four, newBar: true },
+      { startBeat: 9.5, bpm: 120, meter: four, newBar: true },
+      { startBeat: 13.5, bpm: 100, meter: m(3, 4), newBar: true },
+      { startBeat: 16.5, bpm: 100, meter: m(6, 8) },
+    ]);
+    expect(r).toEqual({
+      ok: true,
+      segments: [
+        { startBeat: 0, bpm: 120, meter: four, barIndex: 0 },
+        { startBeat: 9.5, bpm: 120, meter: four, barIndex: 3, newBar: true },
+        { startBeat: 13.5, bpm: 100, meter: m(3, 4), barIndex: 4, newBar: true },
+        { startBeat: 16.5, bpm: 100, meter: m(6, 8), barIndex: 5 },
+      ],
+    });
+  });
 });

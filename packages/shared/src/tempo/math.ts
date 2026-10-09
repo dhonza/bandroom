@@ -76,7 +76,7 @@ export function compileTempo(t: Tempo): TempoGrid {
     const startSec = prev ? prev.startSec + segSeconds(prev, s.startBeat - prev.startBeat) : 0;
     segs.push({ startBeat: s.startBeat, startSec, bpm: s.bpm, slope });
     const r = regions.at(-1);
-    if (!r || r.meter.num !== s.meter.num || r.meter.den !== s.meter.den) {
+    if (!r || s.newBar === true || r.meter.num !== s.meter.num || r.meter.den !== s.meter.den) {
       regions.push({
         startBeat: s.startBeat,
         startBar: s.barIndex,

@@ -19,6 +19,10 @@ export const CommentSecSchema = z.number().min(0).max(86_400);
 export const CommentContextSchema = z.object({
   trackVersions: z.record(z.string(), z.string()).default({}),
   tempoRev: z.string().nullable().default(null),
+  /** The comment's time was cut away by an edit; it became general (SPEC §24.4). */
+  editedOut: z
+    .object({ startSec: z.number(), endSec: z.number().nullable(), sessionId: z.string() })
+    .optional(),
 });
 export type CommentContext = z.infer<typeof CommentContextSchema>;
 

@@ -38,6 +38,12 @@ export const TempoSegmentSchema = z.object({
   meter: MeterSchema,
   /** 0-based bar index at `startBeat` (derived and cached; recomputed on validation). */
   barIndex: z.number().int().optional(),
+  /**
+   * A new bar starts here even off the bar grid (an edit joined two pieces of music, SPEC §24.4):
+   * the bar grid restarts at this segment and the bar index continues (a cut-short bar before it
+   * counts as one bar). Ignored on the first segment.
+   */
+  newBar: z.literal(true).optional(),
 });
 /** Segment input; the derived bar index is optional (editor, importer). */
 export type TempoSegmentInput = z.infer<typeof TempoSegmentSchema>;
@@ -49,6 +55,8 @@ export interface TempoSegment {
   meter: Meter;
   /** 0-based bar number at `startBeat` (bar 1 = 0). */
   barIndex: number;
+  /** The bar grid restarts here (SPEC §24.4). */
+  newBar?: true;
 }
 
 export interface TempoMap {
@@ -115,19 +123,23 @@ export function normalizeSegments(
     if (prev && startBeat <= prev.startBeat + BEAT_EPS) {
       return { ok: false, issue: { code: "order", index: i } };
     }
-    if (!sameMeter(s.meter, meter)) {
+    const newBar = i > 0 && s.newBar === true;
+    if (newBar || !sameMeter(s.meter, meter)) {
       const bars = (startBeat - regionBeat) / barQuarters(meter);
       const whole = Math.round(bars);
-      if (Math.abs(bars - whole) * barQuarters(meter) >= BEAT_EPS) {
+      const onBar = Math.abs(bars - whole) * barQuarters(meter) < BEAT_EPS;
+      if (!onBar && !newBar) {
         return { ok: false, issue: { code: "meterOffBar", index: i } };
       }
-      regionBar += whole;
+      // A bar cut short before a new bar still counts as a bar.
+      regionBar += onBar ? whole : Math.floor(bars) + 1;
       regionBeat = startBeat;
       meter = s.meter;
     }
     const barIndex =
       regionBar + Math.floor((startBeat - regionBeat) / barQuarters(meter) + BEAT_EPS);
     const seg: TempoSegment = { startBeat, bpm: s.bpm, meter: s.meter, barIndex };
+    if (newBar) seg.newBar = true;
     if (s.bpmEnd !== undefined && s.bpmEnd !== s.bpm) seg.bpmEnd = s.bpmEnd;
     out.push(seg);
   }

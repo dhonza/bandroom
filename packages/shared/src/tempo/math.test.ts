@@ -193,3 +193,15 @@ describe("grid, pulses and snapping (SPEC §6.7, §7.5)", () => {
     expect(e.intervalSec).toBeCloseTo(1 / 3, 12);
   });
 });
+
+describe("new-bar segments (SPEC §24.4)", () => {
+  it("start a new bar region off the old grid", () => {
+    const g = grid([
+      { startBeat: 0, bpm: 120, meter: m(4, 4) },
+      { startBeat: 6, bpm: 120, meter: m(4, 4), newBar: true },
+    ]);
+    expect(barAtBeat(g, 5.9)).toEqual({ index: 1, startBeat: 4, meter: m(4, 4) });
+    expect(barAtBeat(g, 6)).toEqual({ index: 2, startBeat: 6, meter: m(4, 4) });
+    expect(barAtBeat(g, 10.5)).toEqual({ index: 3, startBeat: 10, meter: m(4, 4) });
+  });
+});
