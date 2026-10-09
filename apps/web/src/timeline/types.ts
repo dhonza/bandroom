@@ -48,9 +48,15 @@ export interface TimelineProps {
   renderTopHeader?: () => ReactNode;
   /**
    * Width of the narrow label column holding the top-lane labels while `hideLanes` (Mixer closed,
-   * SPEC §11.3). Shown only when there are top lanes; default 0 (no column).
+   * SPEC §11.3). Shown only when some top lane is shown or there is a corner; default 0 (no
+   * column).
    */
   labelWidth?: number;
+  /**
+   * The corner left of the overview strip, above the header or label column (the lanes menu).
+   * The overview is indented by that column, so it shares the detail view's time axis.
+   */
+  renderCorner?: () => ReactNode;
   /** Absolutely positioned content over the detail view, laid out from the current view. */
   renderOverlay?: (view: View) => ReactNode;
   /** Section bands on the overview strip and marker guides across the lanes. */

@@ -1,6 +1,6 @@
 import { MantineProvider } from "@mantine/core";
 import type * as MantineHooks from "@mantine/hooks";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import i18next from "i18next";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -66,6 +66,60 @@ describe("Timeline overview playhead", () => {
     const head = screen.getByTestId<HTMLCanvasElement>("timeline-overview-playhead");
     // 30 s of 60 s on a 600 px overview: the middle (on the pixel centre).
     expect(moves.get(head)).toEqual([[300.5, 0]]);
+    view.unmount();
+  });
+
+  it("indents the overview by the header column: a time has the same x as in the detail view", () => {
+    const moves = fakeContexts();
+    const seeks: number[] = [];
+    const view = render(
+      <I18nextProvider i18n={i18n}>
+        <MantineProvider>
+          <Timeline
+            lanes={[{ id: "a", color: "blue", offsetSamples: 0, peaks: null, dimmed: false }]}
+            durationSec={60}
+            getPosition={() => 30}
+            playing={false}
+            onSeek={(sec) => seeks.push(sec)}
+            renderHeader={() => <span>header</span>}
+            headerWidth={120}
+            renderCorner={() => <span>corner</span>}
+          />
+        </MantineProvider>
+      </I18nextProvider>,
+    );
+    // 600 px minus the 120 px column: both are 480 px wide, so 30 s is at 240 px in each.
+    expect(screen.getByTestId("timeline-corner").textContent).toBe("corner");
+    const overview = screen.getByTestId<HTMLCanvasElement>("timeline-overview");
+    expect(overview.style.width).toBe("480px");
+    const head = screen.getByTestId<HTMLCanvasElement>("timeline-overview-playhead");
+    expect(moves.get(head)).toEqual([[240.5, 0]]);
+    const detailHead = screen.getByTestId("timeline-detail").querySelectorAll("canvas")[1];
+    expect(detailHead && moves.get(detailHead)).toEqual([[240.5, 0]]);
+    // A tap on the overview maps its own x (from its left edge) to the same time.
+    fireEvent.pointerDown(overview, { clientX: 120 });
+    expect(seeks).toEqual([15]);
+    view.unmount();
+  });
+
+  it("has no corner and no indent without a header column", () => {
+    fakeContexts();
+    const view = render(
+      <I18nextProvider i18n={i18n}>
+        <MantineProvider>
+          <Timeline
+            lanes={[]}
+            durationSec={60}
+            getPosition={() => 0}
+            playing={false}
+            onSeek={() => undefined}
+            hideLanes
+          />
+        </MantineProvider>
+      </I18nextProvider>,
+    );
+    expect(screen.queryByTestId("timeline-corner")).toBeNull();
+    expect(screen.getByTestId("timeline-overview").style.width).toBe("600px");
     view.unmount();
   });
 });

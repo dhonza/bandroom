@@ -2,6 +2,7 @@ import { MantineProvider } from "@mantine/core";
 import { render, screen } from "@testing-library/react";
 import i18next from "i18next";
 import { I18nextProvider } from "react-i18next";
+import type { ReactNode } from "react";
 import { beforeAll, describe, expect, it } from "vitest";
 import { initI18n } from "../i18n/i18n";
 import { overviewLanes, type Lane } from "./render";
@@ -60,6 +61,7 @@ describe("Timeline props", () => {
     overviewHeight?: number;
     topLanesHeight?: number;
     labelWidth?: number;
+    renderCorner?: () => ReactNode;
   }) => (
     <I18nextProvider i18n={i18n}>
       <MantineProvider>
@@ -120,6 +122,29 @@ describe("Timeline props", () => {
     const view = render(timeline({ hideLanes: true, topLanesHeight: 0, labelWidth: 88 }));
     expect(screen.queryByTestId("lane-labels")).toBeNull();
     expect(screen.queryByText("top labels")).toBeNull();
+    expect(screen.queryByTestId("timeline-corner")).toBeNull();
+    view.unmount();
+  });
+
+  it("keeps the label column for the corner (lanes menu) when every top lane is hidden", () => {
+    const view = render(
+      timeline({
+        hideLanes: true,
+        topLanesHeight: 0,
+        labelWidth: 88,
+        renderCorner: () => <span>lanes menu</span>,
+      }),
+    );
+    expect(screen.getByTestId("lane-labels").style.width).toBe(remOf(88));
+    expect(screen.getByTestId("timeline-corner").style.width).toBe(remOf(88));
+    expect(screen.getByText("lanes menu")).toBeTruthy();
+    expect(screen.queryByText("top labels")).toBeNull();
+    view.unmount();
+  });
+
+  it("puts the corner above the track headers with the Mixer open", () => {
+    const view = render(timeline({ renderCorner: () => <span>lanes menu</span> }));
+    expect(screen.getByTestId("timeline-corner").style.width).toBe(remOf(120));
     view.unmount();
   });
 });

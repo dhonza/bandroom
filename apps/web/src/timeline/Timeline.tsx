@@ -48,7 +48,7 @@ export { requestZoom, requestZoomToRange, ZOOM_EVENT } from "./zoom";
 
 /**
  * Canvas timeline (SPEC §11.6): overview strip (whole song, sections, the audible lanes summed,
- * viewport box; tap/drag = seek; always the full width) and a zoomable detail view with ruler,
+ * viewport box; tap/drag = seek) and a zoomable detail view with ruler,
  * DOM lanes for sections and markers, and one waveform lane per track unless `hideLanes`. Layered canvases: waveforms are redrawn only on view changes, the
  * playhead every animation frame without React re-renders.
  */
@@ -68,6 +68,7 @@ export function Timeline({
   headerWidth = 0,
   topLanesHeight = 0,
   renderTopHeader,
+  renderCorner,
   labelWidth = 0,
   renderOverlay,
   bands,
@@ -83,15 +84,18 @@ export function Timeline({
   const { t } = useTranslation();
   const { ref: sizeRef, width: fullWidth } = useElementSize();
   // Mixer open: the track-header column. Mixer closed: a narrow column with the top-lane labels,
-  // only while some top lane has items (SPEC §11.3).
+  // while some top lane is shown or there is a corner (the lanes menu) (SPEC §11.3).
   const trackHeaders = !!renderHeader && !hideLanes;
-  const labelColumn = hideLanes && !!renderTopHeader && topLanesHeight > 0 && labelWidth > 0;
+  const labelColumn =
+    hideLanes &&
+    labelWidth > 0 &&
+    ((!!renderTopHeader && topLanesHeight > 0) || renderCorner !== undefined);
   const headerW = trackHeaders ? headerWidth : labelColumn ? labelWidth : 0;
-  // The overview spans the full width in both Mixer states, so opening the Mixer leaves it as it
-  // is (SPEC §11.3).
-  const overviewW = fullWidth;
-  const overviewH = overviewHeight;
   const width = Math.max(0, fullWidth - headerW);
+  // The overview is indented by the header column like the ruler and the lanes, so a time has the
+  // same x in all of them when the detail view shows the whole song (SPEC §11.3).
+  const overviewW = width;
+  const overviewH = overviewHeight;
   // The stored view is reconciled with the current width/length during render (no effect needed).
   const [rawView, setView] = useState<View | null>(null);
   const view = useMemo(() => {
@@ -501,40 +505,48 @@ export function Timeline({
       data-lanes={lanesShown.length}
       data-overview-height={overviewH}
     >
-      <Box pos="relative">
-        <canvas
-          ref={overviewRef}
-          style={{
-            display: "block",
-            width: overviewW || "100%",
-            height: overviewH,
-            cursor: "pointer",
-            touchAction: "pan-y",
-            borderRadius: 4,
-            background: "var(--mantine-color-default-hover)",
-          }}
-          onPointerDown={overviewSeek}
-          onPointerMove={overviewSeek}
-          aria-label={t("timeline.overview")}
-          role="slider"
-          aria-valuemin={0}
-          aria-valuemax={Math.round(durationSec)}
-          // Kept current by the playhead loop below (no re-render per second).
-          aria-valuenow={0}
-          data-testid="timeline-overview"
-        />
-        <canvas
-          ref={overviewHeadRef}
-          style={{
-            display: "block",
-            position: "absolute",
-            inset: 0,
-            width: overviewW || "100%",
-            height: overviewH,
-            pointerEvents: "none",
-          }}
-          data-testid="timeline-overview-playhead"
-        />
+      <Box style={{ display: "flex" }}>
+        {headerW > 0 && (
+          // The corner left of the overview (the lanes menu), as wide as the header column.
+          <Box w={headerW} style={{ flex: "none", minWidth: 0 }} data-testid="timeline-corner">
+            {renderCorner?.()}
+          </Box>
+        )}
+        <Box pos="relative" style={{ flex: "1 1 auto", minWidth: 0 }}>
+          <canvas
+            ref={overviewRef}
+            style={{
+              display: "block",
+              width: overviewW || "100%",
+              height: overviewH,
+              cursor: "pointer",
+              touchAction: "pan-y",
+              borderRadius: 4,
+              background: "var(--mantine-color-default-hover)",
+            }}
+            onPointerDown={overviewSeek}
+            onPointerMove={overviewSeek}
+            aria-label={t("timeline.overview")}
+            role="slider"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(durationSec)}
+            // Kept current by the playhead loop below (no re-render per second).
+            aria-valuenow={0}
+            data-testid="timeline-overview"
+          />
+          <canvas
+            ref={overviewHeadRef}
+            style={{
+              display: "block",
+              position: "absolute",
+              inset: 0,
+              width: overviewW || "100%",
+              height: overviewH,
+              pointerEvents: "none",
+            }}
+            data-testid="timeline-overview-playhead"
+          />
+        </Box>
       </Box>
       {belowOverview && <Box mt={6}>{belowOverview}</Box>}
       <Box mt={6} style={{ display: "flex", alignItems: "flex-start" }}>
