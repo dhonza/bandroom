@@ -21,6 +21,7 @@ import type { Db } from "../db/connection";
 import { editRenders, editSessions, jobs, tracks, trackVersions } from "../db/schema";
 import { recordEvent, type EventInput } from "../events/record";
 import { cancelJob, enqueueJob } from "../jobs/queue";
+import type { JobEvent } from "../jobs/types";
 import { assetProbe, createAsset, getAsset, type AssetRow } from "../media/assets";
 import type { Probe } from "../media/probe";
 import { getVariant } from "../media/variants";
@@ -583,6 +584,111 @@ export function failEditSession(
     });
     return next;
   });
+}
+
+/**
+ * The render that keeps an applying session from committing: the first one not rendered yet or
+ * whose file is not ingested. When every render is ready (the commit itself failed), the last
+ * one, so the session has a failed render for "Retry failed" (its file is kept: the retry only
+ * re-runs the ingest). Null for a session without renders.
+ */
+function blockingRender(db: Db, sessionId: string): string | null {
+  const renders = listEditRenders(db, sessionId);
+  return (renders.find((r) => !isReady(db, r)) ?? renders.at(-1))?.id ?? null;
+}
+
+/** Rendered, and its file ingested. */
+function isReady(db: Db, r: EditRenderRow): boolean {
+  return r.status === "done" && !!r.assetId && getAsset(db, r.assetId)?.status === "ready";
+}
+
+/**
+ * Fails an applying session whose worker job failed for good without naming a render (a crashed
+ * `edit.commit`, a stalled Apply): the blocking render gets the error ({@link failEditSession}).
+ */
+export function failStuckEditSession(
+  db: Db,
+  sessionId: string,
+  error: string,
+  now: number = Date.now(),
+): EditSessionRow | undefined {
+  return failEditSession(db, sessionId, blockingRender(db, sessionId), error, now);
+}
+
+/** Stable start of the error of an Apply/Bounce no worker job moved on for too long. */
+export const EDIT_STALLED = "EDIT_STALLED";
+/** An applying session with no job and no change for this long is stalled. */
+export const EDIT_STALL_MS = 10 * 60_000;
+
+/**
+ * Safety net for Apply/Bounce (SPEC §24.14): an `applying` session whose renders, ingests and
+ * commit have no queued or running job and that has not changed for `staleMs` would wait
+ * forever (e.g. a job lost in a crash). When everything is rendered and ingested, only the
+ * commit is missing and is queued again; otherwise the session fails with {@link EDIT_STALLED}.
+ * Returns the ids of the sessions that failed.
+ */
+export function failStalledEditSessions(
+  db: Db,
+  now: number = Date.now(),
+  staleMs: number = EDIT_STALL_MS,
+): string[] {
+  const failed: string[] = [];
+  const applying = db.select().from(editSessions).where(eq(editSessions.status, "applying")).all();
+  for (const s of applying) {
+    const renders = listEditRenders(db, s.id);
+    const changed = Math.max(s.updatedAt, ...renders.map((r) => r.updatedAt));
+    if (now - changed <= staleMs) continue;
+    const keys = [
+      `edit-commit:${s.id}`,
+      ...renders.flatMap((r) => [`render:${r.id}`, ...(r.assetId ? [`ingest:${r.assetId}`] : [])]),
+    ];
+    const active = db
+      .select({ id: jobs.id })
+      .from(jobs)
+      .where(and(inArray(jobs.dedupeKey, keys), inArray(jobs.status, ["queued", "running"])))
+      .limit(1)
+      .get();
+    if (active) continue;
+    // Rendered and ingested, only the commit got lost: commit now instead of failing (once: a
+    // commit that ran since the last change and left it applying would not help).
+    if (renders.every((r) => isReady(db, r)) && !commitRanSince(db, s.id, changed)) {
+      enqueueEditCommit(db, s.id, null, now);
+      continue;
+    }
+    if (
+      failStuckEditSession(
+        db,
+        s.id,
+        `${EDIT_STALLED}: no worker job moved it on for ${Math.round(staleMs / 60_000)} minutes`,
+        now,
+      )
+    )
+      failed.push(s.id);
+  }
+  return failed;
+}
+
+/** Whether an `edit.commit` of the session was queued after `since`. */
+function commitRanSince(db: Db, sessionId: string, since: number): boolean {
+  const last = db
+    .select({ createdAt: jobs.createdAt })
+    .from(jobs)
+    .where(eq(jobs.dedupeKey, `edit-commit:${sessionId}`))
+    .orderBy(desc(jobs.createdAt))
+    .get();
+  return last !== undefined && last.createdAt > since;
+}
+
+/** `edit.changed` for the session's song (render progress, status), for the SSE fan-out. */
+export function editChangedEvent(db: Db, sessionId: string): JobEvent | undefined {
+  const s = db.select().from(editSessions).where(eq(editSessions.id, sessionId)).get();
+  if (!s) return undefined;
+  return {
+    type: "edit.changed",
+    projectId: s.projectId,
+    songId: s.songId,
+    data: { songId: s.songId, sessionId: s.id, status: s.status, rev: s.rev },
+  };
 }
 
 /**

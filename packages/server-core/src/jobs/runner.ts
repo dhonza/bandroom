@@ -3,12 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import { editAssetSettled } from "../content/editRenders";
 import type { Db } from "../db/connection";
-import { getAsset, setAssetStatus } from "../media/assets";
 import { DEFAULT_TOOLS, ToolTimeoutError, type ToolPaths } from "../media/tools";
 import { getVariant, putVariant } from "../media/variants";
 import { getBlob, storeFile } from "../storage/blobs";
 import type { StorageBackend } from "../storage/backend";
 import { completeJob, failJob, heartbeatJob, requeueInterruptedJob, type JobRow } from "./queue";
+import { settleFailedJob } from "./settle";
 import { PermanentJobError, type JobContext, type JobEvent, type JobHandler } from "./types";
 
 export interface RunnerDeps {
@@ -168,28 +168,7 @@ export async function executeJob(
       (err as { name?: string }).name === "ZodError";
     const status = failJob(db, job.id, message, { permanent });
     log(`job failed: ${message}`, { jobId: job.id, type: job.type, status });
-    const assetId = assetIdOf(payload);
-    if (status === "failed" && assetId && getAsset(db, assetId)) {
-      setAssetStatus(db, assetId, "failed", message.slice(0, 500));
-      // A rendered edit's ingest failed: its session fails (SPEC §24.14).
-      editAssetSettled(db, assetId);
-      const scope = (payload ?? {}) as {
-        projectId?: string | null;
-        songId?: string | null;
-        trackVersionId?: string | null;
-      };
-      emit({
-        type: "asset.failed",
-        projectId: scope.projectId ?? null,
-        songId: scope.songId ?? null,
-        data: {
-          jobId: job.id,
-          assetId,
-          trackVersionId: scope.trackVersionId ?? null,
-          error: message.slice(0, 500),
-        },
-      });
-    }
+    if (status === "failed") for (const e of settleFailedJob(db, job, message).events) emit(e);
     return status === "queued" ? "queued" : "failed";
   } finally {
     deps.signal?.removeEventListener("abort", onShutdown);

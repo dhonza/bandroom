@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { Db } from "../db/connection";
+import { createAsset, getAsset } from "../media/assets";
 import { ToolTimeoutError } from "../media/tools";
 import { LocalStorage } from "../storage/local";
 import { makeTempDir } from "../testing/tempDir";
@@ -45,8 +46,8 @@ function deps(extra: Partial<RunnerDeps> = {}): RunnerDeps {
   };
 }
 
-function claim(maxAttempts = 3) {
-  enqueueJob(db, { type: "t", capability: "t", payload: {}, maxAttempts });
+function claim(maxAttempts = 3, payload: unknown = {}) {
+  enqueueJob(db, { type: "t", capability: "t", payload, maxAttempts });
   const job = claimJob(db, "w", ["t"]);
   if (!job) throw new Error("no job");
   return job;
@@ -151,6 +152,29 @@ describe("executeJob cancel and shutdown (review M16)", () => {
     );
     expect(getJob(db, job.id)).toMatchObject({ status: "queued", attempts: 0, lockedBy: null });
     expect(claimJob(db, "w", ["t"])?.id).toBe(job.id);
+  });
+});
+
+describe("executeJob failures for good (settleFailedJob)", () => {
+  it("fails the job's asset and emits asset.failed only on the last attempt", async () => {
+    const asset = createAsset(db, {
+      kind: "audio",
+      originalFilename: "a.wav",
+      sizeBytes: 1,
+      originalHash: "h",
+      uploadedBy: null,
+    });
+    const boom = handler(() => Promise.reject(new Error("boom")));
+    const first = claim(2, { assetId: asset.id });
+    expect(await executeJob(deps(), handlerRegistry([boom]), first)).toBe("queued");
+    expect(getAsset(db, asset.id)?.status).toBe("queued");
+    expect(events).toEqual([]);
+    const last = claimJob(db, "w", ["t"], Date.now() + 60_000);
+    if (!last) throw new Error("no retry");
+    expect(await executeJob(deps(), handlerRegistry([boom]), last)).toBe("failed");
+    expect(getAsset(db, asset.id)).toMatchObject({ status: "failed", error: "boom" });
+    expect(events.map((e) => e.type)).toEqual(["asset.failed"]);
+    expect(events[0]?.data).toMatchObject({ jobId: last.id, assetId: asset.id, error: "boom" });
   });
 });
 

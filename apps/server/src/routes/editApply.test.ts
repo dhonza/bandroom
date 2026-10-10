@@ -5,6 +5,14 @@ import { matrix, MP3_FILE } from "@bandroom/fixtures";
 import {
   claimJob,
   DEFAULT_TOOLS,
+  EDIT_STALL_MS,
+  EDIT_STALLED,
+  enqueueEditCommit,
+  failStalledEditSessions,
+  LEASE_EXPIRED,
+  recoverAndSettleExpiredJobs,
+  settleFailedJob,
+  type JobEvent,
   ffmpegArgs,
   getBlob,
   getVariant,
@@ -681,6 +689,144 @@ describe("Failure, retry, cancel, crash (SPEC §24.14)", () => {
       expect(Math.abs(peakNear(pcm, 0.5 * SEC) - 0.5 * SEC)).toBeLessThanOrEqual(1);
       // The new version is lossy-derived (from the Opus).
       expect(now[0]?.current?.media?.lossless).toBe(false);
+    },
+  );
+
+  /** Lets a claimed job's last lease run out, as when its worker is killed. */
+  const killOnLastAttempt = (jobId: string) =>
+    t.db
+      .update(schema.jobs)
+      .set({ lockedUntil: Date.now() - LEASE_MS, attempts: 3, maxAttempts: 3 })
+      .where(eq(schema.jobs.id, jobId))
+      .run();
+
+  it(
+    "a render whose last lease ran out fails the session; retry renders and commits",
+    { timeout: 120_000 },
+    async () => {
+      const s = await startWith(songId, (ids) => [cut(SEC, 1.5 * SEC, ids)]);
+      expect((await apply(s)).statusCode).toBe(200);
+      const job = claimJob(t.db, "dead-worker", ["audio.render"], Date.now());
+      expect(job?.type).toBe("audio.render");
+      killOnLastAttempt(job?.id ?? "");
+      const emitted: JobEvent[] = [];
+      const r = recoverAndSettleExpiredJobs(t.db, (e) => emitted.push(e));
+      expect(r.failed.map((j) => j.id)).toEqual([job?.id]);
+      expect(r.sessionIds).toEqual([s.id]);
+      expect(emitted.map((e) => [e.type, e.data.sessionId, e.data.status])).toEqual([
+        ["edit.changed", s.id, "open"],
+      ]);
+      const failed = sessionOf(await call(t, getEditSession, { params: { id: songId } }, eda));
+      expect(failed.status).toBe("open");
+      expect(failed.error).toBe(LEASE_EXPIRED);
+      expect(failed.renders?.[0]?.status).toBe("failed");
+      expect(
+        songEvents(songId)
+          .filter((e) => e.action === "edit.failed")
+          .at(-1)?.targetId,
+      ).toBe(s.id);
+      // Settling it again (another runner's reaper) changes nothing and records no event.
+      const before = songEvents(songId).length;
+      if (!job) throw new Error("no job");
+      expect(settleFailedJob(t.db, job, LEASE_EXPIRED).sessionIds).toEqual([]);
+      expect(songEvents(songId)).toHaveLength(before);
+      const retried = await call(t, retryEditSession, { params: { id: s.id } }, eda);
+      expect(sessionOf(retried).status).toBe("applying");
+      await runQueuedJobs(t);
+      expect(sessionRow(s.id)?.status).toBe("done");
+      tracks = await tracksOf(songId);
+    },
+  );
+
+  it(
+    "a commit whose last lease ran out fails the session; retry commits",
+    { timeout: 120_000 },
+    async () => {
+      const s = await startWith(songId, (ids) => [cut(SEC, 1.5 * SEC, ids)]);
+      expect((await apply(s)).statusCode).toBe(200);
+      // The commit job is claimed by a worker that dies; the renders and ingests run.
+      enqueueEditCommit(t.db, s.id, null);
+      const commit = claimJob(t.db, "dead-worker", ["edit.commit"], Date.now());
+      expect(commit?.type).toBe("edit.commit");
+      await runQueuedJobs(t);
+      expect(sessionRow(s.id)?.status).toBe("applying");
+      killOnLastAttempt(commit?.id ?? "");
+      expect(recoverAndSettleExpiredJobs(t.db, () => undefined).sessionIds).toEqual([s.id]);
+      const failed = sessionOf(await call(t, getEditSession, { params: { id: songId } }, eda));
+      expect(failed.status).toBe("open");
+      expect(failed.error).toBe(LEASE_EXPIRED);
+      // The (rendered) output is the failed one, so "Retry failed" has something to retry.
+      expect(failed.renders?.map((r) => r.status)).toEqual(["failed"]);
+      expect((await tracksOf(songId)).map((x) => x.current?.id)).toEqual(
+        tracks.map((x) => x.current?.id),
+      );
+      const retried = await call(t, retryEditSession, { params: { id: s.id } }, eda);
+      expect(sessionOf(retried).status).toBe("applying");
+      await runQueuedJobs(t);
+      expect(sessionRow(s.id)?.status).toBe("done");
+      tracks = await tracksOf(songId);
+    },
+  );
+
+  /** Ages an applying session and its renders past the stall limit. */
+  const age = (sessionId: string) => {
+    const old = Date.now() - EDIT_STALL_MS - 1000;
+    t.db
+      .update(schema.editSessions)
+      .set({ updatedAt: old })
+      .where(eq(schema.editSessions.id, sessionId))
+      .run();
+    t.db
+      .update(schema.editRenders)
+      .set({ updatedAt: old })
+      .where(eq(schema.editRenders.sessionId, sessionId))
+      .run();
+  };
+  const dropJobs = (where: ReturnType<typeof eq>) =>
+    t.db.update(schema.jobs).set({ status: "cancelled" }).where(where).run();
+
+  it(
+    "fails an Apply no job moves on any more, and commits one only the commit is missing for",
+    { timeout: 120_000 },
+    async () => {
+      const s = await startWith(songId, (ids) => [cut(SEC, 1.5 * SEC, ids)]);
+      expect((await apply(s)).statusCode).toBe(200);
+      // A queued or running job, or a recent change, keeps it applying.
+      age(s.id);
+      expect(failStalledEditSessions(t.db)).toEqual([]);
+      dropJobs(eq(schema.jobs.type, "audio.render"));
+      expect(failStalledEditSessions(t.db, Date.now() - EDIT_STALL_MS)).toEqual([]);
+      // The render job is gone and nothing changed for longer than the limit.
+      expect(failStalledEditSessions(t.db)).toEqual([s.id]);
+      const failed = sessionOf(await call(t, getEditSession, { params: { id: songId } }, eda));
+      expect(failed.status).toBe("open");
+      expect(failed.error).toMatch(new RegExp(`^${EDIT_STALLED}`));
+      expect(failed.renders?.[0]?.status).toBe("failed");
+      expect(
+        songEvents(songId)
+          .filter((e) => e.action === "edit.failed")
+          .at(-1)?.targetId,
+      ).toBe(s.id);
+
+      // Rendered and ingested, but the commit job got lost: it is queued again, not failed.
+      const retried = await call(t, retryEditSession, { params: { id: s.id } }, eda);
+      expect(sessionOf(retried).status).toBe("applying");
+      enqueueEditCommit(t.db, s.id, null);
+      const commit = claimJob(t.db, "dead-worker", ["edit.commit"], Date.now());
+      await runQueuedJobs(t);
+      dropJobs(eq(schema.jobs.id, commit?.id ?? ""));
+      age(s.id);
+      // The lost commit was queued before the last change: commit again.
+      t.db
+        .update(schema.jobs)
+        .set({ createdAt: Date.now() - 2 * EDIT_STALL_MS })
+        .where(eq(schema.jobs.dedupeKey, `edit-commit:${s.id}`))
+        .run();
+      expect(failStalledEditSessions(t.db)).toEqual([]);
+      expect(sessionRow(s.id)?.status).toBe("applying");
+      await runQueuedJobs(t);
+      expect(sessionRow(s.id)?.status).toBe("done");
+      tracks = await tracksOf(songId);
     },
   );
 

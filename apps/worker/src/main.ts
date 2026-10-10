@@ -17,14 +17,14 @@ import {
   loadConfig,
   LocalStorage,
   openDb,
-  recoverExpiredJobs,
   sweepJobTmp,
+  type JobEvent,
 } from "@bandroom/server-core";
 import { documentIngestHandler, imageIngestHandler } from "@bandroom/server-core/image";
 import pkg from "../package.json" with { type: "json" };
 import { startAliveFile } from "./alive";
 import { EventForwarder } from "./events";
-import { maintenanceTick } from "./maintenance";
+import { maintenanceTick, recoverJobs } from "./maintenance";
 import { MIGRATIONS_DIR } from "./paths";
 import { waitForMigrations } from "./waitForMigrations";
 
@@ -104,7 +104,10 @@ async function main(): Promise<void> {
     beat();
     // Jobs left "running" by a previous run of this worker are re-queued at once, ignoring their
     // lease. Other runners' jobs (e.g. the API's Samply import) are left to the periodic check.
-    recoverExpiredJobs(db, Date.now() + 10 * 60_000, { lockedBy: workerId });
+    const emit = (e: JobEvent) => {
+      events.emit(e);
+    };
+    recoverJobs(db, emit, Date.now() + 10 * 60_000, { lockedBy: workerId });
     logger.info({ capabilities: CAPABILITIES, concurrency: 1 }, "worker ready");
 
     let lastBeat = Date.now();
@@ -132,12 +135,13 @@ async function main(): Promise<void> {
       if (now - lastRecover >= 30_000) {
         lastRecover = now;
         try {
-          recoverExpiredJobs(db, now);
+          const r = recoverJobs(db, emit, now);
+          if (r.failed > 0 || r.stalled > 0) logger.warn(r, "failed expired or stalled jobs");
         } catch (err) {
           logger.error({ err }, "recovering expired jobs failed");
         }
       }
-      await maintenanceTick({ db, storage, log: maintenanceLog, state: maintenance });
+      await maintenanceTick({ db, storage, log: maintenanceLog, state: maintenance, emit });
 
       const job = claimJob(db, workerId, CAPABILITIES);
       if (!job) {
@@ -151,9 +155,7 @@ async function main(): Promise<void> {
           storage,
           workerId,
           tmpRoot: jobTmp,
-          emit: (e) => {
-            events.emit(e);
-          },
+          emit,
           log: (msg, extra) => {
             logger.info(extra ?? {}, msg);
           },

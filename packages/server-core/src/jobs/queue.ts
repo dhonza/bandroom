@@ -7,6 +7,8 @@ export type JobRow = typeof jobs.$inferSelect;
 export type JobStatus = JobRow["status"];
 
 export const LEASE_MS = 60_000;
+/** Error of a job whose worker stopped renewing its lease (crash, SIGKILL, OOM). */
+export const LEASE_EXPIRED = "lease expired";
 
 export interface EnqueueInput {
   type: string;
@@ -229,13 +231,14 @@ export function failJob(
  * `lockedBy` limits it to one runner's jobs: a worker restarting may treat its own leases as
  * expired early (`now` in the future) without touching jobs other processes are running, such as
  * the API's Samply import. Each update re-checks the lease, so a heartbeat that renewed it in the
- * meantime wins.
+ * meantime wins. Returns the jobs it failed for good: the caller settles them
+ * (`settleFailedJob`), e.g. fails the edit session a crashed render belonged to.
  */
 export function recoverExpiredJobs(
   db: Db,
   now: number = Date.now(),
   opts: { lockedBy?: string } = {},
-): { requeued: number; failed: number } {
+): { requeued: number; failed: JobRow[] } {
   const expired = (
     opts.lockedBy === undefined
       ? db.$client
@@ -250,7 +253,7 @@ export function recoverExpiredJobs(
   const stillExpired = (id: string) =>
     and(eq(jobs.id, id), eq(jobs.status, "running"), lt(jobs.lockedUntil, now));
   let requeued = 0;
-  let failed = 0;
+  const failed: JobRow[] = [];
   for (const r of expired) {
     if (r.attempts < r.max_attempts) {
       requeued += db
@@ -259,23 +262,25 @@ export function recoverExpiredJobs(
           status: "queued",
           lockedBy: null,
           lockedUntil: null,
-          error: "lease expired",
+          error: LEASE_EXPIRED,
           runAfter: now,
         })
         .where(stillExpired(r.id))
         .run().changes;
     } else {
-      failed += db
+      const rows = db
         .update(jobs)
         .set({
           status: "failed",
           lockedBy: null,
           lockedUntil: null,
-          error: "lease expired",
+          error: LEASE_EXPIRED,
           finishedAt: now,
         })
         .where(stillExpired(r.id))
-        .run().changes;
+        .returning()
+        .all();
+      failed.push(...rows);
     }
   }
   return { requeued, failed };

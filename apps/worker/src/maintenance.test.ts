@@ -2,24 +2,31 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   cancelEditSessionRow,
+  claimJob,
   createAsset,
   createEditSessionRow,
   createProjectRow,
   createSongRow,
   createTestDb,
   createTrackWithVersion,
+  EDIT_STALL_MS,
+  enqueueJob,
   getUsage,
   insertUser,
   listEvents,
+  LEASE_MS,
   LocalStorage,
   makeTempDir,
   putVariant,
+  RENDER_JOB_TYPE,
   schema,
   setSetting,
   softDeleteProject,
   softDeleteTrack,
   storeFile,
+  type JobEvent,
 } from "@bandroom/server-core";
+import { uuidv7 } from "@bandroom/shared";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -29,6 +36,7 @@ import {
   maintenanceDue,
   maintenanceTick,
   purgeExpiredTrash,
+  recoverJobs,
   runMaintenance,
 } from "./maintenance";
 
@@ -250,5 +258,114 @@ describe("Trash purge after the retention period (SPEC §26.3)", () => {
     cancelEditSessionRow(t.db, session);
     expect(purgeExpiredTrash(t.db, now)).toMatchObject({ purged: 1 });
     expect(byId(held.id)).toBeUndefined();
+  });
+});
+
+describe("recoverJobs: stuck Apply/Bounce (SPEC §24.14)", () => {
+  let t: ReturnType<typeof createTestDb>;
+  beforeEach(() => {
+    t = createTestDb();
+  });
+  afterEach(() => {
+    t.close();
+  });
+
+  /** An applying session with one queued render (its job, if any, is the caller's). */
+  function applying(userId: string, projectId: string, title: string, at: number) {
+    const song = createSongRow(t.db, { projectId, title, createdBy: userId });
+    const session = t.db
+      .insert(schema.editSessions)
+      .values({
+        id: uuidv7(),
+        songId: song.id,
+        projectId,
+        status: "applying",
+        ownerId: userId,
+        ownerSince: at,
+        base: "{}",
+        options: "{}",
+        outcome: JSON.stringify({ kind: "apply", by: userId, at }),
+        createdAt: at,
+        updatedAt: at,
+      })
+      .returning()
+      .get();
+    const render = t.db
+      .insert(schema.editRenders)
+      .values({
+        id: uuidv7(),
+        sessionId: session.id,
+        outputKey: "k",
+        trackId: "tr",
+        title: "T",
+        status: "queued",
+        clips: "[]",
+        offsetSamples: 0,
+        lengthFrames: 1,
+        createdAt: at,
+        updatedAt: at,
+      })
+      .returning()
+      .get();
+    return { session, render };
+  }
+
+  it("fails the session of a render whose last lease ran out, and stalled sessions", () => {
+    const user = insertUser(t.db, {
+      username: "u",
+      displayName: "U",
+      globalRole: "member",
+      passwordHash: "x",
+    });
+    const project = createProjectRow(t.db, { name: "P", createdBy: user.id });
+    const now = Date.now();
+    const crashed = applying(user.id, project.id, "Crashed", now);
+    const job = enqueueJob(t.db, {
+      type: RENDER_JOB_TYPE,
+      capability: RENDER_JOB_TYPE,
+      payload: {
+        renderId: crashed.render.id,
+        sessionId: crashed.session.id,
+        projectId: project.id,
+        songId: crashed.session.songId,
+      },
+      maxAttempts: 1,
+    });
+    claimJob(t.db, "dead", [RENDER_JOB_TYPE], now - LEASE_MS - 1);
+    // No job for its render, unchanged for longer than the limit.
+    const stalled = applying(user.id, project.id, "Stalled", now - EDIT_STALL_MS - 1);
+    // Fresh: left alone even without a job yet.
+    const fresh = applying(user.id, project.id, "Fresh", now);
+
+    const emitted: JobEvent[] = [];
+    expect(recoverJobs(t.db, (e) => emitted.push(e), now)).toEqual({
+      requeued: 0,
+      failed: 1,
+      stalled: 1,
+    });
+    const row = (id: string) =>
+      t.db.select().from(schema.editSessions).where(eq(schema.editSessions.id, id)).get();
+    expect(row(crashed.session.id)).toMatchObject({ status: "open", error: "lease expired" });
+    expect(row(stalled.session.id)?.status).toBe("open");
+    expect(row(stalled.session.id)?.error).toMatch(/^EDIT_STALLED/);
+    expect(row(fresh.session.id)?.status).toBe("applying");
+    expect(t.db.select().from(schema.jobs).where(eq(schema.jobs.id, job.id)).get()?.status).toBe(
+      "failed",
+    );
+    expect(emitted.map((e) => [e.type, e.data.sessionId, e.data.status])).toEqual([
+      ["edit.changed", crashed.session.id, "open"],
+      ["edit.changed", stalled.session.id, "open"],
+    ]);
+    expect(
+      listEvents(t.db, { action: "edit.failed" })
+        .map((e) => e.targetId)
+        .sort(),
+    ).toEqual([crashed.session.id, stalled.session.id].sort());
+    // A second pass finds nothing more to do.
+    expect(recoverJobs(t.db, () => undefined, now)).toEqual({
+      requeued: 0,
+      failed: 0,
+      stalled: 0,
+    });
   });
 });

@@ -5,7 +5,7 @@ import {
   claimJob,
   executeJob,
   handlerRegistry,
-  recoverExpiredJobs,
+  recoverAndSettleExpiredJobs,
   sweepJobTmp,
   type Db,
   type JobHandler,
@@ -43,7 +43,14 @@ export function startJobRunner(opts: {
     while (!abort.signal.aborted) {
       const now = Date.now();
       if (now - lastRecover > 30_000) {
-        recoverExpiredJobs(opts.db, now);
+        // Settles jobs failed for good, also the worker's (a crashed render fails its edit).
+        recoverAndSettleExpiredJobs(
+          opts.db,
+          (e) => {
+            opts.hub.publish(e);
+          },
+          now,
+        );
         lastRecover = now;
       }
       const job = claimJob(opts.db, workerId, capabilities);

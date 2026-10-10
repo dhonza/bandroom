@@ -6,7 +6,7 @@ import { getUserById } from "../auth/users";
 import { commitEditSession } from "../content/editCommit";
 import {
   EDIT_COMMIT_JOB_TYPE,
-  failEditSession,
+  editChangedEvent,
   getEditRender,
   outputChannels,
   RENDER_JOB_TYPE,
@@ -16,10 +16,8 @@ import {
   type ClipSource,
 } from "../content/editRenders";
 import { getEditSessionRow } from "../content/editSessions";
-import type { Db } from "../db/connection";
 import { assets, editRenders } from "../db/schema";
 import { recordEvent } from "../events/record";
-import { getJob } from "../jobs/queue";
 import { PermanentJobError, type JobContext, type JobHandler } from "../jobs/types";
 import { measureLoudness } from "./analysis";
 import { getAsset, setAssetProbe, setAssetStatus } from "./assets";
@@ -155,12 +153,6 @@ export type RenderResult =
   | { status: "ingest"; reason: string }
   | { status: "skipped"; reason: string };
 
-/** Whether this attempt is the job's last one (a failure then fails the session). */
-function lastAttempt(db: Db, jobId: string): boolean {
-  const job = getJob(db, jobId);
-  return !job || job.attempts >= job.maxAttempts;
-}
-
 export const audioRenderHandler: JobHandler<RenderPayload, RenderResult> = {
   type: RENDER_JOB_TYPE,
   capability: RENDER_JOB_TYPE,
@@ -176,30 +168,15 @@ export const audioRenderHandler: JobHandler<RenderPayload, RenderResult> = {
       setRenderStatus(db, render.id, { status: "skipped" });
       return { status: "skipped", reason: "session not applying" };
     }
-    try {
-      return await renderOne(ctx, payload, render.id);
-    } catch (err) {
-      const permanent = err instanceof PermanentJobError;
-      if (permanent || lastAttempt(db, ctx.jobId)) {
-        const message = err instanceof Error ? err.message : String(err);
-        const failed = failEditSession(db, payload.sessionId, render.id, message);
-        if (failed) emitSession(ctx, failed.id);
-      }
-      throw err;
-    }
+    // A failure on the last attempt fails the session in the runner (`settleFailedJob`).
+    return renderOne(ctx, payload, render.id);
   },
 };
 
 /** `edit.changed` for the session's song (render progress, status). */
 function emitSession(ctx: Pick<JobContext, "db" | "emit">, sessionId: string): void {
-  const s = getEditSessionRow(ctx.db, sessionId);
-  if (!s) return;
-  ctx.emit({
-    type: "edit.changed",
-    projectId: s.projectId,
-    songId: s.songId,
-    data: { songId: s.songId, sessionId: s.id, status: s.status, rev: s.rev },
-  });
+  const e = editChangedEvent(ctx.db, sessionId);
+  if (e) ctx.emit(e);
 }
 
 async function renderOne(

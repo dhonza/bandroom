@@ -9,10 +9,13 @@ import {
   purgeExpiredLinkSessions,
   purgeExpiredSessions,
   purgeExpiredUploadSessions,
+  editChangedEvent,
+  failStalledEditSessions,
   recordEvent,
-  recoverExpiredJobs,
+  recoverAndSettleExpiredJobs,
   setSetting,
   type Db,
+  type JobEvent,
   type StorageBackend,
 } from "@bandroom/server-core";
 
@@ -81,6 +84,27 @@ export function purgeExpiredTrash(db: Db, now: number): { purged: number; bytesF
 }
 
 /**
+ * Job recovery (every 30 s in the worker loop, and in the daily run): jobs whose worker died are
+ * re-queued, or failed for good and settled (e.g. their edit session fails, SPEC §24.14); then
+ * Apply/Bounce sessions no job moves on any more are failed (`EDIT_STALLED`). The edit sessions
+ * that changed are announced through `emit`.
+ */
+export function recoverJobs(
+  db: Db,
+  emit: (event: JobEvent) => void = () => undefined,
+  now: number = Date.now(),
+  opts: { lockedBy?: string } = {},
+): { requeued: number; failed: number; stalled: number } {
+  const r = recoverAndSettleExpiredJobs(db, emit, now, opts);
+  const stalled = failStalledEditSessions(db, Math.min(now, Date.now()));
+  for (const id of stalled) {
+    const e = editChangedEvent(db, id);
+    if (e) emit(e);
+  }
+  return { requeued: r.requeued, failed: r.failed.length, stalled: stalled.length };
+}
+
+/**
  * Daily maintenance: Trash purge, blob GC, expired sessions, link visitor sessions and upload
  * sessions, old client request ids. Later milestones add retention, usage recompute and disk
  * checks here.
@@ -89,9 +113,10 @@ export async function runMaintenance(
   db: Db,
   storage: StorageBackend,
   now: Date = new Date(),
+  emit?: (event: JobEvent) => void,
 ): Promise<MaintenanceResult> {
   const t = now.getTime();
-  recoverExpiredJobs(db, t);
+  recoverJobs(db, emit, t);
   const trash = purgeExpiredTrash(db, t);
   const gc = await collectGarbageBlobs(db, storage, t);
   const sessionsPurged = purgeExpiredSessions(db, t);
@@ -129,6 +154,8 @@ export interface MaintenanceTickDeps {
   log: MaintenanceLog;
   /** In-memory back-off: no attempt before this time (epoch ms). Updated on failure. */
   state: { retryAfter: number };
+  /** Fan-out of the events of recovered jobs (`edit.changed`, `asset.failed`). */
+  emit?: (event: JobEvent) => void;
   /** Injectable for tests. */
   run?: typeof runMaintenance;
 }
@@ -145,7 +172,7 @@ export async function maintenanceTick(
   if (now.getTime() < deps.state.retryAfter) return "idle";
   try {
     if (!maintenanceDue(now, lastMaintenanceRun(deps.db))) return "idle";
-    const res = await (deps.run ?? runMaintenance)(deps.db, deps.storage, now);
+    const res = await (deps.run ?? runMaintenance)(deps.db, deps.storage, now, deps.emit);
     deps.log.info(res, "daily maintenance done");
     return "done";
   } catch (err) {

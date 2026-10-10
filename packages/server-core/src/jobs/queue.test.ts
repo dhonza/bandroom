@@ -82,9 +82,14 @@ describe("job queue (SPEC §18.4)", () => {
     expect(getJob(db, j.id)).toMatchObject({ progress: 0.5, lockedUntil: 30_000 + LEASE_MS });
     expect(heartbeatJob(db, j.id, "other", null, 30_000)).toBe(false);
 
-    expect(recoverExpiredJobs(db, 30_000 + LEASE_MS + 1)).toEqual({ requeued: 1, failed: 0 });
+    expect(recoverExpiredJobs(db, 30_000 + LEASE_MS + 1)).toEqual({ requeued: 1, failed: [] });
     claimJob(db, "w", ["x"], 200_000);
-    expect(recoverExpiredJobs(db, 200_000 + LEASE_MS + 1)).toEqual({ requeued: 0, failed: 1 });
+    // The jobs failed for good come back, so the caller can settle them.
+    const r = recoverExpiredJobs(db, 200_000 + LEASE_MS + 1);
+    expect(r.requeued).toBe(0);
+    expect(r.failed).toEqual([
+      expect.objectContaining({ id: j.id, status: "failed", error: "lease expired" }),
+    ]);
 
     const k = add("x");
     claimJob(db, "w", ["x"], 300_000);
@@ -104,13 +109,13 @@ describe("recoverExpiredJobs", () => {
     const startup = 20_000 + 10 * 60_000;
     expect(recoverExpiredJobs(db, startup, { lockedBy: "local-host" })).toEqual({
       requeued: 1,
-      failed: 0,
+      failed: [],
     });
     expect(getJob(db, own.id)).toMatchObject({ status: "queued", lockedBy: null });
     expect(getJob(db, api.id)).toMatchObject({ status: "running", lockedBy: "server-123" });
     // The periodic check with the real time still recovers any runner's expired lease.
-    expect(recoverExpiredJobs(db, 20_000)).toEqual({ requeued: 0, failed: 0 });
-    expect(recoverExpiredJobs(db, 10_000 + LEASE_MS + 1)).toEqual({ requeued: 1, failed: 0 });
+    expect(recoverExpiredJobs(db, 20_000)).toEqual({ requeued: 0, failed: [] });
+    expect(recoverExpiredJobs(db, 10_000 + LEASE_MS + 1)).toEqual({ requeued: 1, failed: [] });
     expect(getJob(db, api.id)).toMatchObject({ status: "queued" });
   });
 
@@ -129,7 +134,7 @@ describe("recoverExpiredJobs", () => {
           ? { all: () => stale }
           : prepare(sql)) as typeof db.$client.prepare);
     try {
-      expect(recoverExpiredJobs(db, late)).toEqual({ requeued: 0, failed: 0 });
+      expect(recoverExpiredJobs(db, late)).toEqual({ requeued: 0, failed: [] });
     } finally {
       spy.mockRestore();
     }
