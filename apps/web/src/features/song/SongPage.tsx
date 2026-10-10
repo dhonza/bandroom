@@ -9,6 +9,7 @@ import {
   type Track,
 } from "@bandroom/shared";
 import {
+  ActionIcon,
   Alert,
   Button,
   Center,
@@ -19,15 +20,17 @@ import {
   Textarea,
   TextInput,
   Title,
+  Tooltip,
+  VisuallyHidden,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
-import { IconPencil } from "@tabler/icons-react";
+import { IconArrowLeft } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormatters } from "../../i18n/format";
-import { useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { LinksPanel } from "../../links/LinksPanel";
 import { api, ApiError } from "../../api/client";
 import { useApiError } from "../../api/useApiError";
@@ -60,18 +63,137 @@ import {
   useEditingSong,
 } from "../../edit/EditMode";
 import { useEditSessionSync } from "../../edit/session";
+import { useBarLayout, type BarLayout } from "../../rehearse/barLayout";
+import {
+  closeSongPreferences,
+  SONG_SECTION_IDS,
+  SongMenuDialogs,
+  SongMoreMenu,
+  SongPreferencesButton,
+  useSongMenuUi,
+} from "./SongMenu";
+
+/** Icon buttons of the desktop song header (SPEC §31.2). */
+const HEADER_ICON = 36;
+
+/**
+ * The compact song header (SPEC §31.2): back link, title (wrapping by words), the song info line
+ * and the actions. Phones: a back arrow, the title and a few icons (the rest in "⋯"). Landscape
+ * phones: the title stays for screen readers; the control bar has a compact one.
+ */
+function SongHeader({
+  song,
+  layout,
+  editing,
+  actions,
+  phoneActions,
+}: {
+  song: Song;
+  layout: BarLayout;
+  editing: boolean;
+  actions: ReactNode;
+  phoneActions: ReactNode;
+}) {
+  const { t } = useTranslation();
+  const fmt = useFormatters();
+  const meta = [
+    song.subtitle,
+    song.key && t("songs.keyLabel", { key: song.key }),
+    song.bytes ? fmt.bytes(song.bytes) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const back = `/projects/${song.project.id}`;
+  const info = (size: "xs" | "sm") => (
+    <Group gap={6} wrap="wrap" style={{ rowGap: 0 }}>
+      {meta && (
+        <Text c="dimmed" size={size} data-testid="song-meta">
+          {meta}
+        </Text>
+      )}
+      <SongTempoSummary songId={song.id} />
+    </Group>
+  );
+  if (layout === "landscape") {
+    return (
+      <VisuallyHidden>
+        <Title order={2} data-testid="song-title">
+          {song.title}
+        </Title>
+        {editing && <EditModeHeader song={song} />}
+      </VisuallyHidden>
+    );
+  }
+  if (layout === "phone") {
+    return (
+      <Group gap={2} wrap="nowrap" align="center" data-testid="song-header">
+        <Tooltip label={t("songs.backTo", { name: song.project.name })}>
+          <ActionIcon
+            component={Link}
+            to={back}
+            size={44}
+            variant="subtle"
+            aria-label={t("songs.backTo", { name: song.project.name })}
+            data-testid="song-back"
+          >
+            <IconArrowLeft size={20} />
+          </ActionIcon>
+        </Tooltip>
+        <Stack gap={0} style={{ flex: "1 1 auto", minWidth: 0 }}>
+          <Title
+            order={2}
+            size="h4"
+            lineClamp={2}
+            style={{ overflowWrap: "break-word" }}
+            data-testid="song-title"
+          >
+            {song.title}
+          </Title>
+          {!editing && info("xs")}
+        </Stack>
+        {editing ? <EditModeHeader song={song} /> : phoneActions}
+      </Group>
+    );
+  }
+  return (
+    <Group gap="xs" wrap="wrap" align="center" data-testid="song-header" style={{ rowGap: 4 }}>
+      <BackLink to={back}>{song.project.name}</BackLink>
+      <Title order={2} size="h3" style={{ overflowWrap: "break-word" }} data-testid="song-title">
+        {song.title}
+      </Title>
+      {info("sm")}
+      <Group
+        gap={4}
+        wrap="wrap"
+        justify="flex-end"
+        ml="auto"
+        style={{ flex: "0 1 auto" }}
+        data-testid="song-actions"
+      >
+        {editing ? <EditModeHeader song={song} /> : actions}
+      </Group>
+    </Group>
+  );
+}
 
 /** Song page (SPEC §11.3): metadata, the Player (Mixer in the header), tracks, notes and access. */
 export function SongPage() {
   const { t } = useTranslation();
-  const fmt = useFormatters();
   const { songId = "" } = useParams();
   const query = useSong(songId);
   const tracks = useSongTracks(songId);
   const mixer = useMixerToggle(true, songId);
   // Without tracks the Mixer still has the click lane once the song has a tempo (SPEC §9).
   const hasTempo = useTempoUi((s) => s.songId === songId && s.grid !== null);
-  const [editOpen, edit] = useDisclosure(false);
+  const preferencesOpen = useSongMenuUi((s) => s.preferences);
+  const layout = useBarLayout();
+  // Leaving the page closes its dialogs (the next song must not open with them).
+  useEffect(
+    () => () => {
+      useSongMenuUi.setState({ offline: false, preferences: false });
+    },
+    [],
+  );
   // Edit mode (SPEC §24.6): the edit bar replaces the header actions; the Mixer is open.
   const editing = useEditingSong(songId);
   useEditSessionSync(songId, tracks.data?.tracks);
@@ -93,55 +215,37 @@ export function SongPage() {
 
   return (
     <Stack gap="lg">
-      <BackLink to={`/projects/${song.project.id}`}>{song.project.name}</BackLink>
-      {/* Long titles wrap by words; on narrow screens the buttons wrap below (SPEC §11.3). */}
-      <Group justify="space-between" align="flex-start" wrap="wrap" data-testid="song-header">
-        <Stack gap={2} style={{ flex: "1 1 12rem", minWidth: 0 }}>
-          <Title order={2} style={{ overflowWrap: "break-word" }} data-testid="song-title">
-            {song.title}
-          </Title>
-          {(song.subtitle || song.key || !!song.bytes) && (
-            <Text c="dimmed" data-testid="song-meta">
-              {[
-                song.subtitle,
-                song.key && t("songs.keyLabel", { key: song.key }),
-                song.bytes ? fmt.bytes(song.bytes) : null,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </Text>
-          )}
-          <SongTempoSummary songId={song.id} />
-        </Stack>
-        {editing ? (
-          <EditModeHeader song={song} />
-        ) : (
-          <Group gap="xs" wrap="wrap" justify="flex-end" style={{ flex: "0 1 auto" }}>
+      <SongHeader
+        song={song}
+        layout={layout}
+        editing={editing}
+        actions={
+          <>
             <MixerButton mixer={mixer} disabled={tracks.data?.tracks.length === 0 && !hasTempo} />
+            <EditButton song={song} tracks={tracks.data?.tracks ?? null} />
             <OfflineButton
               kind="song"
               id={song.id}
               title={song.title}
               projectId={song.project.id}
+              iconOnly
+              size={HEADER_ICON}
             />
-            <FollowButton target="song" id={song.id} />
-            <SongLockButton song={song} />
-            <EditButton song={song} tracks={tracks.data?.tracks ?? null} />
-            {caps.has("edit.any") && (
-              <Button
-                disabled={!!song.editing}
-                variant="default"
-                h={44}
-                leftSection={<IconPencil size={16} />}
-                onClick={edit.open}
-                data-testid="edit-song"
-              >
-                {t("common.edit")}
-              </Button>
-            )}
-          </Group>
-        )}
-      </Group>
+            <FollowButton target="song" id={song.id} iconOnly size={HEADER_ICON} />
+            <SongLockButton song={song} size={HEADER_ICON} />
+            <SongPreferencesButton song={song} size={HEADER_ICON} />
+            <SongMoreMenu song={song} compact={false} size={HEADER_ICON} />
+          </>
+        }
+        phoneActions={
+          <>
+            <MixerButton mixer={mixer} disabled={tracks.data?.tracks.length === 0 && !hasTempo} />
+            <EditButton song={song} tracks={tracks.data?.tracks ?? null} iconOnly />
+            <SongPreferencesButton song={song} size={44} />
+            <SongMoreMenu song={song} compact size={44} />
+          </>
+        }
+      />
       {editing && <EditModeToolbar />}
 
       <SongLockBanner song={song} />
@@ -158,10 +262,19 @@ export function SongPage() {
       )}
 
       {caps.has("link.manage") && <SongLinksSection song={song} />}
-      {caps.has("grants.manage") && <SongAccessSection song={song} />}
-      {caps.has("song.delete") && <DeleteSongSection song={song} />}
+      {caps.has("grants.manage") && (
+        <div id={SONG_SECTION_IDS.access}>
+          <SongAccessSection song={song} />
+        </div>
+      )}
+      {caps.has("song.delete") && (
+        <div id={SONG_SECTION_IDS.delete}>
+          <DeleteSongSection song={song} />
+        </div>
+      )}
 
-      {editOpen && <EditSongModal song={song} onClose={edit.close} />}
+      {preferencesOpen && <EditSongModal song={song} onClose={closeSongPreferences} />}
+      <SongMenuDialogs song={song} />
     </Stack>
   );
 }
@@ -229,7 +342,7 @@ function SongLinksSection({ song }: { song: Song }) {
     if (focus) ref.current?.scrollIntoView({ block: "start" });
   }, [focus]);
   return (
-    <div ref={ref}>
+    <div ref={ref} id={SONG_SECTION_IDS.links}>
       <Section title={t("links.title")} description={t("links.songExplain")} testId="song-links">
         <LinksPanel owner={{ kind: "song", songId: song.id }} canCreate />
       </Section>

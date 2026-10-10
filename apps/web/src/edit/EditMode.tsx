@@ -1,5 +1,5 @@
 import type { Song, Track } from "@bandroom/shared";
-import { Alert, Button, Group, Stack, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Alert, Button, Group, Stack, Text, Tooltip } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { IconCut } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -33,7 +33,18 @@ export function mayEditAudio(song: Song): boolean {
  * is locked or has no playable track; hidden while someone else edits (the banner offers the
  * takeover).
  */
-export function EditButton({ song, tracks }: { song: Song; tracks: Track[] | null }) {
+export function EditButton({
+  song,
+  tracks,
+  iconOnly = false,
+  size = 44,
+}: {
+  song: Song;
+  tracks: Track[] | null;
+  /** Phones and landscape (SPEC §31.2, §31.6): an icon with the wording in its tooltip. */
+  iconOnly?: boolean;
+  size?: number;
+}) {
   const { t } = useTranslation();
   const apiError = useApiError();
   const qc = useQueryClient();
@@ -57,7 +68,22 @@ export function EditButton({ song, tracks }: { song: Song; tracks: Track[] | nul
       setBusy(false);
     }
   };
-  const button = (
+  const button = iconOnly ? (
+    <ActionIcon
+      size={size}
+      variant="subtle"
+      color="gray"
+      disabled={locked || !playable}
+      loading={busy}
+      aria-label={t("edit.button")}
+      onClick={() => {
+        void start();
+      }}
+      data-testid="edit-audio"
+    >
+      <IconCut size={20} />
+    </ActionIcon>
+  ) : (
     <Button
       variant="default"
       h={44}
@@ -74,7 +100,11 @@ export function EditButton({ song, tracks }: { song: Song; tracks: Track[] | nul
   );
   if (locked) return <LockedHint locked>{button}</LockedHint>;
   return (
-    <Tooltip label={t("edit.buttonHint")} multiline w={260}>
+    <Tooltip
+      label={iconOnly ? `${t("edit.button")} · ${t("edit.buttonHint")}` : t("edit.buttonHint")}
+      multiline
+      w={260}
+    >
       {button}
     </Tooltip>
   );

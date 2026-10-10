@@ -66,10 +66,18 @@ export function useDownloadPercent(key: string): number | null {
  * downloaded, a menu to update or remove it. The label is short ("Offline") so the song header
  * stays compact; icon and colour show the state, which the tooltip and accessible name spell out.
  */
-export function OfflineButton(target: OfflineTarget) {
+export function OfflineButton({
+  iconOnly = false,
+  size = 44,
+  ...target
+}: OfflineTarget & {
+  /** The compact song header (SPEC §31.2): an icon with the wording in its tooltip. */
+  iconOnly?: boolean;
+  size?: number;
+}) {
   const { t, i18n } = useTranslation();
   const online = useOnline();
-  const isPhone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
+  const isPhone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false }) || iconOnly;
   const key = itemKey(target.kind, target.id);
   const items = useOffline((s) => s.items);
   const ready = useOffline((s) => s.userId !== null);
@@ -90,8 +98,8 @@ export function OfflineButton(target: OfflineTarget) {
     isPhone ? (
       <Tooltip label={hint}>
         <ActionIcon
-          size={44}
-          variant="default"
+          size={size}
+          variant={iconOnly ? (color === GRAY ? "subtle" : "light") : "default"}
           color={color}
           aria-label={hint}
           onClick={onClick}
@@ -132,15 +140,27 @@ export function OfflineButton(target: OfflineTarget) {
       return (
         <Tooltip label={t("offline.needsNetwork")}>
           <span>
-            <Button
-              variant="default"
-              h={44}
-              disabled
-              leftSection={<IconCloudDown size={16} />}
-              aria-label={t("offline.button.makeHint")}
-            >
-              {isPhone ? null : short}
-            </Button>
+            {isPhone ? (
+              <ActionIcon
+                size={size}
+                variant={iconOnly ? "subtle" : "default"}
+                disabled
+                aria-label={t("offline.button.makeHint")}
+                data-testid="offline-button"
+              >
+                <IconCloudDown size={18} />
+              </ActionIcon>
+            ) : (
+              <Button
+                variant="default"
+                h={44}
+                disabled
+                leftSection={<IconCloudDown size={16} />}
+                aria-label={t("offline.button.makeHint")}
+              >
+                {short}
+              </Button>
+            )}
           </span>
         </Tooltip>
       );
@@ -211,6 +231,58 @@ export function OfflineButton(target: OfflineTarget) {
 }
 
 /** Size estimate and options before the download (SPEC §13). */
+/**
+ * "Make available offline" as an item of the song's "⋯" menu (phones, landscape; SPEC §31.2):
+ * opens the size estimate (`onOpen`) or, once the song is on the device, the offline page.
+ */
+export function OfflineMenuItem({ target, onOpen }: { target: OfflineTarget; onOpen: () => void }) {
+  const { t } = useTranslation();
+  const online = useOnline();
+  const key = itemKey(target.kind, target.id);
+  const items = useOffline((s) => s.items);
+  const ready = useOffline((s) => s.userId !== null);
+  const own = items.find((i) => i.key === key);
+  const viaProject = !own && target.kind === "song" ? offlineItemFor(target.id, items) : undefined;
+  const percent = useDownloadPercent(key);
+  if (!offlineSupported() || !ready) return null;
+  const status = own?.status ?? (viaProject ? "project" : "none");
+  if (!own && !viaProject) {
+    return (
+      <Menu.Item
+        leftSection={<IconCloudDown size={14} />}
+        disabled={!online}
+        onClick={onOpen}
+        data-testid="offline-button"
+        data-status={status}
+      >
+        {online ? t("offline.button.makeHint") : t("offline.needsNetwork")}
+      </Menu.Item>
+    );
+  }
+  const label = viaProject
+    ? t("offline.button.viaProject")
+    : own?.status === "downloading"
+      ? percent === null
+        ? t("offline.button.preparing")
+        : t("offline.button.downloading", { percent })
+      : own?.status === "error"
+        ? t("offline.button.failed")
+        : own?.status === "outdated"
+          ? t("offline.button.outdated")
+          : t("offline.button.ready");
+  return (
+    <Menu.Item
+      component={Link}
+      to="/offline"
+      leftSection={<IconCloudCheck size={14} />}
+      data-testid="offline-button"
+      data-status={status}
+    >
+      {label}
+    </Menu.Item>
+  );
+}
+
 export function OfflineModal({ target, onClose }: { target: OfflineTarget; onClose: () => void }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";

@@ -6,9 +6,9 @@ import {
   type Capability,
   type Song,
 } from "@bandroom/shared";
-import { ActionIcon, Alert, Tooltip } from "@mantine/core";
+import { ActionIcon, Alert, Box, Menu, Tooltip } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconLock, IconLockOpen } from "@tabler/icons-react";
+import { IconCheck, IconLock, IconLockOpen } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -79,7 +79,81 @@ export function LockedHint({
  * Lock toggle in the song header: editors switch it; everyone else sees the lock icon while the
  * song is locked.
  */
-export function SongLockButton({ song }: { song: Song }) {
+export function SongLockButton({ song, size = 44 }: { song: Song; size?: number }) {
+  const { t } = useTranslation();
+  const { locked, label, canToggle, toggle } = useSongLockToggle(song);
+  if (!canToggle && !locked) return null;
+  // An edit session freezes the song lock too (SPEC §24.7).
+  const editFrozen = !!song.editing;
+  const icon = locked ? <IconLock size={20} /> : <IconLockOpen size={20} />;
+  const tip = locked
+    ? `${label ?? t("songs.lock.locked")}${canToggle ? ` · ${t("songs.lock.unlock")}` : ""}`
+    : t("songs.lock.lockHint");
+  return (
+    <Tooltip label={tip} multiline w={280}>
+      {canToggle ? (
+        <ActionIcon
+          size={size}
+          variant={locked ? "light" : "subtle"}
+          color={locked ? "yellow" : "gray"}
+          loading={toggle.isPending}
+          disabled={editFrozen}
+          aria-pressed={locked}
+          aria-label={locked ? t("songs.lock.unlock") : t("songs.lock.lock")}
+          onClick={() => {
+            toggle.mutate();
+          }}
+          data-testid="song-lock-toggle"
+        >
+          {icon}
+        </ActionIcon>
+      ) : (
+        <ActionIcon
+          size={size}
+          variant="light"
+          color="yellow"
+          component="span"
+          role="img"
+          aria-label={label ?? t("songs.lock.locked")}
+          data-testid="song-lock-state"
+        >
+          {icon}
+        </ActionIcon>
+      )}
+    </Tooltip>
+  );
+}
+
+/** The lock as an item of a "⋯" menu (phones and landscape, SPEC §31.2, §31.6). */
+export function SongLockMenuItem({ song }: { song: Song }) {
+  const { t } = useTranslation();
+  const { locked, label, canToggle, toggle } = useSongLockToggle(song);
+  if (!canToggle && !locked) return null;
+  if (!canToggle) {
+    return (
+      <Menu.Item disabled leftSection={<IconLock size={14} />} data-testid="song-lock-state">
+        {label ?? t("songs.lock.locked")}
+      </Menu.Item>
+    );
+  }
+  return (
+    <Menu.Item
+      leftSection={locked ? <IconCheck size={14} /> : <Box w={14} />}
+      rightSection={locked ? <IconLock size={14} /> : <IconLockOpen size={14} />}
+      disabled={!!song.editing || toggle.isPending}
+      onClick={() => {
+        toggle.mutate();
+      }}
+      role="menuitemcheckbox"
+      aria-checked={locked}
+      data-testid="song-lock-toggle"
+    >
+      {t("songs.lock.lock")}
+    </Menu.Item>
+  );
+}
+
+function useSongLockToggle(song: Song) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const apiError = useApiError();
@@ -99,46 +173,7 @@ export function SongLockButton({ song }: { song: Song }) {
       notifications.show({ color: "red", message: apiError(err) });
     },
   });
-  if (!canToggle && !locked) return null;
-  // An edit session freezes the song lock too (SPEC §24.7).
-  const editFrozen = !!song.editing;
-  const icon = locked ? <IconLock size={20} /> : <IconLockOpen size={20} />;
-  const tip = locked
-    ? `${label ?? t("songs.lock.locked")}${canToggle ? ` · ${t("songs.lock.unlock")}` : ""}`
-    : t("songs.lock.lockHint");
-  return (
-    <Tooltip label={tip} multiline w={280}>
-      {canToggle ? (
-        <ActionIcon
-          size={44}
-          variant={locked ? "light" : "default"}
-          color={locked ? "yellow" : "gray"}
-          loading={toggle.isPending}
-          disabled={editFrozen}
-          aria-pressed={locked}
-          aria-label={locked ? t("songs.lock.unlock") : t("songs.lock.lock")}
-          onClick={() => {
-            toggle.mutate();
-          }}
-          data-testid="song-lock-toggle"
-        >
-          {icon}
-        </ActionIcon>
-      ) : (
-        <ActionIcon
-          size={44}
-          variant="light"
-          color="yellow"
-          component="span"
-          role="img"
-          aria-label={label ?? t("songs.lock.locked")}
-          data-testid="song-lock-state"
-        >
-          {icon}
-        </ActionIcon>
-      )}
-    </Tooltip>
-  );
+  return { locked, label, canToggle, toggle };
 }
 
 /** Banner on the song page while it is locked. */
