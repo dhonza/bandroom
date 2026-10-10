@@ -71,7 +71,8 @@ export function setChromeHidden(hidden: boolean): void {
 }
 
 export function toggleChrome(): void {
-  setChromeHidden(!useChrome.getState().hidden);
+  if (chromeCollapsed(useChrome.getState())) showChrome();
+  else setChromeHidden(true);
 }
 
 /** `Shift+F` toggles the navigation on every screen. */

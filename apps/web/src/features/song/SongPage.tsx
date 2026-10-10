@@ -67,6 +67,7 @@ import {
 } from "../../edit/EditMode";
 import { useEditSessionSync } from "../../edit/session";
 import { useBarLayout, type BarLayout } from "../../rehearse/barLayout";
+import { setChromeAuto } from "../../shell/chrome";
 import { EditingLabel, SectionsToggle, type BarSongSlots } from "../../rehearse/Transport";
 import {
   closeSongPreferences,
@@ -201,6 +202,16 @@ export function SongPage() {
   const hasTempo = useTempoUi((s) => s.songId === songId && s.grid !== null);
   const preferencesOpen = useSongMenuUi((s) => s.preferences);
   const layout = useBarLayout();
+  // A phone in landscape: the app chrome hides by itself on this page (SPEC §31.6).
+  useEffect(() => {
+    setChromeAuto(layout === "landscape");
+  }, [layout]);
+  useEffect(
+    () => () => {
+      setChromeAuto(false);
+    },
+    [],
+  );
   // Leaving the page closes its dialogs (the next song must not open with them).
   useEffect(
     () => () => {

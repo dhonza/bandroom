@@ -16,7 +16,14 @@ import { useCurrentUser } from "../auth/session";
 import type { GoneSongs } from "../player/queue";
 import { BottomTabBar, TAB_BAR_HEIGHT } from "./BottomTabBar";
 import { ChromeRestoreButton } from "./ChromeRestoreButton";
-import { isChromeToggleKey, isTypingTarget, toggleChrome, useChrome } from "./chrome";
+import {
+  chromeAutoOnly,
+  chromeCollapsed,
+  isChromeToggleKey,
+  isTypingTarget,
+  toggleChrome,
+  useChrome,
+} from "./chrome";
 import { ColorSchemeToggle } from "./ColorSchemeToggle";
 import { DesktopNav } from "./DesktopNav";
 import { LanguageSwitcher } from "./LanguageSwitcher";
@@ -64,7 +71,9 @@ export function AppLayout() {
   // Split view: the documents panel sits beside the page on desktop (SPEC §11.3).
   const docsInset = useDocsInset();
   // "Hide navigation" (SPEC §25.2): header and navbar or tab bar make room for the page.
-  const hidden = useChrome((s) => s.hidden);
+  const hidden = useChrome(chromeCollapsed);
+  // Hidden only automatically (SPEC §31.6): the page offers "Show navigation" itself.
+  const autoOnly = useChrome(chromeAutoOnly);
   useChromeShortcut();
   const tabBar = isPhone && !hidden;
   const footerHeight = (tabBar ? TAB_BAR_HEIGHT : 0) + (mini ? miniPlayerHeight(isPhone) : 0);
@@ -140,7 +149,7 @@ export function AppLayout() {
           }),
         }}
       >
-        {hidden && <ChromeRestoreButton />}
+        {hidden && !autoOnly && <ChromeRestoreButton />}
         <UpdateBanner />
         <Outlet />
         <LogoutPrompt />

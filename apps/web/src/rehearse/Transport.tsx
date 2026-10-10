@@ -505,10 +505,6 @@ export function ControlBar({
         borderBottom: "1px solid var(--mantine-color-default-border)",
         borderTopLeftRadius: "inherit",
         borderTopRightRadius: "inherit",
-        ...(layout === "landscape" && {
-          paddingLeft: "env(safe-area-inset-left)",
-          paddingRight: "env(safe-area-inset-right)",
-        }),
       }}
     >
       {interrupted}

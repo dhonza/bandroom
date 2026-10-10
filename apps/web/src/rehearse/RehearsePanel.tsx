@@ -445,6 +445,11 @@ export function RehearsePanel({
           marginInline: "calc(var(--mantine-spacing-md) * -1)",
           borderInline: "none",
         }),
+        // Landscape: clear of the notch and the rounded corners (SPEC §31.6).
+        ...(landscape && {
+          paddingLeft: "env(safe-area-inset-left)",
+          paddingRight: "env(safe-area-inset-right)",
+        }),
       }}
     >
       {lockHint && (
