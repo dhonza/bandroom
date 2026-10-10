@@ -528,12 +528,19 @@ export function ControlBar({
   );
 }
 
-/** "Editing · Saved" under the compact title (landscape, SPEC §31.2). */
-function EditingLabel() {
+/** "Editing · Saved" under the title (phones, landscape; SPEC §31.2). */
+export function EditingLabel() {
   const { t } = useTranslation();
   const save = useEdit((s) => s.save);
   return (
-    <Text size="xs" fw={700} c="orange" truncate="end">
+    <Text
+      size="xs"
+      fw={700}
+      c="orange"
+      truncate="end"
+      data-testid="edit-save-status"
+      data-status={save}
+    >
       {t("edit.editing_label")} ·{" "}
       <Text span size="xs" fw={500} c={save === "error" ? "red" : "dimmed"}>
         {t(`edit.save.${save}`)}
@@ -552,8 +559,10 @@ export function ContextRow({
   spread = false,
   children,
   testId = "context-row",
+  dataLayout,
   label,
 }: {
+  dataLayout?: string;
   coarse: boolean;
   edit?: boolean;
   /** Phones: the buttons spread over the width. */
@@ -572,6 +581,7 @@ export function ContextRow({
       px={coarse ? 4 : 8}
       py={coarse ? 0 : 2}
       data-testid={testId}
+      data-layout={dataLayout}
       style={{
         boxSizing: "border-box",
         ...(coarse ? { height: 44 } : { minHeight: 32 }),

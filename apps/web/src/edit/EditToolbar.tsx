@@ -11,9 +11,10 @@ import {
   Box,
   Button,
   Checkbox,
+  Divider,
   Group,
+  Menu,
   NumberInput,
-  Paper,
   SegmentedControl,
   Select,
   Stack,
@@ -21,17 +22,19 @@ import {
   Text,
   Tooltip,
 } from "@mantine/core";
-import { useMediaQuery } from "@mantine/hooks";
 import {
   IconAdjustmentsAlt,
   IconArrowBackUp,
   IconArrowForwardUp,
   IconCheck,
+  IconChevronDown,
   IconCloudUpload,
   IconCut,
+  IconDots,
   IconFileExport,
   IconFlag,
   IconScissors,
+  IconStack2,
   IconVolume,
   IconVolumeOff,
   IconAlertTriangle,
@@ -39,10 +42,10 @@ import {
 } from "@tabler/icons-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { AppModal, CaptionButton, PanelPopover } from "../components/ResponsivePanel";
+import { AppModal, PanelPopover } from "../components/ResponsivePanel";
 import { setSnap } from "../markers/store";
 import { formatClock } from "../player/format";
-import { PHONE_QUERY } from "../shell/mediaQueries";
+import { ContextRow } from "../rehearse/Transport";
 import { useEditActions, useEditAvailability } from "./actions";
 import { ApplyDialog, BounceDialog } from "./ApplyBounce";
 import { splitPoints, type UnavailableReason } from "./model";
@@ -57,9 +60,6 @@ import {
   useEdit,
   type SaveStatus,
 } from "./store";
-
-/** Height of the phone's edit sheet (two rows of 44 px buttons and padding). */
-export const EDIT_SHEET_H = 112;
 
 /** A button that explains why it is disabled (SPEC §24.6: "Select a range first"). */
 function Why({ reason, children }: { reason: string | null; children: ReactNode }) {
@@ -209,212 +209,400 @@ function useFinishActions(): ToolAction[] {
   ];
 }
 
+/** One edit tool as an icon with its tooltip (the reason while disabled). */
+function ToolIcon({ a, size }: { a: ToolAction; size: number }) {
+  const button = (
+    <ActionIcon
+      size={size}
+      variant={a.key === "apply" && a.disabledReason === null ? "filled" : "subtle"}
+      color={a.color ?? "gray"}
+      onClick={a.onClick}
+      disabled={a.disabledReason !== null}
+      aria-label={a.label}
+      data-testid={a.testId}
+    >
+      {a.icon}
+    </ActionIcon>
+  );
+  if (a.disabledReason) return <Why reason={a.disabledReason}>{button}</Why>;
+  return <Tooltip label={a.label}>{button}</Tooltip>;
+}
+
+/** A text button of the edit row (Cancel, Bounce…, Apply) with its disabled reason. */
+function RowButton({
+  a,
+  coarse,
+  variant,
+}: {
+  a: ToolAction;
+  coarse: boolean;
+  variant: "filled" | "default" | "subtle";
+}) {
+  return (
+    <Why reason={a.disabledReason}>
+      <Button
+        size="compact-sm"
+        h={coarse ? 44 : 24}
+        px={coarse ? 14 : 8}
+        variant={variant}
+        color={a.color}
+        leftSection={a.key === "apply" ? <IconCheck size={14} /> : undefined}
+        onClick={a.onClick}
+        disabled={a.disabledReason !== null}
+        data-testid={a.testId}
+      >
+        {a.short}
+      </Button>
+    </Why>
+  );
+}
+
+const PHONE_TOOLS = new Set(["split", "cut", "silence", "gain", "undo", "redo"]);
+const CUT_TOOLS = new Set(["split", "splitAtMarkers", "cut", "silence", "gain"]);
+const HISTORY_TOOLS = new Set(["undo", "redo"]);
+
 /**
- * The edit toolbar (SPEC §24.6): under the song header on desktop; on phones a sheet at the
- * bottom of the screen (above the tab bar; the transport stays pinned at the top), so every
- * operation is one tap away.
+ * The orange edit row (SPEC §24.6, §31.2): row 2 of the control bar on every device. Desktop:
+ * "Editing", the tools as icons, options, the track count, Sections, the save status, Cancel,
+ * Bounce… and Apply. Phones: six tools and "⋯" (split at markers, options, tracks, bounce);
+ * Apply and Cancel are in the song header. Landscape: every tool, then Bounce…, Cancel and Apply.
  */
-export function EditToolbar({
+export function EditContextRow({
+  layout,
+  coarse,
   markers,
   durationSec,
+  trackNames,
+  sections,
+  onCancel,
 }: {
+  layout: "desktop" | "phone" | "landscape";
+  coarse: boolean;
   markers: readonly Marker[];
   durationSec: number;
+  trackNames: Readonly<Record<string, string>>;
+  /** The Sections toggle (desktop). */
+  sections?: ReactNode;
+  onCancel: () => Promise<void>;
 }) {
   const { t } = useTranslation();
-  const phone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   const tools = useToolActions();
   const finish = useFinishActions();
-  const options = <EditOptionsButton phone={phone} />;
+  const cancel = useCancelAction(onCancel);
+  const size = coarse ? 44 : 28;
+  const sep = <Divider orientation="vertical" mx={5} my="auto" h={16} />;
+  const icons = (keys?: Set<string>) =>
+    tools
+      .filter((a) => !keys || keys.has(a.key))
+      .map((a) => <ToolIcon key={a.key} a={a} size={size} />);
+  const [apply, bounce] = finish as [ToolAction, ToolAction];
   const dialogs = (
     <>
       <GainDialog />
       <SplitAtMarkersDialog markers={markers} durationSec={durationSec} />
     </>
   );
-  if (phone) {
-    return (
+  let content: ReactNode;
+  if (layout === "phone") {
+    const more = tools.filter((a) => !PHONE_TOOLS.has(a.key));
+    content = (
       <>
-        {/* Keeps the page's end clear of the sheet. */}
-        <Box h={EDIT_SHEET_H} aria-hidden />
-        <Paper
-          shadow="md"
-          withBorder
-          radius={0}
-          px={4}
-          py={4}
-          data-testid="edit-toolbar"
-          data-layout="sheet"
-          style={{
-            position: "fixed",
-            insetInline: 0,
-            bottom: "var(--app-shell-footer-offset, 0px)",
-            zIndex: 150,
-            paddingBottom: "calc(4px + env(safe-area-inset-bottom))",
-          }}
-          role="toolbar"
-          aria-label={t("edit.toolbar")}
-        >
-          <Group gap={2} justify="space-around" wrap="wrap">
-            {tools.map((a) => (
-              <Why key={a.key} reason={a.disabledReason}>
-                <CaptionButton
-                  icon={a.icon}
-                  caption={a.short}
-                  onClick={a.onClick}
-                  disabled={a.disabledReason !== null}
-                  aria-label={a.label}
-                  data-testid={a.testId}
-                />
-              </Why>
+        {icons(PHONE_TOOLS)}
+        <Menu position="bottom-end" withinPortal>
+          <Menu.Target>
+            <Tooltip label={t("edit.moreTools")}>
+              <ActionIcon
+                size={44}
+                variant="subtle"
+                color="gray"
+                aria-label={t("edit.moreTools")}
+                data-testid="edit-more"
+              >
+                <IconDots size={20} />
+              </ActionIcon>
+            </Tooltip>
+          </Menu.Target>
+          <Menu.Dropdown miw={220}>
+            {more.map((a) => (
+              <Menu.Item
+                key={a.key}
+                leftSection={a.icon}
+                disabled={a.disabledReason !== null}
+                onClick={a.onClick}
+                data-testid={a.testId}
+              >
+                {a.label}
+              </Menu.Item>
             ))}
-            {options}
-            {finish.map((a) => (
-              <Why key={a.key} reason={a.disabledReason}>
-                <CaptionButton
-                  icon={a.icon}
-                  caption={a.short}
-                  active={a.key === "apply" && a.disabledReason === null}
-                  color={a.color}
-                  onClick={a.onClick}
-                  disabled={a.disabledReason !== null}
-                  aria-label={a.label}
-                  data-testid={a.testId}
-                />
-              </Why>
-            ))}
-          </Group>
-        </Paper>
-        {dialogs}
+            <Menu.Item
+              leftSection={<IconAdjustmentsAlt size={18} />}
+              onClick={() => {
+                openEditDialog("options");
+              }}
+              data-testid="edit-options-button"
+            >
+              {t("edit.options")}
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<IconStack2 size={18} />}
+              onClick={() => {
+                openEditDialog("tracks");
+              }}
+              data-testid="edit-track-count"
+            >
+              <TrackCountText />
+            </Menu.Item>
+            <Menu.Item
+              leftSection={bounce.icon}
+              disabled={bounce.disabledReason !== null}
+              onClick={bounce.onClick}
+              data-testid={bounce.testId}
+            >
+              {bounce.label}
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+        <EditOptionsSheet />
+        <TrackSelectionSheet names={trackNames} />
+      </>
+    );
+  } else {
+    const landscape = layout === "landscape";
+    content = (
+      <>
+        {!landscape && (
+          <Text
+            size="xs"
+            fw={700}
+            c="orange"
+            mr={6}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}
+          >
+            <IconCut size={14} />
+            {t("edit.editing_label")}
+          </Text>
+        )}
+        {icons(CUT_TOOLS)}
+        {sep}
+        {icons(HISTORY_TOOLS)}
+        {sep}
+        <EditOptionsButton size={size} />
+        {sep}
+        {landscape ? (
+          <>
+            <Button
+              size="compact-sm"
+              h={32}
+              variant="default"
+              onClick={() => {
+                openEditDialog("tracks");
+              }}
+              data-testid="edit-track-count"
+            >
+              <TrackCountText short />
+            </Button>
+            <TrackSelectionSheet names={trackNames} />
+          </>
+        ) : (
+          <TrackCountMenu />
+        )}
+        {!landscape && sections && (
+          <>
+            {sep}
+            {sections}
+          </>
+        )}
+        <Box style={{ flex: "1 1 0" }} />
+        {!landscape && <SaveState />}
+        {landscape ? (
+          <>
+            <RowButton a={bounce} coarse={false} variant="default" />
+            <Tooltip label={t("edit.cancel")}>
+              <ActionIcon
+                size={44}
+                variant="outline"
+                color="red"
+                ml={4}
+                loading={cancel.busy}
+                aria-label={t("edit.cancel")}
+                onClick={cancel.run}
+                data-testid="edit-cancel"
+              >
+                <IconX size={20} />
+              </ActionIcon>
+            </Tooltip>
+            <Box ml={4}>
+              <RowButton a={apply} coarse variant="filled" />
+            </Box>
+          </>
+        ) : (
+          <>
+            <Button
+              size="compact-sm"
+              h={coarse ? 44 : 24}
+              variant="subtle"
+              color="red"
+              loading={cancel.busy}
+              onClick={cancel.run}
+              data-testid="edit-cancel"
+            >
+              {t("edit.cancelShort")}
+            </Button>
+            <RowButton a={bounce} coarse={coarse} variant="default" />
+            <RowButton a={apply} coarse={coarse} variant="filled" />
+          </>
+        )}
       </>
     );
   }
   return (
-    <Paper
-      withBorder
-      p={6}
-      data-testid="edit-toolbar"
-      data-layout="bar"
-      role="toolbar"
-      aria-label={t("edit.toolbar")}
-    >
-      <Group gap={4} wrap="wrap">
-        {tools.map((a) => (
-          <Why key={a.key} reason={a.disabledReason}>
-            <Button
-              variant="default"
-              h={44}
-              px="sm"
-              leftSection={a.icon}
-              onClick={a.onClick}
-              disabled={a.disabledReason !== null}
-              data-testid={a.testId}
-            >
-              {a.label}
-            </Button>
-          </Why>
-        ))}
-        {options}
-        <Box ml="auto">
-          <TrackSelectionSummary />
-        </Box>
-      </Group>
+    <Box data-testid="edit-bar">
+      <ContextRow
+        coarse={coarse}
+        edit
+        spread={layout === "phone"}
+        testId="edit-toolbar"
+        dataLayout="row"
+        label={t("edit.toolbar")}
+      >
+        {content}
+      </ContextRow>
       {dialogs}
-    </Paper>
+    </Box>
   );
 }
 
-/** "3 of 5 tracks" with All / None (SPEC §24.6). */
-export function TrackSelectionSummary({
-  names,
-}: {
-  /** Track names: phones choose the tracks in a sheet (the strips are too narrow for a box). */
-  names?: Readonly<Record<string, string>>;
-}) {
+/** Cancel (confirmed when there are ops; SPEC §24.7). */
+function useCancelAction(onCancel: () => Promise<void>) {
+  const ops = useEdit((s) => s.ops.length);
+  const [busy, setBusy] = useState(false);
+  const run = () => {
+    if (ops > 0) {
+      openEditDialog("cancel");
+      return;
+    }
+    setBusy(true);
+    void onCancel().finally(() => {
+      setBusy(false);
+    });
+  };
+  return { busy, run };
+}
+
+/** "3/5 tracks" (short) or "3 of 5 tracks". */
+function TrackCountText({ short = false }: { short?: boolean }) {
   const { t } = useTranslation();
-  const selectedIds = useEdit((s) => s.selectedTracks);
-  const selected = selectedIds.length;
+  const selected = useEdit((s) => s.selectedTracks.length);
+  const total = useEdit((s) => s.base?.tracks.length ?? 0);
+  const text = t(short ? "edit.tracksShort" : "edit.tracksCount", { count: selected, total });
+  return (
+    <Text span inherit c={selected === 0 ? "red" : undefined}>
+      {text}
+    </Text>
+  );
+}
+
+/** "3/5 tracks ▾" with All / None (desktop; the headers have the checkboxes, SPEC §24.6). */
+function TrackCountMenu() {
+  const { t } = useTranslation();
+  const selected = useEdit((s) => s.selectedTracks.length);
   const base = useEdit((s) => s.base);
   const all = useMemo(() => base?.tracks.map((x) => x.trackId) ?? [], [base]);
-  const [open, setOpen] = useState(false);
-  const count = t("edit.tracksCount", { count: selected, total: all.length });
-  const buttons = (
-    <>
-      <Button
-        variant="subtle"
-        size="compact-sm"
-        mih={44}
-        onClick={() => {
-          setSelectedTracks(all);
-        }}
-        disabled={selected === all.length}
-        data-testid="edit-tracks-all"
-      >
-        {t("edit.allTracks")}
-      </Button>
-      <Button
-        variant="subtle"
-        size="compact-sm"
-        mih={44}
-        onClick={() => {
-          setSelectedTracks([]);
-        }}
-        disabled={selected === 0}
-        data-testid="edit-tracks-none"
-      >
-        {t("edit.noTracks")}
-      </Button>
-    </>
-  );
-  if (names) {
-    return (
-      <>
+  return (
+    <Menu position="bottom-start" withinPortal>
+      <Menu.Target>
         <Button
+          size="compact-xs"
+          h={24}
           variant="default"
-          h={44}
-          px="sm"
-          color={selected === 0 ? "red" : undefined}
-          onClick={() => {
-            setOpen(true);
-          }}
+          rightSection={<IconChevronDown size={12} />}
           data-testid="edit-track-count"
         >
-          {count}
+          <TrackCountText short />
         </Button>
-        <AppModal
-          opened={open}
-          onClose={() => {
-            setOpen(false);
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Item
+          disabled={selected === all.length}
+          onClick={() => {
+            setSelectedTracks(all);
           }}
-          title={t("edit.tracksTitle")}
-          data-testid="edit-tracks-sheet"
+          data-testid="edit-tracks-all"
         >
-          <Stack gap={0}>
-            <Group gap="xs">{buttons}</Group>
-            {all.map((id) => (
-              <Checkbox
-                key={id}
-                py={12}
-                checked={selectedIds.includes(id)}
-                onChange={() => {
-                  toggleTrackSelected(id);
-                }}
-                label={names[id] ?? id}
-                data-testid="edit-track-select"
-              />
-            ))}
-          </Stack>
-        </AppModal>
-      </>
-    );
-  }
+          {t("edit.allTracks")}
+        </Menu.Item>
+        <Menu.Item
+          disabled={selected === 0}
+          onClick={() => {
+            setSelectedTracks([]);
+          }}
+          data-testid="edit-tracks-none"
+        >
+          {t("edit.noTracks")}
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
+  );
+}
+
+/** Phones and landscape choose the tracks in a sheet (the strips are too narrow for a box). */
+function TrackSelectionSheet({ names }: { names: Readonly<Record<string, string>> }) {
+  const { t } = useTranslation();
+  const open = useEdit((s) => s.dialog === "tracks");
+  const selectedIds = useEdit((s) => s.selectedTracks);
+  const base = useEdit((s) => s.base);
+  const all = useMemo(() => base?.tracks.map((x) => x.trackId) ?? [], [base]);
+  const close = () => {
+    openEditDialog(null);
+  };
   return (
-    <Group gap={4} wrap="nowrap" data-testid="edit-track-count">
-      <Text size="sm" c={selected === 0 ? "red" : "dimmed"} style={{ whiteSpace: "nowrap" }}>
-        {count}
-      </Text>
-      {buttons}
-    </Group>
+    <AppModal
+      opened={open}
+      onClose={close}
+      title={t("edit.tracksTitle")}
+      data-testid="edit-tracks-sheet"
+    >
+      <Stack gap={0}>
+        <Group gap="xs">
+          <Button
+            variant="subtle"
+            size="compact-sm"
+            mih={44}
+            onClick={() => {
+              setSelectedTracks(all);
+            }}
+            disabled={selectedIds.length === all.length}
+            data-testid="edit-tracks-all"
+          >
+            {t("edit.allTracks")}
+          </Button>
+          <Button
+            variant="subtle"
+            size="compact-sm"
+            mih={44}
+            onClick={() => {
+              setSelectedTracks([]);
+            }}
+            disabled={selectedIds.length === 0}
+            data-testid="edit-tracks-none"
+          >
+            {t("edit.noTracks")}
+          </Button>
+        </Group>
+        {all.map((id) => (
+          <Checkbox
+            key={id}
+            py={12}
+            checked={selectedIds.includes(id)}
+            onChange={() => {
+              toggleTrackSelected(id);
+            }}
+            label={names[id] ?? id}
+            data-testid="edit-track-select"
+          />
+        ))}
+      </Stack>
+    </AppModal>
   );
 }
 
@@ -442,24 +630,27 @@ export function SaveState() {
 }
 
 /**
- * Replaces the song header's actions in edit mode (SPEC §24.6): the mode, the save status, the
- * track selection (phones), Apply and Bounce… (desktop; phones have them in the sheet) and
- * Cancel (confirmed when there are ops). The Apply/Bounce dialogs live here.
+ * The song header in edit mode (SPEC §24.6, §31.2). Phones: Cancel (icon) and Apply; the header
+ * row scrolls with the page. Desktop and landscape: nothing visible (the edit row has the
+ * buttons). The Cancel, Apply and Bounce dialogs live here on every device.
  */
 export function EditHeaderBar({
   onCancel,
   trackNames,
   songTitle,
+  phone,
 }: {
   onCancel: () => Promise<void>;
   trackNames: Readonly<Record<string, string>>;
   songTitle: string;
+  phone: boolean;
 }) {
   const { t } = useTranslation();
-  const phone = useMediaQuery(PHONE_QUERY, false, { getInitialValueInEffect: false });
   const ops = useEdit((s) => s.ops.length);
   const dialog = useEdit((s) => s.dialog);
   const finish = useFinishActions();
+  const apply = finish[0];
+  const quick = useCancelAction(onCancel);
   const [busy, setBusy] = useState(false);
   const cancel = async () => {
     setBusy(true);
@@ -471,43 +662,39 @@ export function EditHeaderBar({
     }
   };
   return (
-    <Group gap="xs" wrap="wrap" justify="flex-end" data-testid="edit-bar">
-      <Text fw={700} c="orange" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-        <IconCut size={18} />
-        {t("edit.mode")}
-      </Text>
-      <SaveState />
-      {phone && <TrackSelectionSummary names={trackNames} />}
-      {!phone &&
-        finish.map((a) => (
-          <Why key={a.key} reason={a.disabledReason}>
-            <Button
-              variant={a.key === "apply" ? "filled" : "default"}
-              color={a.color}
-              h={44}
-              leftSection={a.icon}
-              onClick={a.onClick}
-              disabled={a.disabledReason !== null}
-              data-testid={a.testId}
+    <Group gap={6} wrap="nowrap" data-testid="edit-header">
+      {phone && (
+        <>
+          <Tooltip label={t("edit.cancel")}>
+            <ActionIcon
+              size={44}
+              variant="outline"
+              color="red"
+              loading={quick.busy}
+              aria-label={t("edit.cancel")}
+              onClick={quick.run}
+              data-testid="edit-cancel"
             >
-              {a.label}
-            </Button>
-          </Why>
-        ))}
-      <Button
-        variant="light"
-        color="red"
-        h={44}
-        leftSection={<IconX size={16} />}
-        loading={busy && dialog !== "cancel"}
-        onClick={() => {
-          if (ops > 0) openEditDialog("cancel");
-          else void cancel();
-        }}
-        data-testid="edit-cancel"
-      >
-        {t("edit.cancel")}
-      </Button>
+              <IconX size={20} />
+            </ActionIcon>
+          </Tooltip>
+          {apply && (
+            <Why reason={apply.disabledReason}>
+              <Button
+                h={44}
+                px={14}
+                color={apply.color}
+                leftSection={<IconCheck size={18} />}
+                onClick={apply.onClick}
+                disabled={apply.disabledReason !== null}
+                data-testid={apply.testId}
+              >
+                {apply.short}
+              </Button>
+            </Why>
+          )}
+        </>
+      )}
       <AppModal
         opened={dialog === "cancel"}
         onClose={() => {
@@ -706,7 +893,7 @@ const msOf = (frames: number) => Math.round(frames / 48);
 const framesOf = (ms: number) => Math.max(0, Math.min(480_000, Math.round(ms * 48)));
 
 /** Edit options (SPEC §24.6): fades, overlap mode, timeline follow-up and snap. */
-function EditOptionsButton({ phone }: { phone: boolean }) {
+function EditOptionsButton({ size }: { size: number }) {
   const { t } = useTranslation();
   const opened = useEdit((s) => s.dialog === "options");
   return (
@@ -719,33 +906,41 @@ function EditOptionsButton({ phone }: { phone: boolean }) {
       width={320}
       position="bottom-end"
       testId="edit-options"
-      target={(props) =>
-        phone ? (
-          <CaptionButton
-            icon={<IconAdjustmentsAlt size={18} />}
-            caption={t("edit.options")}
+      target={(props) => (
+        <Tooltip label={t("edit.options")}>
+          <ActionIcon
+            size={size}
+            variant="subtle"
+            color="gray"
             aria-label={t("edit.options")}
-            onClick={() => {
-              props.onClick({} as never);
-            }}
-            data-testid="edit-options-button"
-          />
-        ) : (
-          <Button
-            variant="default"
-            h={44}
-            px="sm"
-            leftSection={<IconAdjustmentsAlt size={18} />}
             {...props}
             data-testid="edit-options-button"
           >
-            {t("edit.options")}
-          </Button>
-        )
-      }
+            <IconAdjustmentsAlt size={Math.round(size * 0.6)} />
+          </ActionIcon>
+        </Tooltip>
+      )}
     >
       <EditOptionsPanel />
     </PanelPopover>
+  );
+}
+
+/** Phones: the edit options full screen, opened from the edit row's "⋯". */
+function EditOptionsSheet() {
+  const { t } = useTranslation();
+  const opened = useEdit((s) => s.dialog === "options");
+  return (
+    <AppModal
+      opened={opened}
+      onClose={() => {
+        openEditDialog(null);
+      }}
+      title={t("edit.optionsTitle")}
+      data-testid="edit-options"
+    >
+      <EditOptionsPanel />
+    </AppModal>
   );
 }
 

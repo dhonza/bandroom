@@ -3,7 +3,7 @@ import { ActionIcon, Alert, Button, Group, Stack, Text, Tooltip } from "@mantine
 import { notifications } from "@mantine/notifications";
 import { IconCut } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "../api/client";
 import { useApiError } from "../api/useApiError";
@@ -14,7 +14,8 @@ import { useFormatters } from "../i18n/format";
 import { useTimelineUi } from "../markers/store";
 import { prepareEngine, usePlayerView } from "../rehearse/controller";
 import { ApplyProgress } from "./ApplyBounce";
-import { EditHeaderBar, EditToolbar } from "./EditToolbar";
+import { EditContextRow, EditHeaderBar } from "./EditToolbar";
+import { useBarLayout, useCoarsePointer } from "../rehearse/barLayout";
 import { cancelEdit, editKeys, startEdit, takeOverEdit } from "./session";
 import { useEdit } from "./store";
 
@@ -110,8 +111,8 @@ export function EditButton({
   );
 }
 
-/** The song header in edit mode: the edit bar instead of the actions. */
-export function EditModeHeader({ song }: { song: Song }) {
+/** Track names by id and the session's cancel, for the edit header and row. */
+function useEditSongBits(song: Song) {
   const qc = useQueryClient();
   const tracks = useSongTracks(song.id).data?.tracks;
   const names = useMemo(
@@ -122,22 +123,43 @@ export function EditModeHeader({ song }: { song: Song }) {
     const id = useEdit.getState().session?.id;
     if (id) await cancelEdit(qc, id, song.id);
   };
-  return <EditHeaderBar onCancel={onCancel} trackNames={names} songTitle={song.title} />;
+  return { names, onCancel };
 }
 
 /**
- * The toolbar under the header (desktop) or the bottom sheet (phones), and the progress of a
- * running (or failed) Apply/Bounce above it.
+ * The song header in edit mode (SPEC §31.2): Cancel and Apply on phones; the edit dialogs on every
+ * device.
  */
-export function EditModeToolbar() {
+export function EditModeHeader({ song, phone = false }: { song: Song; phone?: boolean }) {
+  const { names, onCancel } = useEditSongBits(song);
+  return (
+    <EditHeaderBar onCancel={onCancel} trackNames={names} songTitle={song.title} phone={phone} />
+  );
+}
+
+/** Row 2 of the control bar in edit mode: the orange edit row (SPEC §24.6, §31.2). */
+export function EditModeRow({ song, sections }: { song: Song; sections?: ReactNode }) {
+  const { names, onCancel } = useEditSongBits(song);
+  const layout = useBarLayout();
+  const coarse = useCoarsePointer();
   const markers = useTimelineUi((s) => s.markers);
   const durationSec = usePlayerView((s) => s.timelineSec);
   return (
-    <>
-      <ApplyProgress />
-      <EditToolbar markers={markers} durationSec={durationSec} />
-    </>
+    <EditContextRow
+      layout={layout}
+      coarse={coarse || layout !== "desktop"}
+      markers={markers}
+      durationSec={durationSec}
+      trackNames={names}
+      sections={sections}
+      onCancel={onCancel}
+    />
   );
+}
+
+/** The progress of a running (or failed) Apply/Bounce, above the Player (SPEC §24.8). */
+export function EditModeToolbar() {
+  return <ApplyProgress />;
 }
 
 /**

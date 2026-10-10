@@ -70,7 +70,8 @@ export interface EditStore {
 
 export type EditPhase = "editing" | "applying";
 
-export type EditDialog = "gain" | "splitAtMarkers" | "options" | "cancel" | "apply" | "bounce";
+export type EditDialog =
+  "gain" | "splitAtMarkers" | "options" | "tracks" | "cancel" | "apply" | "bounce";
 
 export const DEFAULT_EDIT_OPTIONS: EditOptions = {
   fades: DEFAULT_EDIT_FADES,

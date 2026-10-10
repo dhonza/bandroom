@@ -61,12 +61,13 @@ import {
   EditBanner,
   EditButton,
   EditModeHeader,
+  EditModeRow,
   EditModeToolbar,
   useEditingSong,
 } from "../../edit/EditMode";
 import { useEditSessionSync } from "../../edit/session";
 import { useBarLayout, type BarLayout } from "../../rehearse/barLayout";
-import type { BarSongSlots } from "../../rehearse/Transport";
+import { EditingLabel, SectionsToggle, type BarSongSlots } from "../../rehearse/Transport";
 import {
   closeSongPreferences,
   SONG_SECTION_IDS,
@@ -162,9 +163,9 @@ function SongHeader({
           >
             {song.title}
           </Title>
-          {!editing && info("xs")}
+          {editing ? <EditingLabel /> : info("xs")}
         </Stack>
-        {editing ? <EditModeHeader song={song} /> : phoneActions}
+        {editing ? <EditModeHeader song={song} phone /> : phoneActions}
       </Group>
     );
   }
@@ -264,6 +265,11 @@ export function SongPage() {
       <EditBanner song={song} tracks={tracks.data?.tracks ?? null} />
       <WhatsNewBanner song={song} />
       <SongPlayer
+        editRow={
+          editing ? (
+            <EditModeRow song={song} sections={<SectionsToggle size={24} labelled />} />
+          ) : undefined
+        }
         song={song}
         mixer={editing ? { ...mixer, open: true } : mixer}
         bar={{
@@ -475,7 +481,17 @@ function DeleteSongSection({ song }: { song: Song }) {
  * button shows or hides the mixer tools and the track lanes while the engine plays on. A song
  * without tracks has it too: tempo, click and the transport, running until Stop (SPEC §9).
  */
-function SongPlayer({ song, mixer, bar }: { song: Song; mixer: MixerToggle; bar: BarSongSlots }) {
+function SongPlayer({
+  song,
+  mixer,
+  bar,
+  editRow,
+}: {
+  song: Song;
+  mixer: MixerToggle;
+  bar: BarSongSlots;
+  editRow: ReactNode;
+}) {
   const tracks = useSongTracks(song.id);
   if (tracks.isPending) return <Loader size="sm" />;
   const list = tracks.data?.tracks ?? NO_TRACKS;
@@ -486,6 +502,7 @@ function SongPlayer({ song, mixer, bar }: { song: Song; mixer: MixerToggle; bar:
       mixerOpen={mixer.open}
       songPath={appSongPath}
       bar={bar}
+      editRow={editRow}
     />
   );
 }
