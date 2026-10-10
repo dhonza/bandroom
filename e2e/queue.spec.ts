@@ -131,7 +131,8 @@ test("Play all advances, the mini-player plays on across pages, the song page re
   await expect(page.getByTestId("rehearse-play")).toHaveAccessibleName("Play", {
     timeout: 30_000,
   });
-  await page.getByRole("link", { name: /^←/ }).click();
+  // The back link: "← Project" on desktop, an arrow "Back to Project" on phones (SPEC §31.2).
+  await page.getByRole("link", { name: /^(←|Back to)/ }).click();
   await page
     .getByTestId("song-row")
     .filter({ hasText: first.title })
