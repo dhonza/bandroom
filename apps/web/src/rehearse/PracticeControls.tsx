@@ -9,7 +9,7 @@ import {
 import { ActionIcon, Box, Button, Group, Menu, Slider, Stack, Text, Tooltip } from "@mantine/core";
 import { IconGauge, IconMinus, IconPlus, IconPlayerTrackNext } from "@tabler/icons-react";
 import type { TFunction } from "i18next";
-import { useMemo } from "react";
+import { useMemo, type MouseEvent, type Ref } from "react";
 import { create } from "zustand";
 import { useTranslation } from "react-i18next";
 import type { PracticeAction } from "../markers/shortcuts";
@@ -294,11 +294,16 @@ function PracticeTarget({
   long,
   testId,
   onClick,
+  ref,
+  ...rest
 }: {
   size: number;
   long: boolean;
   testId: string;
-  onClick?: () => void;
+  onClick?: (e: MouseEvent<HTMLElement>) => void;
+  ref?: Ref<HTMLButtonElement>;
+  "aria-haspopup"?: "dialog";
+  "aria-expanded"?: boolean;
 }) {
   const { t } = useTranslation();
   const p = usePractice();
@@ -306,6 +311,8 @@ function PracticeTarget({
   if (!active) {
     return (
       <ActionIcon
+        ref={ref}
+        {...rest}
         size={size}
         variant="subtle"
         color="gray"
@@ -319,6 +326,8 @@ function PracticeTarget({
   }
   return (
     <Button
+      ref={ref}
+      {...rest}
       h={size}
       px={8}
       size="compact-sm"
@@ -342,13 +351,11 @@ export function PracticeButton({ size = 44 }: { size?: number }) {
       position="top-end"
       width={340}
       title={t("practice.title")}
-      target={
-        <span style={{ display: "inline-flex" }}>
-          <Tooltip label={t("practice.title")}>
-            <PracticeTarget size={size} long testId="practice-button" />
-          </Tooltip>
-        </span>
-      }
+      target={(props) => (
+        <Tooltip label={t("practice.title")}>
+          <PracticeTarget size={size} long testId="practice-button" {...props} />
+        </Tooltip>
+      )}
     >
       <PracticeForm />
     </PanelPopover>

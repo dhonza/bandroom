@@ -405,7 +405,7 @@ export function ControlBar({
     );
   } else if (layout === "landscape") {
     row1 = (
-      <Group gap={0} wrap="nowrap" px={4} h={48}>
+      <Group gap={0} wrap="nowrap" px={4} h={48} style={{ overflow: "hidden" }}>
         {slots && (
           <>
             <ActionIcon
@@ -420,7 +420,8 @@ export function ControlBar({
             >
               <IconArrowLeft size={20} />
             </ActionIcon>
-            <Stack gap={0} w={editing ? 118 : 96} style={{ flex: "none", minWidth: 0 }}>
+            {/* The title gives way first on narrow landscape screens. */}
+            <Stack gap={0} style={{ flex: `0 1 ${editing ? 118 : 96}px`, minWidth: 40 }}>
               <Text size="sm" fw={700} truncate="end" data-testid="song-title-compact">
                 {slots.title}
               </Text>
@@ -575,12 +576,12 @@ export function ContextRow({
       wrap={coarse ? "nowrap" : "wrap"}
       justify={spread ? "space-between" : undefined}
       px={coarse ? 4 : 8}
-      py={coarse ? 0 : 2}
       data-testid={testId}
       data-layout={dataLayout}
       style={{
         boxSizing: "border-box",
-        ...(coarse ? { height: 44 } : { minHeight: 32 }),
+        // 28 px buttons, 1.5 px padding and the border: 32 px (SPEC §31.1).
+        ...(coarse ? { height: 44 } : { minHeight: 32, paddingBlock: 1.5 }),
         background: edit
           ? "var(--mantine-color-orange-light)"
           : "light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-8))",
