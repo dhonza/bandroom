@@ -1,6 +1,6 @@
 import { MANUAL_MAX_BPM, MANUAL_MIN_BPM } from "@bandroom/shared";
 import { ActionIcon, Autocomplete, Box, NumberInput, Text, Tooltip } from "@mantine/core";
-import { IconTrash, IconTrendingDown, IconTrendingUp } from "@tabler/icons-react";
+import { IconScissors, IconTrash, IconTrendingDown, IconTrendingUp } from "@tabler/icons-react";
 import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { MAX_EDIT_BAR, METER_PRESETS, parseMeter, type ChangeRow } from "./model";
@@ -40,16 +40,20 @@ export function ChangeTableHeader() {
 
 /**
  * One tempo and/or time signature change as a compact table row: bar, beat (tempo changes only),
- * BPM and time signature. An empty BPM or time signature keeps what is in effect there.
+ * BPM and time signature. An empty BPM or time signature keeps what is in effect there. A row
+ * after a bar cut short by an edit shows that (`cut`: its length in counted beats, null when the
+ * time signature is not valid) and keeps its bar and beat.
  */
 export function ChangeRowEditor({
   row,
   coarse,
   invalid,
+  cut,
   onChange,
   onRemove,
 }: {
   row: ChangeRow;
+  cut?: { beats: number; of: number } | null;
   coarse: boolean;
   invalid: boolean;
   onChange: (patch: Partial<ChangeRow>) => void;
@@ -78,6 +82,23 @@ export function ChangeRowEditor({
         </Box>
       </Tooltip>
     ) : undefined;
+  const isCut = row.cutBar !== undefined;
+  const cutLabel = cut
+    ? t("tempo.cutBar", { beats: cut.beats, count: cut.of })
+    : t("tempo.cutBarUnknown");
+  const cutIcon = isCut ? (
+    <Tooltip label={cutLabel} events={{ hover: true, focus: true, touch: true }}>
+      <Box
+        component="span"
+        tabIndex={0}
+        aria-label={cutLabel}
+        style={{ display: "inline-flex" }}
+        data-testid="tempo-change-cut"
+      >
+        <IconScissors size={14} />
+      </Box>
+    </Tooltip>
+  ) : undefined;
   return (
     <Box style={GRID} data-testid="tempo-change">
       <NumberInput
@@ -86,6 +107,10 @@ export function ChangeRowEditor({
         styles={styles}
         hideControls
         value={row.bar}
+        readOnly={isCut}
+        rightSection={cutIcon}
+        rightSectionWidth={cutIcon ? 20 : undefined}
+        rightSectionPointerEvents={cutIcon ? "all" : undefined}
         min={2}
         max={MAX_EDIT_BAR}
         step={1}
@@ -103,7 +128,7 @@ export function ChangeRowEditor({
         hideControls
         value={tempoOn ? row.beat : ""}
         placeholder={tempoOn ? undefined : NO_CHANGE}
-        disabled={!tempoOn}
+        disabled={!tempoOn || isCut}
         min={1}
         step={1}
         decimalScale={3}

@@ -13,6 +13,7 @@ import { clampManualBpm, offsetFromInput, roundMs } from "./midi";
 import {
   addChangeAtBar,
   addTap,
+  cutBarBeats,
   mapFromRows,
   MAX_EDIT_BAR,
   METER_PRESETS,
@@ -214,6 +215,7 @@ export function ManualTempo({
                 row={r}
                 coarse={coarse}
                 invalid={!parsed.ok && parsed.rowId === r.id}
+                cut={cutBarBeats(head, rows, r)}
                 onChange={(patch) => {
                   setRow(r.id, patch);
                 }}

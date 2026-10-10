@@ -1128,6 +1128,9 @@
     "addMeterChange": "Add time signature change",
     "sigShort": "Time sig.",
     "rampTo": "Ramps to {{bpm}} BPM",
+    "cutBar_one": "Bar cut short by an edit: {{beats}} of {{count}} beat",
+    "cutBar_other": "Bar cut short by an edit: {{beats}} of {{count}} beats",
+    "cutBarUnknown": "Bar cut short by an edit",
     "removeChange": "Remove this change",
     "errors": {
       "meter": "Enter a time signature like 4/4 or 6/8.",
@@ -1140,7 +1143,8 @@
       "bar": "Enter a whole bar number from 2 to 9999.",
       "beat": "Enter a beat that lies within the bar.",
       "duplicate": "Two changes are at the same bar and beat.",
-      "meterOffBeat": "A time signature change must start on beat 1 of its bar."
+      "meterOffBeat": "A time signature change must start on beat 1 of its bar.",
+      "cutBar": "A bar cut short by an edit no longer fits the time signature before it."
     },
     "saved": "Tempo saved",
     "removed": "Tempo map removed (it stays in the history)",

@@ -1158,6 +1158,11 @@
     "addMeterChange": "Přidat změnu taktu",
     "sigShort": "Metrum",
     "rampTo": "Plynule na {{bpm}} BPM",
+    "cutBar_one": "Takt zkrácený střihem: {{beats}} z {{count}} doby",
+    "cutBar_few": "Takt zkrácený střihem: {{beats}} z {{count}} dob",
+    "cutBar_many": "Takt zkrácený střihem: {{beats}} z {{count}} dob",
+    "cutBar_other": "Takt zkrácený střihem: {{beats}} z {{count}} dob",
+    "cutBarUnknown": "Takt zkrácený střihem",
     "removeChange": "Odebrat tuto změnu",
     "errors": {
       "meter": "Zadejte taktové označení, např. 4/4 nebo 6/8.",
@@ -1170,7 +1175,8 @@
       "bar": "Zadejte celé číslo taktu od 2 do 9999.",
       "beat": "Zadejte dobu, která leží uvnitř taktu.",
       "duplicate": "Dvě změny jsou ve stejném taktu a na stejné době.",
-      "meterOffBeat": "Změna taktového označení musí začínat na 1. době taktu."
+      "meterOffBeat": "Změna taktového označení musí začínat na 1. době taktu.",
+      "cutBar": "Takt zkrácený střihem už neodpovídá taktovému označení před ním."
     },
     "saved": "Tempo uloženo",
     "removed": "Tempová mapa odebrána (zůstává v historii)",
