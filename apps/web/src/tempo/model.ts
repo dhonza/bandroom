@@ -4,6 +4,7 @@ import {
   barQuarters,
   BEAT_EPS,
   beatQuarters,
+  beatsPerBar,
   bpmAtBeat,
   compileTempo,
   formatMeter,
@@ -106,6 +107,11 @@ export interface ChangeRow {
   /** null: keeps the time signature. */
   meter: string | null;
   bpmEnd?: number;
+  /**
+   * An edit cut the bar before this row short (SPEC §24.4): its length in quarter notes. The row
+   * starts a new bar (`bar` is its number, beat 1); bar and length are kept, not editable.
+   */
+  cutBar?: number;
 }
 
 export type ChangeKind = "tempo" | "meter";
@@ -114,7 +120,7 @@ export type ChangeKind = "tempo" | "meter";
 export const MAX_EDIT_BAR = 9999;
 
 export type RowError =
-  "bpm" | "meter" | "bar" | "beat" | "duplicate" | "meterOffBeat" | TempoIssue["code"];
+  "bpm" | "meter" | "bar" | "beat" | "duplicate" | "meterOffBeat" | "cutBar" | TempoIssue["code"];
 
 let rowSeq = 0;
 /** Stable React key for a new row. */
@@ -125,7 +131,10 @@ export function newRowId(): string {
 
 const round6 = (x: number) => Math.round(x * 1e6) / 1e6;
 
-/** A map (normalized) → bar 1 and its changes; only what differs from before becomes a row. */
+/**
+ * A map (normalized) → bar 1 and its changes; only what differs from before becomes a row, and
+ * a new bar after a bar cut short by an edit (`newBar` off the bar grid).
+ */
 export function rowsFromMap(map: TempoMap): { head: HeadRow; rows: ChangeRow[] } {
   const segs = map.segments;
   const s0 = segs[0] as TempoSegment;
@@ -138,7 +147,11 @@ export function rowsFromMap(map: TempoMap): { head: HeadRow; rows: ChangeRow[] }
     const prev = segs[i - 1] as TempoSegment;
     const tempo = s.bpm !== prev.bpm || s.bpmEnd !== undefined || prev.bpmEnd !== undefined;
     const meter = !sameMeter(s.meter, prev.meter);
-    if (!tempo && !meter) continue;
+    // A new bar on the bar grid changes nothing; off it, the bar before is cut short.
+    const before = s.newBar ? barByIndex(grid, s.barIndex - 1) : null;
+    const cut = before ? s.startBeat - before.startBeat : 0;
+    const cutBar = before && cut < barQuarters(before.meter) - BEAT_EPS ? cut : undefined;
+    if (!tempo && !meter && cutBar === undefined) continue;
     const bar = barAtBeat(grid, s.startBeat);
     const row: ChangeRow = {
       id: newRowId(),
@@ -148,6 +161,7 @@ export function rowsFromMap(map: TempoMap): { head: HeadRow; rows: ChangeRow[] }
       meter: meter ? formatMeter(s.meter) : null,
     };
     if (s.bpmEnd !== undefined) row.bpmEnd = s.bpmEnd;
+    if (cutBar !== undefined) row.cutBar = cutBar;
     rows.push(row);
   }
   return { head, rows };
@@ -162,6 +176,7 @@ interface Parsed {
   beat: number;
   bpm: number | null;
   meter: Meter | null;
+  cutBar: number | undefined;
 }
 
 export type RowsResult =
@@ -170,7 +185,9 @@ export type RowsResult =
 /**
  * Bar 1 and change rows → normalized segments (quarter-note beats), or the first problem.
  * Rows are bar-anchored: each one's beat position follows from the time signatures before it.
- * Rows with neither a tempo nor a time signature are ignored.
+ * Rows with neither a tempo nor a time signature are ignored unless they follow a cut-short bar:
+ * such a row starts a new bar `cutBar` quarter notes into the bar before it, and later rows count
+ * bars from there.
  */
 export function mapFromRows(head: HeadRow, rows: readonly ChangeRow[]): RowsResult {
   const headBpm = num(head.bpm);
@@ -179,7 +196,8 @@ export function mapFromRows(head: HeadRow, rows: readonly ChangeRow[]): RowsResu
   if (!headMeter) return { ok: false, error: "meter" };
   const parsed: Parsed[] = [];
   for (const row of rows) {
-    if (row.bpm === null && row.meter === null) continue;
+    const cutBar = row.cutBar;
+    if (row.bpm === null && row.meter === null && cutBar === undefined) continue;
     const bar = num(row.bar);
     const beat = num(row.beat);
     const bpm = row.bpm === null ? null : num(row.bpm);
@@ -190,7 +208,8 @@ export function mapFromRows(head: HeadRow, rows: readonly ChangeRow[]): RowsResu
     if (bpm !== null && !validBpm(bpm)) return fail("bpm");
     if (row.meter !== null && !meter) return fail("meter");
     if (meter && Math.abs(beat - 1) > BEAT_EPS) return fail("meterOffBeat");
-    parsed.push({ row, bar, beat, bpm, meter });
+    if (cutBar !== undefined && Math.abs(beat - 1) > BEAT_EPS) return fail("beat");
+    parsed.push({ row, bar, beat, bpm, meter, cutBar });
   }
   parsed.sort((a, b) => a.bar - b.bar || a.beat - b.beat);
 
@@ -213,8 +232,19 @@ export function mapFromRows(head: HeadRow, rows: readonly ChangeRow[]): RowsResu
     if (prev && prev.bar === p.bar && Math.abs(prev.beat - p.beat) <= BEAT_EPS) {
       return fail("duplicate");
     }
+    let barStart = regionBeat + (p.bar - regionBar) * barQuarters(meter);
+    if (p.cutBar !== undefined) {
+      // The bar before is cut short: a new bar (and bar grid) starts `cutBar` into it.
+      if (!(p.cutBar > BEAT_EPS && p.cutBar < barQuarters(meter) - BEAT_EPS)) return fail("cutBar");
+      barStart -= barQuarters(meter) - p.cutBar;
+      // A change in the cut-short bar must lie before the cut.
+      if (prev && (out.at(-1) as TempoSegmentInput).startBeat >= barStart - BEAT_EPS) {
+        return { ok: false, error: "beat", rowId: prev.row.id };
+      }
+      regionBar = p.bar;
+      regionBeat = barStart;
+    }
     prev = p;
-    const barStart = regionBeat + (p.bar - regionBar) * barQuarters(meter);
     if (p.meter) {
       meter = p.meter;
       regionBar = p.bar;
@@ -225,6 +255,7 @@ export function mapFromRows(head: HeadRow, rows: readonly ChangeRow[]): RowsResu
     if (p.bpm !== null) bpm = p.bpm;
     const seg: TempoSegmentInput = { startBeat: barStart + offset, bpm, meter };
     if (p.bpm !== null && p.row.bpmEnd !== undefined) seg.bpmEnd = p.row.bpmEnd;
+    if (p.cutBar !== undefined) seg.newBar = true;
     out.push(seg);
   }
   // A ramp needs a following change; drop it when that change was deleted.
@@ -234,6 +265,31 @@ export function mapFromRows(head: HeadRow, rows: readonly ChangeRow[]): RowsResu
   /* v8 ignore next -- the rows were checked above (bars, beats, order, ramp); a safety net */
   if (!n.ok) return { ok: false, error: n.issue.code };
   return { ok: true, segments: n.segments };
+}
+
+/**
+ * A cut row's shortened bar in counted beats (rounded to 0.01) of the time signature in effect
+ * there, as typed: "3 of 4". Null for other rows or when that time signature is not valid.
+ */
+export function cutBarBeats(
+  head: HeadRow,
+  rows: readonly ChangeRow[],
+  row: ChangeRow,
+): { beats: number; of: number } | null {
+  if (row.cutBar === undefined) return null;
+  const bar = num(row.bar) - 1;
+  let text = head.meter;
+  let at = 1;
+  for (const r of rows) {
+    const b = num(r.bar);
+    if (r.meter !== null && b <= bar && b >= at) {
+      text = r.meter;
+      at = b;
+    }
+  }
+  const m = parseMeter(text);
+  if (!m) return null;
+  return { beats: Math.round((row.cutBar / beatQuarters(m)) * 100) / 100, of: beatsPerBar(m) };
 }
 
 /** Tempo (rounded to 0.001 BPM) and time signature at the start of bar `bar` (1-based). */

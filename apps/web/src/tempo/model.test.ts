@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { normalizeSegments, type TempoMap, type TempoSegmentInput } from "@bandroom/shared";
+import {
+  EDIT_SAMPLE_RATE,
+  FOLLOW_ALL,
+  normalizeSegments,
+  remapTempoMap,
+  type TempoMap,
+  type TempoSegmentInput,
+} from "@bandroom/shared";
 import {
   addChangeAtBar,
   addTap,
+  cutBarBeats,
   formatBpmRange,
   mapFromRows,
   parseMeter,
@@ -248,5 +256,146 @@ describe("bar-based change rows (SPEC §7.1, §7.3)", () => {
       "tempo",
     );
     expect(ramp?.find((r) => r.bar === 3)?.bpm).toBeCloseTo(166.667, 3);
+  });
+});
+
+describe("bars cut short by an edit (SPEC §24.4)", () => {
+  // 120 BPM 4/4 (a quarter note is 0.5 s), 140 BPM from bar 9.
+  const base: TempoMap = norm([
+    { startBeat: 0, bpm: 120, meter: four },
+    { startBeat: 32, bpm: 140, meter: four },
+  ]);
+  /** The map after the seconds `[s, e)` are cut out with the tempo following. */
+  const cut = (map: TempoMap, s: number, e: number): TempoMap => {
+    const step = {
+      kind: "cut" as const,
+      start: s * EDIT_SAMPLE_RATE,
+      end: e * EDIT_SAMPLE_RATE,
+      timeline: FOLLOW_ALL,
+    };
+    const t = remapTempoMap({ map, bar1OffsetSec: 0 }, [step]);
+    if (!t) throw new Error("no tempo");
+    return t.map;
+  };
+  // Bar 3 beat 3 to bar 4 beat 2 cut: bar 3 ends after 2.5 quarters, the rest of bar 4 follows.
+  const remapped = cut(base, 5.25, 6.75);
+  const cutRows = (r: ChangeRow[]) =>
+    r.map(({ bar, beat, bpm, meter, cutBar }) => ({ bar, beat, bpm, meter, cutBar }));
+
+  it("keeps new bars as rows and round-trips the remapped map", () => {
+    expect(remapped.segments.map((s) => [s.startBeat, s.barIndex, s.newBar])).toEqual([
+      [0, 0, undefined],
+      [10.5, 3, true],
+      [13, 4, true],
+      [29, 8, undefined],
+    ]);
+    const { head, rows } = rowsFromMap(remapped);
+    expect(cutRows(rows)).toEqual([
+      { bar: 4, beat: 1, bpm: null, meter: null, cutBar: 2.5 },
+      { bar: 5, beat: 1, bpm: null, meter: null, cutBar: 2.5 },
+      { bar: 9, beat: 1, bpm: 140, meter: null, cutBar: undefined },
+    ]);
+    const r = mapFromRows(head, rows);
+    expect(r.ok && r.segments).toEqual(remapped.segments);
+    // A cut in a 3/4 bar with a ramp over the join and a meter change after it.
+    const ramp = norm([
+      { startBeat: 0, bpm: 100, bpmEnd: 160, meter: three },
+      { startBeat: 24, bpm: 160, meter: four },
+    ]);
+    const m = cut(ramp, 2, 3);
+    expect(m.segments.some((s) => s.newBar)).toBe(true);
+    const back = rowsFromMap(m);
+    const r2 = mapFromRows(back.head, back.rows);
+    expect(r2.ok && r2.segments).toEqual(m.segments);
+  });
+
+  it("drops a new bar that lies on the bar grid (it changes nothing)", () => {
+    // Bar 3 to bar 4 beat 2 cut: the join is on a bar line, only the bar after it is cut short.
+    const m = cut(base, 4, 6.75);
+    expect(m.segments.map((s) => [s.startBeat, s.newBar])).toEqual([
+      [0, undefined],
+      [8, true],
+      [10.5, true],
+      [26.5, undefined],
+    ]);
+    const { head, rows } = rowsFromMap(m);
+    expect(cutRows(rows)).toEqual([
+      { bar: 4, beat: 1, bpm: null, meter: null, cutBar: 2.5 },
+      { bar: 8, beat: 1, bpm: 140, meter: null, cutBar: undefined },
+    ]);
+    expect(segs(head, rows).map((s) => [s.startBeat, s.bar])).toEqual([
+      [0, 1],
+      [10.5, 4],
+      [26.5, 8],
+    ]);
+  });
+
+  it("keeps the cut and later bars when earlier changes are edited", () => {
+    const { rows } = rowsFromMap(remapped);
+    const edited = [row(2, { bpm: 90 }), row(3, { beat: 2, bpm: 100 }), ...rows];
+    expect(
+      segs({ bpm: 110, meter: "4/4" }, edited).map((s) => [s.startBeat, s.bar, s.bpm]),
+    ).toEqual([
+      [0, 1, 110],
+      [4, 2, 90],
+      [9, 3, 100],
+      [10.5, 4, 100],
+      [13, 5, 100],
+      [29, 9, 140],
+    ]);
+    const r = mapFromRows({ bpm: 120, meter: "4/4" }, rows);
+    expect(r.ok && r.segments.filter((s) => s.newBar).map((s) => s.startBeat)).toEqual([10.5, 13]);
+    // A time signature on the cut row itself starts there.
+    const sig = rows.map((x) => (x.bar === 5 ? { ...x, meter: "3/4" } : x));
+    expect(segs({ bpm: 120, meter: "4/4" }, sig).map((s) => [s.startBeat, s.bar, s.meter])).toEqual(
+      [
+        [0, 1, "4/4"],
+        [10.5, 4, "4/4"],
+        [13, 5, "3/4"],
+        [25, 9, "3/4"],
+      ],
+    );
+  });
+
+  it("adds changes after the cut on the right beats", () => {
+    const { head, rows } = rowsFromMap(remapped);
+    const added = addChangeAtBar(head, rows, 7, "tempo");
+    expect(added?.find((x) => x.bar === 7)).toMatchObject({ beat: 1, bpm: 120, meter: null });
+    expect(segs(head, added ?? []).find((s) => s.bar === 7)?.startBeat).toBe(21);
+    const sig = addChangeAtBar(head, rows, 10, "meter");
+    expect(sig?.find((x) => x.bar === 10)?.meter).toBe("4/4");
+    expect(segs(head, sig ?? []).at(-1)).toMatchObject({ startBeat: 33, bar: 10 });
+    // On the cut row itself: the aspect is switched on and the cut kept.
+    const on = addChangeAtBar(head, rows, 5, "tempo");
+    expect(on?.find((x) => x.bar === 5)).toMatchObject({ bpm: 120, cutBar: 2.5 });
+  });
+
+  it("counts the cut-short bar in beats of the time signature in effect", () => {
+    const h: HeadRow = { bpm: 120, meter: "4/4" };
+    const c = row(5, { cutBar: 1.5 });
+    expect(cutBarBeats(h, [c], c)).toEqual({ beats: 1.5, of: 4 });
+    expect(cutBarBeats({ bpm: 120, meter: "6/8" }, [c], c)).toEqual({ beats: 1, of: 2 });
+    // The last time signature before the cut-short bar counts (rows need not be sorted).
+    const rows = [row(4, { meter: "3/4" }), c, row(2, { meter: "7/8" }), row(5, { meter: "2/4" })];
+    expect(cutBarBeats(h, rows, c)).toEqual({ beats: 1.5, of: 3 });
+    expect(cutBarBeats({ bpm: 120, meter: "x" }, [c], c)).toBeNull();
+    expect(cutBarBeats(h, [row(3)], row(3))).toBeNull();
+  });
+
+  it("rejects cut rows that no longer fit", () => {
+    const err = (head: HeadRow, rows: ChangeRow[]) => {
+      const r = mapFromRows(head, rows);
+      return r.ok ? null : [r.error, r.rowId];
+    };
+    const h: HeadRow = { bpm: 120, meter: "4/4" };
+    expect(err(h, [row(4, { cutBar: 2.5 })])).toBeNull();
+    expect(err(h, [row(4, { beat: 2, cutBar: 2.5 })])).toEqual(["beat", "r4"]);
+    expect(err(h, [row(4, { cutBar: 0 })])).toEqual(["cutBar", "r4"]);
+    expect(err(h, [row(4, { cutBar: 4 })])).toEqual(["cutBar", "r4"]);
+    // The time signature before it changed: 3.5 quarters do not fit a 3/4 bar.
+    expect(err({ bpm: 120, meter: "3/4" }, [row(4, { cutBar: 3.5 })])).toEqual(["cutBar", "r4"]);
+    // A change in the cut-short bar must lie before the cut.
+    expect(err(h, [row(3, { beat: 4, bpm: 90 }), row(4, { cutBar: 2.5 })])).toEqual(["beat", "r3"]);
+    expect(err(h, [row(3, { beat: 2, bpm: 90 }), row(4, { cutBar: 2.5 })])).toBeNull();
   });
 });
