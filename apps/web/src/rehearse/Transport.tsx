@@ -17,6 +17,7 @@ import {
   IconFileMusic,
   IconKeyboard,
   IconListDetails,
+  IconMetronome,
   IconMicrophone,
   IconPlayerPauseFilled,
   IconPlayerPlayFilled,
@@ -373,6 +374,17 @@ export function Transport({
           <>
             <Menu.Divider />
             <Menu.Item
+              leftSection={<IconMetronome size={14} />}
+              closeMenuOnClick
+              disabled={!hasTempo}
+              onClick={() => {
+                setClickSettingsOpen(true);
+              }}
+              data-testid="menu-click-settings"
+            >
+              {t("click.settings")}
+            </Menu.Item>
+            <Menu.Item
               leftSection={<IconKeyboard size={14} />}
               onClick={() => {
                 setHelpOpen(true);
@@ -467,6 +479,12 @@ export function Transport({
           {options}
         </Group>
       </Group>
+      <ClickSettingsModal
+        opened={clickSettings}
+        onClose={() => {
+          setClickSettingsOpen(false);
+        }}
+      />
     </Box>
   );
 }

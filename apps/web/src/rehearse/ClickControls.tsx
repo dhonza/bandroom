@@ -3,8 +3,6 @@ import type { ClickSettings } from "@bandroom/shared";
 import {
   ActionIcon,
   Box,
-  Button,
-  Group,
   Menu,
   SegmentedControl,
   Slider,
@@ -13,11 +11,12 @@ import {
   Text,
   Tooltip,
 } from "@mantine/core";
-import { IconCheck, IconMetronome, IconSettings } from "@tabler/icons-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { IconCheck, IconMetronome } from "@tabler/icons-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { AppModal, PanelPopover } from "../components/ResponsivePanel";
+import { AppModal } from "../components/ResponsivePanel";
+import { CountInIcon } from "./CountInIcon";
 import { useTempoUi } from "../tempo/store";
 import { countInNow, setClickSettings, usePlayerView } from "./controller";
 import { clickSettingsOf } from "./model";
@@ -164,82 +163,78 @@ export function ClickSettingsForm({ hideVolume = false }: { hideVolume?: boolean
 }
 
 /**
- * Desktop transport toggles (SPEC §11.3 "Count-in · Click"): greyed out with "Set tempo to
- * enable" without a tempo map (SPEC §6.7); settings in a popover.
+ * Count-in and click as icon toggles (SPEC §31.5): on = filled grape, off = subtle grey; greyed
+ * out with "Set tempo to enable" without a tempo map (SPEC §6.7). The settings are in "⋯".
  */
-export function ClickToggles() {
+export function ClickToggles({ size = 44 }: { size?: number }) {
   const { t } = useTranslation();
   const c = useClickSettings();
   const tempo = useHasTempo();
+  const icon = Math.round(size * 0.45);
   return (
-    <Group gap={4} wrap="nowrap">
+    <>
       <ClickToggle
         label={t("click.countIn")}
+        tip={c.countIn ? t("click.countInOn") : t("click.countInOff")}
         on={c.countIn}
         tempo={tempo}
+        size={size}
         patch={{ countIn: !c.countIn }}
         testId="count-in-toggle"
-      />
+      >
+        <CountInIcon size={icon} />
+      </ClickToggle>
       <ClickToggle
         label={t("click.click")}
+        tip={c.enabled ? t("click.clickOn") : t("click.clickOff")}
         on={c.enabled}
         tempo={tempo}
+        size={size}
         patch={{ enabled: !c.enabled }}
         testId="click-toggle"
-      />
-      <PanelPopover
-        position="top-end"
-        width={320}
-        title={t("click.settings")}
-        target={
-          <ActionIcon
-            size={44}
-            variant="subtle"
-            color="gray"
-            aria-label={t("click.settings")}
-            disabled={!tempo}
-            data-testid="click-settings-button"
-          >
-            <IconSettings size={18} />
-          </ActionIcon>
-        }
       >
-        <ClickSettingsForm />
-      </PanelPopover>
-    </Group>
+        <IconMetronome size={icon} />
+      </ClickToggle>
+    </>
   );
 }
 
 function ClickToggle({
   label,
+  tip,
   on,
   tempo,
+  size,
   patch,
   testId,
+  children,
 }: {
   label: string;
+  tip: string;
   on: boolean;
   tempo: boolean;
+  size: number;
   patch: Partial<ClickSettings>;
   testId: string;
+  children: ReactNode;
 }) {
   const { t } = useTranslation();
   return (
-    <Tooltip label={tempo ? label : t("click.noTempo")}>
-      <Button
-        h={44}
-        size="sm"
-        variant={on && tempo ? "filled" : "default"}
-        color="grape"
+    <Tooltip label={tempo ? tip : t("click.noTempo")}>
+      <ActionIcon
+        size={size}
+        variant={on && tempo ? "filled" : "subtle"}
+        color={on && tempo ? "grape" : "gray"}
         disabled={!tempo}
+        aria-label={label}
         aria-pressed={on}
         onClick={() => {
           setClickSettings(patch);
         }}
         data-testid={testId}
       >
-        {label}
-      </Button>
+        {children}
+      </ActionIcon>
     </Tooltip>
   );
 }
