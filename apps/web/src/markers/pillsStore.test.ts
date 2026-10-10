@@ -1,10 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  sectionPillsOn,
-  setSectionPills,
-  toggleSectionPills,
-  useSectionPills,
-} from "./sectionPills";
+import { sectionPillsOn, setSectionPills, toggleSectionPills, useSectionPills } from "./pillsStore";
 
 afterEach(() => {
   localStorage.clear();

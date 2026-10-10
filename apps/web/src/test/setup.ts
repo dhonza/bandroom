@@ -11,19 +11,37 @@ const hasDom = typeof window !== "undefined";
 afterEach(() => {
   cleanup();
   if (hasDom) localStorage.clear();
+  mediaQueryState.coarse = false;
+  mediaQueryState.short = false;
 });
 
 // jsdom lacks these browser APIs that Mantine uses.
-const mediaQueryState: { phone: boolean } = { phone: false };
+const mediaQueryState = { phone: false, coarse: false, short: false };
 export function setPhoneViewport(phone: boolean): void {
   mediaQueryState.phone = phone;
+}
+/** A touch screen (`pointer: coarse`). */
+export function setCoarsePointer(coarse: boolean): void {
+  mediaQueryState.coarse = coarse;
+}
+/** A short viewport (a phone in landscape with `setCoarsePointer`). */
+export function setShortViewport(short: boolean): void {
+  mediaQueryState.short = short;
+}
+
+function matchesQuery(query: string): boolean {
+  const s = mediaQueryState;
+  if (query.includes("pointer: coarse") && !s.coarse) return false;
+  if (query.includes("max-width")) return s.phone;
+  if (query.includes("max-height")) return s.short;
+  return query.includes("pointer: coarse");
 }
 
 if (hasDom) {
   Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: (query: string) => ({
-      matches: query.includes("max-width") ? mediaQueryState.phone : false,
+      matches: matchesQuery(query),
       media: query,
       onchange: null,
       addListener: () => undefined,

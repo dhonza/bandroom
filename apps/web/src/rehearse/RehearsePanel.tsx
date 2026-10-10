@@ -26,7 +26,7 @@ import { usePeaks } from "../timeline/usePeaks";
 import {
   MarkerEditor,
   MarkerToolbar,
-  SectionChips,
+  SectionPills,
   SectionReadout,
   SelectionBar,
   TimelineMenu,
@@ -431,7 +431,7 @@ export function RehearsePanel({
         </Text>
       )}
       <SelectionBar song={song} />
-      <SectionChips />
+      <SectionPills song={song} />
       <MarkerToolbar song={song} />
       <SongComments song={song} />
       <TimelineMenu
