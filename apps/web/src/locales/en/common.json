@@ -2271,7 +2271,11 @@
       "failedNote": "The edit could not be applied; the song is unchanged. You can retry, keep editing or cancel.",
       "cancelledNote": "The edit session was cancelled; the song is unchanged.",
       "failedTitle_one": "{{count}} track failed",
-      "failedTitle_other": "{{count}} tracks failed"
+      "failedTitle_other": "{{count}} tracks failed",
+      "error": {
+        "stalled": "Processing stopped making progress. Retry or cancel.",
+        "workerStopped": "Processing this track was interrupted. Retry or cancel."
+      }
     },
     "finished": {
       "generic": "The edit is done.",

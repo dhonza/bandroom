@@ -18,6 +18,7 @@ import { ApiError, api } from "../api/client";
 import { useApiError } from "../api/useApiError";
 import { useSongTracks } from "../features/library/queries";
 import { rememberApplying } from "./editSync";
+import { renderErrorText } from "./renderError";
 import type { ReviewView } from "./review";
 import { editKeys, flushEditSave, useEditSessionQuery } from "./session";
 import { openEditDialog, setEditPhase, useEdit } from "./store";
@@ -252,7 +253,7 @@ export function useRenderProgress(): RenderProgressView | null {
           name: song ? `${song} · ${track}` : track,
           status: r.status,
           progress: r.progress,
-          error: r.error,
+          error: renderErrorText(r.error, t),
         };
       });
     return { kind: session.outcome.kind, outputs, running, error: session.error ?? null };
