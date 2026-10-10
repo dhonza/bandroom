@@ -118,8 +118,12 @@ test("Public links: a password link plays and takes anonymous comments until it 
   await visitor.getByTestId("mixer-toggle").click();
   await expect(visitor.getByTestId("mixer-toggle")).toHaveAttribute("aria-pressed", "true");
   await expect(visitor.getByTestId("track-strip")).toHaveCount(1);
+  // The mixer tools: row 2 on desktop, the transport's ⋯ on phones (SPEC §31.1).
+  if (phone) await visitor.getByRole("button", { name: "Playback options" }).click();
   await expect(visitor.getByTestId("mixer-reset")).toBeVisible();
+  if (!phone) await visitor.getByTestId("mixer-mixes").click();
   await expect(visitor.getByTestId("mixer-save-defaults")).toHaveCount(0);
+  await visitor.keyboard.press("Escape");
   if (phone) await noHorizontalOverflow(visitor);
   await visitor.getByTestId("mixer-toggle").click();
   await expect(visitor.getByTestId("track-strip")).toHaveCount(0);

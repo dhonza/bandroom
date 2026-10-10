@@ -58,10 +58,10 @@ test("phones: the Practice panel is full screen, in portrait and landscape", asy
     timeout: 180_000,
   });
 
-  // Portrait: the Practice button is always in the readout row.
+  // Portrait: the Practice button is always in row 2 of the control bar (SPEC §31.1).
   const phoneButton = page.getByTestId("practice-phone-button");
   await expect(phoneButton).toBeVisible({ timeout: 30_000 });
-  await expect(phoneButton).toHaveText("Practice");
+  await expect(phoneButton).toHaveAccessibleName("Practice");
   const box = await phoneButton.boundingBox();
   expect(box?.width ?? 0).toBeGreaterThanOrEqual(43.5);
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(43.5);
@@ -69,9 +69,10 @@ test("phones: the Practice panel is full screen, in portrait and landscape", asy
   await expectFullScreen(page);
   await resetReachable(page);
 
-  // Landscape: the wider transport's Practice button opens the same full-screen panel.
+  // Landscape: the one-row bar's Practice button opens the same full-screen panel (SPEC §31.6).
   await page.setViewportSize({ width: 844, height: 390 });
-  const button = page.getByTestId("practice-button");
+  await expect(page.getByTestId("rehearse-transport")).toHaveAttribute("data-layout", "landscape");
+  const button = page.getByTestId("practice-phone-button");
   await button.scrollIntoViewIfNeeded();
   await button.click();
   await expectFullScreen(page);

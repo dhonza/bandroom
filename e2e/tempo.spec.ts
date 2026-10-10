@@ -108,6 +108,12 @@ async function phoneMenu(page: Page, testId: string) {
   await closeMenu(page);
 }
 
+/** The tempo dialog: "Tempo map" in row 2 (desktop) or in the transport's ⋯ (phones). */
+async function openTempo(page: Page, phone: boolean) {
+  if (phone) await page.getByRole("button", { name: "Playback options" }).last().click();
+  await page.getByTestId("tempo-button").click();
+}
+
 /** Closes an open menu and waits until its dropdown is gone (it may cover the timeline). */
 async function closeMenu(page: Page) {
   await page.keyboard.press("Escape");
@@ -149,7 +155,7 @@ test("Tempo: MIDI import with markers, manual tempo, grid snapping, click and co
   await expect(page.getByTestId("signature-item")).toHaveCount(0);
 
   // --- MIDI import (SPEC §7.2): an SMPTE file is rejected, the Reaper export imports. ---
-  await page.getByTestId("tempo-button").click();
+  await openTempo(page, phone);
   const dialog = page.getByTestId("tempo-dialog");
   await dialog.getByTestId("tempo-tab-midi").click();
   const fileInput = dialog.locator('input[type="file"]');
@@ -171,7 +177,7 @@ test("Tempo: MIDI import with markers, manual tempo, grid snapping, click and co
   await expect(page.getByTestId("bar-beat").first()).toHaveText("1.1");
 
   // --- Manual tempo (SPEC §7.3): bar-based tempo and time signature changes. ---
-  await page.getByTestId("tempo-button").click();
+  await openTempo(page, phone);
   await dialog.getByTestId("tempo-tab-manual").click();
   // The imported map arrives as rows; keep the first tempo, drop the other changes.
   const removeButtons = dialog.getByRole("button", { name: "Remove this change" });
@@ -214,14 +220,15 @@ test("Tempo: MIDI import with markers, manual tempo, grid snapping, click and co
     [5, 12, 140, "3/4"],
   ]);
 
-  // The time-signature lane labels bar 1 and the change; the transport shows the meter.
-  await expect(page.getByTestId("signature-item")).toHaveText(["6/8", "3/4"]);
+  // The ruler boxes the meter change (SPEC §31.4); the song changes meter, so the transport
+  // shows the meter at the playhead (SPEC §31.5).
+  await expect(page.getByTestId("signature-item")).toHaveText(["3/4"]);
   await expect(page.getByTestId("meter-readout").first()).toHaveText("6/8");
 
   // Reopen (rows come back by bar): 4/4 again, the time signature change to bar 3, and the
   // tempo change removed → 120 BPM 4/4, 3/4 from bar 3. With a mouse, a tap on a time signature
   // in the lane opens the dialog.
-  if (phone) await page.getByTestId("tempo-button").click();
+  if (phone) await openTempo(page, phone);
   else await page.getByTestId("signature-item").last().click();
   await expect(changes).toHaveCount(2);
   await expect(dialog.getByTestId("tempo-changes-header")).toBeVisible();
@@ -316,14 +323,14 @@ test("Tempo: MIDI import with markers, manual tempo, grid snapping, click and co
   await expect.poll(async () => (await debug(page))?.status).toBe("stopped");
 
   // --- Tempo change moves musical items; history restores the MIDI import. ---
-  await page.getByTestId("tempo-button").click();
+  await openTempo(page, phone);
   await dialog.getByTestId("tempo-bpm").fill("60");
   await dialog.getByTestId("tempo-save").click();
   await expect(dialog).toHaveCount(0);
   await expect
     .poll(async () => (await songMarkers(page, songId)).find((m) => m.name === "Chorus")?.startSec)
     .toBeCloseTo(8, 3);
-  await page.getByTestId("tempo-button").click();
+  await openTempo(page, phone);
   await dialog.getByTestId("tempo-tab-history").click();
   await expect(dialog.getByTestId("tempo-revision")).toHaveCount(4);
   await dialog.getByTestId("tempo-restore").last().click(); // the oldest: the MIDI import
@@ -377,7 +384,7 @@ test("Empty song: set the tempo, play the click until Stop, change the tempo (SP
   await expect.poll(async () => (await debug(page))?.openEnd).toBe(true);
 
   const setBpm = async (bpm: string) => {
-    await page.getByTestId("tempo-button").click();
+    await openTempo(page, phone);
     const dialog = page.getByTestId("tempo-dialog");
     await dialog.getByTestId("tempo-tab-manual").click();
     await dialog.getByTestId("tempo-bpm").fill(bpm);

@@ -170,14 +170,23 @@ test("lane labels: only lanes with items, in a narrow column with the Mixer clos
   const detail = panel.getByTestId("timeline-detail");
   const overview = panel.getByTestId("timeline-overview");
 
-  // No sections, markers or comments: no top lanes and no label column; full-width timeline.
-  await expect(labels).toHaveCount(0);
+  const phone = isMobile(testInfo);
+  // The lanes menu: in row 2 of the control bar on desktop, in the transport's "⋯" on phones.
+  const openLanes = async () => {
+    if (phone) await page.getByTestId("transport-more").click();
+    else await panel.getByTestId("lanes-menu").click();
+  };
+
+  // No sections or comments: no top lanes; the label column holds "Whole song" left of the
+  // overview, so the overview and the detail view share one time axis (SPEC §31.4).
+  await expect(labels).toBeVisible();
+  await expect(panel.getByTestId("timeline-corner")).toHaveText("Whole song");
   expect(Math.abs((await box(detail)).width - (await box(overview)).width)).toBeLessThanOrEqual(1);
 
-  // The first marker makes its lane (and the column) appear; there is still no Sections lane.
+  // A marker sits on the ruler: no Markers lane (SPEC §31.4).
   await page.getByTestId("add-marker").click();
   await expect(panel.getByTestId("marker-item")).toHaveCount(1);
-  await expect(labels.getByTestId("lane-label-markers")).toHaveText("Markers");
+  await expect(labels.getByTestId("lane-label-markers")).toHaveCount(0);
   await expect(labels.getByTestId("lane-label-sections")).toHaveCount(0);
   await expect(labels.getByTestId("lane-label-comments")).toHaveCount(0);
 
@@ -193,39 +202,35 @@ test("lane labels: only lanes with items, in a narrow column with the Mixer clos
   await expect(close).toBeHidden();
   await expect(labels.getByTestId("lane-label-comments")).toHaveText("Comments");
   await expect(labels.getByTestId("lane-label-sections")).toHaveCount(0);
-  // The column is narrow: the detail view starts right of it, and the overview above it too, so
-  // both share one time axis (the corner left of the overview holds the lanes menu).
+  // The column is narrow: the detail view starts right of it, and the overview above it too.
   const col = await box(labels);
-  expect(col.width).toBeLessThanOrEqual(isMobile(testInfo) ? 72 : 88);
+  expect(col.width).toBeLessThanOrEqual(phone ? 72 : 88);
   expect((await box(detail)).x).toBeGreaterThanOrEqual(col.x + col.width - 1);
   expect(Math.abs((await box(overview)).x - (await box(detail)).x)).toBeLessThanOrEqual(1);
   expect(Math.abs((await box(overview)).width - (await box(detail)).width)).toBeLessThanOrEqual(1);
   await noHorizontalOverflow(page);
 
   // The lanes menu hides a lane (per device, so it survives a reload) and shows them all again.
-  await panel.getByTestId("lanes-menu").click();
+  await openLanes();
   await page.getByTestId("lane-toggle-comments").click();
   await expect(labels.getByTestId("lane-label-comments")).toHaveCount(0);
   await expect(panel.getByTestId("comment-pin")).toHaveCount(0);
   await page.getByTestId("lanes-hide-all").click();
-  await expect(labels.getByTestId("lane-label-markers")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await page.reload();
   await expect(panel.getByTestId("rehearse-play")).toBeEnabled({ timeout: 30_000 });
-  // Every lane hidden: the column stays for the menu, the timeline stays aligned.
+  // Every lane hidden: the column stays, the timeline stays aligned; markers stay on the ruler.
   await expect(labels).toBeVisible();
-  await expect(panel.getByTestId("marker-item")).toHaveCount(0);
+  await expect(panel.getByTestId("marker-item")).toHaveCount(1);
   expect(Math.abs((await box(overview)).x - (await box(detail)).x)).toBeLessThanOrEqual(1);
-  await panel.getByTestId("lanes-menu").click();
+  await openLanes();
   await page.getByTestId("lanes-show-all").click();
   await page.keyboard.press("Escape");
-  await expect(labels.getByTestId("lane-label-markers")).toHaveText("Markers");
   await expect(labels.getByTestId("lane-label-comments")).toHaveText("Comments");
 
   // Mixer open: the labels move to the track-header column; the narrow column goes.
   await page.getByTestId("mixer-toggle").click();
   const headers = panel.getByTestId("track-headers");
-  await expect(headers.getByTestId("lane-label-markers")).toBeVisible();
   await expect(headers.getByTestId("lane-label-comments")).toBeVisible();
   await expect(labels).toHaveCount(0);
   await page.getByTestId("mixer-toggle").click();
@@ -296,6 +301,8 @@ test("a long song title wraps by words next to the header buttons (portrait and 
   const heading = page.getByTestId("song-title");
   await expect(heading).toHaveText(title);
   await expect(page.getByTestId("mixer-toggle")).toBeVisible();
+  // The song header's button: the Mixer on desktop, the song menu on phones (SPEC §31.2).
+  const action = page.getByTestId("song-more");
 
   for (const size of [
     { width: 360, height: 740 },
@@ -303,8 +310,13 @@ test("a long song title wraps by words next to the header buttons (portrait and 
     { width: 852, height: 393 },
   ]) {
     await page.setViewportSize(size);
-    // On phones the Mixer button is another component (icon + caption): measure after the swap.
-    await expect(page.getByTestId("mixer-toggle")).toBeVisible();
+    // A phone in landscape: the control bar has a compact title instead (SPEC §31.6).
+    if (isMobile(testInfo) && size.width > size.height) {
+      await expect(page.getByTestId("song-title-compact")).toHaveText(title);
+      await noHorizontalOverflow(page);
+      continue;
+    }
+    await expect(action).toBeVisible();
     await page.evaluate(
       () =>
         new Promise((r) => {
@@ -332,7 +344,7 @@ test("a long song title wraps by words next to the header buttons (portrait and 
     });
     expect(word).toBe(1);
     // The header buttons stay within the screen (they wrap below the title when needed).
-    const buttons = await box(page.getByTestId("mixer-toggle"));
+    const buttons = await box(action);
     expect(buttons.x + buttons.width).toBeLessThanOrEqual(size.width);
   }
 });

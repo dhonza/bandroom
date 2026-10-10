@@ -57,14 +57,26 @@ async function songWithMix(page: Page, name: string): Promise<{ songPath: string
   return { songPath: new URL(page.url()).pathname };
 }
 
-async function makeOffline(page: Page) {
+/**
+ * The song's offline state: the header icon on desktop, an item of the song's ⋯ on phones
+ * (SPEC §31.2), read with the menu open.
+ */
+async function songOfflineStatus(page: Page, phone: boolean): Promise<string | null> {
+  if (!phone) return page.getByTestId("offline-button").getAttribute("data-status");
+  await page.getByTestId("song-more").click();
+  const status = await page.getByTestId("offline-button").getAttribute("data-status");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  return status;
+}
+
+async function makeOffline(page: Page, phone: boolean) {
+  if (phone) await page.getByTestId("song-more").click();
   await page.getByTestId("offline-button").click();
   const modal = page.getByTestId("offline-modal");
   await expect(modal.getByTestId("offline-estimate")).toContainText("About", { timeout: 30_000 });
   await modal.getByTestId("offline-download").click();
-  await expect(page.getByTestId("offline-button")).toHaveAttribute("data-status", "ready", {
-    timeout: 120_000,
-  });
+  await expect.poll(() => songOfflineStatus(page, phone), { timeout: 120_000 }).toBe("ready");
 }
 
 /** Opens the song again while offline: the app shell, API answers and audio from the worker. */
@@ -101,7 +113,7 @@ test("Offline song: the Player with the Mixer closed and open in airplane mode, 
   const { songPath } = await songWithMix(page, `Offline ${uniqueUsername(testInfo)}`);
   const songId = songPath.split("/").at(-1) ?? "";
   await waitForServiceWorker(page);
-  await makeOffline(page);
+  await makeOffline(page, phone);
 
   // --- Airplane mode: the app, the song and its audio come from this device. ---
   await context.setOffline(true);
@@ -110,7 +122,7 @@ test("Offline song: the Player with the Mixer closed and open in airplane mode, 
     timeout: 30_000,
   });
   await expect(page.getByTestId("offline-indicator")).toBeVisible();
-  await expect(page.getByTestId("offline-button")).toHaveAttribute("data-status", "ready");
+  await expect.poll(() => songOfflineStatus(page, phone)).toBe("ready");
 
   // The Player plays the engine from the cache with the Mixer closed (SPEC §27.6) …
   await expect(page.getByTestId("mixer-toggle")).toHaveAttribute("aria-pressed", "false");
@@ -217,7 +229,8 @@ test("Offline project, Range answers from the cache, Offline page, logout cleanu
   await waitForServiceWorker(page);
 
   // The whole project, from its page.
-  await page.getByRole("link", { name: `← ${projectName}` }).click();
+  if (phone) await page.getByTestId("song-back").click();
+  else await page.getByRole("link", { name: `← ${projectName}` }).click();
   await page.getByTestId("offline-button").click();
   await expect(page.getByTestId("offline-estimate")).toContainText("1 song", { timeout: 30_000 });
   await page.getByTestId("offline-download").click();
@@ -246,7 +259,7 @@ test("Offline project, Range answers from the cache, Offline page, logout cleanu
     await context.setOffline(false);
   }
   await page.goto(songPath.replace(/^\/bandroom/, "").replace(/^\//, ""));
-  await expect(page.getByTestId("offline-button")).toHaveAttribute("data-status", "project");
+  await expect.poll(() => songOfflineStatus(page, phone)).toBe("project");
 
   // The worker answers the engine's (and any media element's) requests from the cached blobs: whole files,
   // open and closed ranges, and 416 outside the file.

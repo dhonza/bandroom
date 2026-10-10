@@ -64,7 +64,11 @@ async function tracksOf(page: Page, songId: string): Promise<ApiTrack[]> {
 
 /** Opens the song's record sheet and waits until the microphone is armed. */
 async function openRecorder(page: Page) {
-  await page.getByTestId("record-open").click();
+  // Desktop: the transport's Record button; phones: the transport's ⋯ (SPEC §31.1).
+  const button = page.getByTestId("record-open");
+  if (!(await button.isVisible()))
+    await page.getByRole("button", { name: "Playback options" }).click();
+  await button.click();
   const panel = page.getByTestId("record-panel");
   await expect(panel).toHaveAttribute("data-phase", "armed", { timeout: 60_000 });
   await expect(page.getByTestId("record-meter")).toBeVisible();

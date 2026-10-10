@@ -72,6 +72,12 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], ...FAKE_MIC, baseURL: SUBPATH_URL },
     },
     { name: "subpath-iphone", use: { ...devices["iPhone 15"], baseURL: SUBPATH_URL } },
+    // A phone in landscape (SPEC §31.6): only the song layout spec.
+    {
+      name: "iphone-landscape",
+      testMatch: /song-layout\.spec\.ts/,
+      use: { ...devices["iPhone 15 landscape"], baseURL: ROOT_URL },
+    },
   ],
   webServer: [
     server(ROOT_PORT, ROOT_URL, "root", ROOT_PORT + 100),

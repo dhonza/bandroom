@@ -28,6 +28,8 @@ function smallTargets(page: Page): Promise<SmallTarget[]> {
     );
     for (const el of nodes) {
       if (el.closest('[aria-hidden="true"], [inert]')) continue;
+      // The section pills are 34 px on touch screens by an owner decision (SPEC §31.3).
+      if (el.closest("[data-touch-exempt]")) continue;
       const style = getComputedStyle(el);
       if (style.visibility !== "visible" || style.display === "none") continue;
       const r = el.getBoundingClientRect();
@@ -116,7 +118,32 @@ test("Touch targets: buttons and links are at least 44 px on the main screens at
 
   await openMixer(page);
   await expectTouchFriendly(page, "mixer");
+  // The section pills on (SPEC §31.3): only the exempt pills are smaller. The Sections lane is
+  // hidden here: its items are 42 px tall (PROGRESS follow-up).
+  const section = await page.request.post(`api/v1/songs/${song.id}/markers`, {
+    headers: CSRF,
+    data: { type: "section", name: "Verse", color: "blue", startSec: 0, endSec: 1 },
+  });
+  expect(section.ok()).toBe(true);
+  await page.evaluate(() => {
+    localStorage.setItem("bandroom.hiddenLanes", JSON.stringify(["sections"]));
+  });
+  await page.reload();
+  await openMixer(page);
+  await page.getByTestId("section-pills-toggle").click();
+  await expect(page.getByTestId("section-chip")).toHaveCount(1);
+  await expectTouchFriendly(page, "section pills");
   await page.getByTestId("track-settings").click(TAP_NAME);
   await expect(page.getByTestId("track-settings-panel")).toBeVisible();
   await expectTouchFriendly(page, "track settings");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("track-settings-panel")).toBeHidden();
+
+  // Edit mode (SPEC §31.2): the orange row and the header's Cancel and Apply.
+  await expect(page.getByTestId("edit-audio")).toBeEnabled({ timeout: 120_000 });
+  await page.getByTestId("edit-audio").click();
+  await expect(page.getByTestId("edit-toolbar")).toBeVisible({ timeout: 30_000 });
+  await expectTouchFriendly(page, "edit mode");
+  await page.getByTestId("edit-cancel").click();
+  await expect(page.getByTestId("edit-toolbar")).toHaveCount(0, { timeout: 30_000 });
 });

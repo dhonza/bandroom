@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { generateFixtures, TONE_FILE } from "@bandroom/fixtures";
-import { loginAsNewUser, uniqueUsername } from "./helpers";
+import { isMobile, loginAsNewUser, uniqueUsername } from "./helpers";
 
 /**
  * M19 group D: the song lock (SPEC §25.12) and the default mix while the song's mix is being
@@ -66,10 +66,19 @@ test("Song lock: frozen controls, refused changes, live for other tabs, unlock",
   await other.goto(`songs/${songId}`);
   await expect(other.getByTestId("add-marker")).toBeEnabled({ timeout: 30_000 });
 
+  // Desktop: an icon in the song header; phones: an item of the song's ⋯ (SPEC §31.2).
+  const phone = isMobile(testInfo);
   const toggle = page.getByTestId("song-lock-toggle");
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  const state = phone ? "aria-checked" : "aria-pressed";
+  const lockToggle = async (from: string, to: string) => {
+    if (phone) await page.getByTestId("song-more").click();
+    await expect(toggle).toHaveAttribute(state, from);
+    await toggle.click();
+    if (phone) await page.getByTestId("song-more").click();
+    await expect(toggle).toHaveAttribute(state, to);
+    if (phone) await page.keyboard.press("Escape");
+  };
+  await lockToggle("false", "true");
   await expect(page.getByTestId("song-lock-banner")).toBeVisible();
   await expect(addMarker).toBeDisabled();
   await expect(page.getByTestId("comment-at-playhead")).toBeDisabled();
@@ -87,8 +96,7 @@ test("Song lock: frozen controls, refused changes, live for other tabs, unlock",
   expect(await markerCount(page, songId)).toBe(0);
 
   // Unlock: everything works again, in both tabs.
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await lockToggle("true", "false");
   await expect(page.getByTestId("song-lock-banner")).toHaveCount(0);
   await expect(other.getByTestId("song-lock-banner")).toHaveCount(0, { timeout: 15_000 });
   await addMarker.click();

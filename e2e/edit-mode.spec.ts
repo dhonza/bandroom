@@ -118,7 +118,8 @@ test("Edit mode: split, cut, move, undo/redo, reload, takeover and cancel", asyn
   await page.getByTestId("edit-audio").click();
   const toolbar = page.getByTestId("edit-toolbar");
   await expect(toolbar).toBeVisible();
-  await expect(toolbar).toHaveAttribute("data-layout", phone ? "sheet" : "bar");
+  // Row 2 of the control bar on every device (SPEC §31.2).
+  await expect(toolbar).toHaveAttribute("data-layout", "row");
   await expect(page.getByTestId("edit-clip")).toHaveCount(3, { timeout: 90_000 });
   await expect.poll(async () => (await debug(page))?.edit?.sessionId ?? null).not.toBeNull();
   expect(await clipCounts(page)).toEqual([1, 1, 1]);

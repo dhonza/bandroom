@@ -203,6 +203,8 @@ test("Bounce: split into songs at two sections with chosen names", async ({ page
   await page.getByTestId("edit-silence").click();
   await expect.poll(() => clipCounts(page)).toEqual([2, 2]);
 
+  // Phones: Bounce… is in the edit row's ⋯ (SPEC §31.2).
+  if (isMobile(testInfo)) await page.getByTestId("edit-more").click();
   await page.getByTestId("edit-bounce").click();
   const dialog = page.getByTestId("edit-bounce-dialog");
   await dialog.getByTestId("edit-bounce-kind-bounceSongs").click();

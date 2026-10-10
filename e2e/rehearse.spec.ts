@@ -114,6 +114,7 @@ test("Rehearse: multitrack play, mute/solo, seek, personal mix persists", async 
   // to v1 again from the header's version stack is personal and marks the track "not current".
   if (phone) return;
   // The project creator (manager) can make this mix everyone's default.
+  await page.getByTestId("mixer-mixes").click();
   await page.getByTestId("mixer-save-defaults").click();
   await expect(page.getByText("Default mix saved.")).toBeVisible();
 

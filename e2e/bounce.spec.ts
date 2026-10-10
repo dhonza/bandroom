@@ -159,7 +159,8 @@ test("bounce a mix with a muted track into a new song that plays", async ({
   await page.getByTestId("rehearse-play").click();
 
   // In the project it sits right after the source song.
-  await page.getByRole("link", { name: `← ${projectName}` }).click();
+  if (phone) await page.getByTestId("song-back").click();
+  else await page.getByRole("link", { name: `← ${projectName}` }).click();
   await page.getByRole("tab", { name: "Songs" }).click();
   await expect(page.getByTestId("song-row")).toHaveText([/Two takes/, /Two takes \(bounce\)/]);
 });

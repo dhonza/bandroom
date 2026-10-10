@@ -80,10 +80,13 @@ test("Markers: add a section, loop it with two taps, frame-accurate loop cache",
   await expect(editor.getByTestId("marker-name")).toHaveValue("Chorus");
   await editor.getByTestId("marker-save").click();
   await expect(page.getByTestId("section-item")).toHaveCount(1);
+  // The section pills are off by default (SPEC §31.3): the Sections toggle shows them.
+  await expect(page.getByTestId("section-chip")).toHaveCount(0);
+  await page.getByTestId("section-pills-toggle").click();
   const chip = page.getByTestId("section-chip").filter({ hasText: "Chorus" });
   await expect(chip).toBeVisible();
 
-  // Two taps on the chip loop the section (SPEC §11.1 two-tap rule).
+  // Two taps on the pill loop the section (SPEC §11.1 two-tap rule).
   await page.getByTestId("selection-clear").click();
   await expect.poll(async () => (await debug(page))?.loop ?? null).toBeNull();
   await chip.dblclick();
