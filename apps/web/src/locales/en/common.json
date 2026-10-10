@@ -112,6 +112,7 @@
     "EDIT_SESSION_STATE": "The edit session has already ended. Reload the page.",
     "NOT_SESSION_OWNER": "Someone else has taken over this edit session. Your latest changes were not saved.",
     "SONG_EDITING": "Someone is editing this song, so this cannot be changed until the session ends.",
+    "PROJECT_EDITING": "A song in this project is being edited. Finish or cancel the edit first.",
     "PROCESSING_SOURCE": "A track of the song is still being processed. Try again when it is ready."
   },
   "footer": {

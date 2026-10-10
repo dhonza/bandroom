@@ -58,7 +58,7 @@ import { contentDisposition } from "../http/blobs";
 import { registerAuthorizedRoute, registerContract, userOrIpKey } from "../http/contracts";
 import { AppError } from "../http/errors";
 import { planProjectExport, zipEntries } from "../http/projectExport";
-import type { ProjectScopeAccess } from "../http/scope";
+import { checkProjectNotEditing, type ProjectScopeAccess } from "../http/scope";
 import { acquireFfmpegSlot } from "../http/versionDownload";
 import { notifyGranted, notifyNewSong } from "../notify";
 
@@ -174,6 +174,8 @@ export function registerProjectRoutes(app: FastifyInstance, ctx: AppContext): vo
   });
 
   registerContract(app, deleteProject, ({ user, access }, request) => {
+    // An edit session freezes its song (SPEC §24.7), so its project stays too.
+    checkProjectNotEditing(db, access.project.id);
     // Published first: once the project is deleted nobody can see project-scoped events any more.
     // Open players drop its songs (SPEC §6.10); clients refetch after the delete is done.
     ctx.hub.publish({

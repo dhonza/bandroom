@@ -59,6 +59,7 @@ export const ERROR_CODES = [
   "EDIT_SESSION_STATE",
   "NOT_SESSION_OWNER",
   "SONG_EDITING",
+  "PROJECT_EDITING",
   "PROCESSING_SOURCE",
 ] as const;
 
@@ -161,6 +162,8 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
   NOT_SESSION_OWNER: 409,
   /** Someone is editing the song: its tracks, timeline and comments are frozen (SPEC §24.7). */
   SONG_EDITING: 409,
+  /** A song of the project is being edited: the project cannot be deleted or purged (SPEC §24.7). */
+  PROJECT_EDITING: 409,
   /** A current version of the song is still being processed (SPEC §24.7). */
   PROCESSING_SOURCE: 409,
 };

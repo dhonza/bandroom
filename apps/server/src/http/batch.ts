@@ -31,7 +31,7 @@ import {
   type TrashKind,
 } from "@bandroom/shared";
 import { AppError } from "./errors";
-import { checkNotEditing } from "./scope";
+import { checkNotEditing, checkProjectNotEditing } from "./scope";
 
 /** One checked batch item with the user's role on its song. */
 export type BatchItem = ResolvedItem & { role: EffectiveRole };
@@ -242,5 +242,7 @@ export function checkBatch(
   // moved or stripped of full quality. Copies and inspections only read.
   if (EDIT_FROZEN_ACTIONS.has(action))
     for (const songId of new Set(items.map((i) => i.song.id))) checkNotEditing(db, songId);
+  // The same for a project restored or purged as a whole (containers come only with those).
+  for (const c of containers) if (c.kind === "project") checkProjectNotEditing(db, c.project.id);
   return { scope: "batch", action, items, containers, target: checkTarget(db, user, body) };
 }

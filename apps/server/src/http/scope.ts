@@ -11,6 +11,7 @@ import {
   documentLocationOfVersion,
   getEditSessionRow,
   getLinkRow,
+  projectIsEditing,
   songIsEditing,
   type EditSessionRow,
   type LinkRow,
@@ -286,6 +287,15 @@ export function checkSongLock(
  */
 export function checkNotEditing(db: Db, songId: string): void {
   if (songIsEditing(db, songId)) throw new AppError("SONG_EDITING", "Someone is editing the song");
+}
+
+/**
+ * The edit lock for the whole project (deleting, restoring or purging it): PROJECT_EDITING while
+ * an edit session holds any of its songs (SPEC §24.7).
+ */
+export function checkProjectNotEditing(db: Db, projectId: string): void {
+  if (projectIsEditing(db, projectId))
+    throw new AppError("PROJECT_EDITING", "A song in the project is being edited");
 }
 
 /** The song a resolved scope belongs to, if any (batch scopes have many: none). */

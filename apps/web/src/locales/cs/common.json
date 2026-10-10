@@ -114,6 +114,7 @@
     "EDIT_SESSION_STATE": "Úpravy už skončily. Obnovte stránku.",
     "NOT_SESSION_OWNER": "Úpravy převzal někdo jiný. Vaše poslední změny se neuložily.",
     "SONG_EDITING": "Píseň právě někdo upravuje, proto to do konce úprav nelze změnit.",
+    "PROJECT_EDITING": "Píseň v tomto projektu se právě upravuje. Nejdřív úpravy dokončete nebo zrušte.",
     "PROCESSING_SOURCE": "Stopa písně se ještě zpracovává. Zkuste to znovu, až bude hotová."
   },
   "footer": {

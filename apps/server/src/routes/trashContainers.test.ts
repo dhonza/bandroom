@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import {
+  cancelEditSessionRow,
   createAsset,
+  createEditSessionRow,
   createSongRow,
   createTrackWithVersion,
   getUsage,
@@ -166,6 +168,34 @@ describe("deleted projects in Admin → Trash", () => {
     expect(
       t.db.select().from(schema.jobs).where(eq(schema.jobs.type, "blob.gc")).all().length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe("deleted projects with a song in an edit session", () => {
+  it("refuses to restore or purge them (PROJECT_EDITING) until the session ends", async () => {
+    const projectId = await newProject("Held");
+    const songId = createSongRow(t.db, { projectId, title: "S", createdBy: ids.boss ?? "" }).id;
+    expect((await call(t, deleteProject, { params: { id: projectId } }, admin)).statusCode).toBe(
+      200,
+    );
+    // A session left on a song of a project deleted before the project lock existed.
+    const session = createEditSessionRow(t.db, {
+      songId,
+      projectId,
+      userId: ids.boss ?? "",
+      base: { tracks: [], remap: [], foldedOps: 0 },
+    });
+    for (const route of [batchRestore, batchPurge]) {
+      const res = await call(t, route, { body: { projects: [projectId] } }, admin);
+      expect(res.statusCode).toBe(409);
+      expect(codeOf(res)).toBe("PROJECT_EDITING");
+    }
+    expect(projectRow(projectId)?.deletedAt).not.toBeNull();
+
+    cancelEditSessionRow(t.db, session);
+    const res = await call(t, batchPurge, { body: { projects: [projectId] } }, admin);
+    expect(res.json()).toMatchObject({ ok: true, count: 1 });
+    expect(projectRow(projectId)).toBeUndefined();
   });
 });
 

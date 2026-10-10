@@ -25,7 +25,14 @@ import {
   updateSong,
   GrantRowSchema,
 } from "@bandroom/shared";
-import { getUserById, listEvents } from "@bandroom/server-core";
+import {
+  cancelEditSessionRow,
+  createEditSessionRow,
+  getUserById,
+  listEvents,
+  schema,
+} from "@bandroom/server-core";
+import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { call, createTestApp, loginAs, seedUser, type TestApp } from "../testing/testApp";
@@ -33,6 +40,7 @@ import { makeFilter } from "./stream";
 
 let t: TestApp;
 let admin: string;
+let adminId: string;
 let member: string;
 let memberId: string;
 let guest: string;
@@ -40,7 +48,7 @@ let guestId: string;
 
 beforeEach(async () => {
   t = await createTestApp();
-  await seedUser(t, "boss", "admin");
+  adminId = (await seedUser(t, "boss", "admin")).id;
   memberId = (await seedUser(t, "petr", "member")).id;
   guestId = (await seedUser(t, "producer", "guest")).id;
   admin = await loginAs(t, "boss");
@@ -124,6 +132,43 @@ describe("projects", () => {
     expect((await call(t, deleteProject, { params: { id: p.id } }, admin)).statusCode).toBe(200);
     expect(await projectsOf(admin)).toEqual([]);
     expect(code(await call(t, getProject, { params: { id: p.id } }, admin))).toBe("NOT_FOUND");
+  });
+
+  it("refuses to delete a project while a song in it is being edited (PROJECT_EDITING)", async () => {
+    const p = await newProject(admin);
+    const other = await newProject(admin, "Other");
+    const song = await newSong(admin, p.id, "Edited");
+    // The session's own project id is stale (the song moved): the song's project counts.
+    const session = createEditSessionRow(t.db, {
+      songId: song.id,
+      projectId: other.id,
+      userId: adminId,
+      base: { tracks: [], remap: [], foldedOps: 0 },
+    });
+    const del = () => call(t, deleteProject, { params: { id: p.id } }, admin);
+    const refused = await del();
+    expect(refused.statusCode).toBe(409);
+    expect(code(refused)).toBe("PROJECT_EDITING");
+    t.db
+      .update(schema.editSessions)
+      .set({ status: "applying" })
+      .where(eq(schema.editSessions.id, session.id))
+      .run();
+    expect(code(await del())).toBe("PROJECT_EDITING");
+    expect(listEvents(t.db, { action: "project.deleted", targetId: p.id })).toHaveLength(0);
+    expect((await call(t, getProject, { params: { id: p.id } }, admin)).statusCode).toBe(200);
+    // The other project is not held by the session.
+    expect((await call(t, deleteProject, { params: { id: other.id } }, admin)).statusCode).toBe(
+      200,
+    );
+
+    t.db
+      .update(schema.editSessions)
+      .set({ status: "open" })
+      .where(eq(schema.editSessions.id, session.id))
+      .run();
+    cancelEditSessionRow(t.db, session);
+    expect((await del()).statusCode).toBe(200);
   });
 
   it("tells members who could see the project that it was deleted (SSE)", async () => {

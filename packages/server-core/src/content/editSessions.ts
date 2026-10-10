@@ -15,7 +15,7 @@ import {
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "../db/connection";
-import { editSessions, users } from "../db/schema";
+import { editSessions, songs, users } from "../db/schema";
 import { durationSamples48k } from "../media/ingest";
 import { assetProbe } from "../media/assets";
 import { editRenderProgress, parseOutcome } from "./editRenders";
@@ -43,6 +43,22 @@ export function activeEditSession(db: Db, songId: string): EditSessionRow | unde
 /** Whether an edit session holds the song (the central lock check, SPEC §24.7). */
 export function songIsEditing(db: Db, songId: string): boolean {
   return activeEditSession(db, songId) !== undefined;
+}
+
+/**
+ * Whether an edit session holds any song of the project, which then cannot be deleted or purged.
+ * Joined through the song's current project: `edit_sessions.project_id` is not updated when the
+ * song moves to another project.
+ */
+export function projectIsEditing(db: Db, projectId: string): boolean {
+  return (
+    db
+      .select({ id: editSessions.id })
+      .from(editSessions)
+      .innerJoin(songs, eq(songs.id, editSessions.songId))
+      .where(and(eq(songs.projectId, projectId), inArray(editSessions.status, [...ACTIVE])))
+      .get() !== undefined
+  );
 }
 
 function nameOf(db: Db, userId: string): string {
