@@ -82,7 +82,7 @@ export function reviewRanges(
   }));
 }
 
-const peakCache = new WeakMap<object, Map<string, { spp: number; pairs: Int8Array } | null>>();
+const peakCache = new WeakMap<object, Map<string, { spp: number; pairs: Int16Array } | null>>();
 
 function maxPeak(
   deps: ReviewDeps,
@@ -112,7 +112,7 @@ function maxPeak(
   let m = 0;
   for (let i = Math.max(0, from); i < Math.min(dat.pairs.length / 2, to); i++)
     m = Math.max(m, Math.abs(dat.pairs[2 * i] ?? 0), Math.abs(dat.pairs[2 * i + 1] ?? 0));
-  return m / 127;
+  return m / 32_767;
 }
 
 /**

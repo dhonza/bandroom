@@ -5,7 +5,7 @@ import { decodeDat, encodeDat, overviewFromPairs, PeaksAccumulator } from "./pea
 import type { Probe } from "./probe";
 
 describe("PeaksAccumulator", () => {
-  it("computes 8-bit min/max per block across channels, across chunk boundaries", () => {
+  it("computes 16-bit min/max per block across channels, across chunk boundaries", () => {
     const acc = new PeaksAccumulator(2, 2);
     const frames = [
       [1000, -2000],
@@ -21,29 +21,42 @@ describe("PeaksAccumulator", () => {
     });
     acc.push(buf.subarray(0, 7)); // split mid-sample
     acc.push(buf.subarray(7));
-    expect(Array.from(acc.finish())).toEqual([-2000 >> 8, 30000 >> 8, -128, 256 >> 8, -2, 2]);
+    expect(Array.from(acc.finish())).toEqual([-2000, 30000, -32768, 256, -512, 512]);
   });
 
   it("keeps every pair past its initial capacity", () => {
     const acc = new PeaksAccumulator(1, 1);
-    const n = 10_000; // pairs; more than the initial int8 storage holds
+    const n = 10_000; // pairs; more than the initial storage holds
     const buf = Buffer.alloc(n * 2);
-    for (let i = 0; i < n; i++) buf.writeInt16LE(((i % 256) - 128) << 8, i * 2);
+    for (let i = 0; i < n; i++) buf.writeInt16LE(i - 5_000, i * 2);
     acc.push(buf);
     const pairs = acc.finish();
-    expect(pairs).toBeInstanceOf(Int8Array);
+    expect(pairs).toBeInstanceOf(Int16Array);
     expect(pairs.length).toBe(2 * n);
-    expect(pairs[2 * 9_999]).toBe((9_999 % 256) - 128);
-    expect(pairs[2 * 9_999 + 1]).toBe((9_999 % 256) - 128);
+    expect(pairs[2 * 9_999]).toBe(4_999);
+    expect(pairs[2 * 9_999 + 1]).toBe(4_999);
   });
 
-  it("round-trips the .dat format and builds an overview", () => {
-    const pairs = Int8Array.from([-10, 10, -127, 127, 0, 5]);
+  it("round-trips the 16-bit .dat format and builds an overview", () => {
+    const pairs = Int16Array.from([-2560, 2600, -32768, 32767, 0, 1300]);
     const back = decodeDat(encodeDat(pairs, 44_100, 256));
-    expect(back).toMatchObject({ sampleRate: 44_100, spp: 256 });
+    expect(back).toMatchObject({ sampleRate: 44_100, spp: 256, bits: 16 });
     expect(Array.from(back.pairs)).toEqual(Array.from(pairs));
     expect(overviewFromPairs(pairs, 3)).toEqual([10, 127, 5]);
-    expect(overviewFromPairs(new Int8Array(0), 2)).toEqual([0, 0]);
+    expect(overviewFromPairs(new Int16Array(0), 2)).toEqual([0, 0]);
+  });
+
+  it("reads older 8-bit .dat files on the 16-bit scale", () => {
+    const buf = Buffer.alloc(24);
+    buf.writeInt32LE(1, 0);
+    buf.writeUInt32LE(1, 4); // 8-bit
+    buf.writeInt32LE(48_000, 8);
+    buf.writeInt32LE(256, 12);
+    buf.writeUInt32LE(2, 16);
+    Buffer.from(Int8Array.from([-10, 10, -128, 127]).buffer).copy(buf, 20);
+    const back = decodeDat(buf);
+    expect(back.bits).toBe(8);
+    expect(Array.from(back.pairs)).toEqual([-2560, 2560, -32768, 32512]);
   });
 });
 

@@ -158,7 +158,7 @@ function drawPeaks(
   const samplesPerPx = p.sampleRate / view.pxPerSec;
   const level = pickLevel(p, samplesPerPx);
   const mid = y + h / 2;
-  const scale = ((h / 2 - 1) / 128) * amp;
+  const scale = ((h / 2 - 1) / 32_768) * amp;
   ctx.fillStyle = color;
   ctx.globalAlpha = 0.75; // SPEC §11.5: ~70 % opacity
   for (let x = part?.from ?? 0; x < (part?.to ?? view.widthPx); x++) {

@@ -19,15 +19,19 @@ import {
   zoomAt,
 } from "./view";
 
-function dat(pairs: number[], sampleRate = 48_000, spp = 256): ArrayBuffer {
-  const buf = new ArrayBuffer(20 + pairs.length);
+function dat(pairs: number[], bits: 8 | 16 = 16, sampleRate = 48_000, spp = 256): ArrayBuffer {
+  const bytes = bits / 8;
+  const buf = new ArrayBuffer(20 + pairs.length * bytes);
   const dv = new DataView(buf);
   dv.setInt32(0, 1, true);
-  dv.setUint32(4, 1, true);
+  dv.setUint32(4, bits === 8 ? 1 : 0, true);
   dv.setInt32(8, sampleRate, true);
   dv.setInt32(12, spp, true);
   dv.setUint32(16, pairs.length / 2, true);
-  new Int8Array(buf, 20).set(pairs);
+  pairs.forEach((v, i) => {
+    if (bits === 8) dv.setInt8(20 + i, v);
+    else dv.setInt16(20 + 2 * i, v, true);
+  });
   return buf;
 }
 
@@ -41,6 +45,14 @@ describe("peaks pyramid", () => {
     expect(Array.from(p.levels[1]?.maxs ?? [])).toEqual([3, 8, 2]);
     expect(p.lengthSamples).toBe(5 * 256);
     expect(() => parseDat(new ArrayBuffer(20))).toThrow();
+  });
+
+  it("keeps 16-bit detail and scales older 8-bit peaks to the same range", () => {
+    // Quiet audio: 16-bit keeps levels that 8 bits rounded away (blocky with a large gain).
+    expect(Array.from(parseDat(dat([-37, 300, -32_768, 32_767])).maxs)).toEqual([300, 32_767]);
+    const old = parseDat(dat([-1, 1, -128, 127], 8));
+    expect(Array.from(old.mins)).toEqual([-256, -32_768]);
+    expect(Array.from(old.maxs)).toEqual([256, 32_512]);
   });
 
   it("picks the coarsest level still finer than a pixel and aggregates ranges", () => {

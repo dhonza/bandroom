@@ -12,7 +12,7 @@ import { encodeFlac, encodeOpus, encodeWavPack } from "./encode";
 import { flacSeekIndex } from "./flacIndex";
 import { opusKbpsFor } from "./opusRates";
 import { readOggOpus } from "./ogg";
-import { computePeaks } from "./peaks";
+import { computePeaks, PEAKS_BITS } from "./peaks";
 import { probeAudio, UnsupportedMediaError, type Probe } from "./probe";
 import { mediaTimeLimitMs, PROBE_TIME_LIMIT_MS, withTimeLimit } from "./tools";
 import { removeVariant } from "./variants";
@@ -244,7 +244,7 @@ export const audioIngestHandler: JobHandler<
     );
     await ctx.output(ref("peaks"), peaksOut, {
       format: "audiowaveform-dat-v1",
-      bits: 8,
+      bits: PEAKS_BITS,
       samplesPerPixel: 256,
       sampleRate: probe.sampleRate,
       pixels: peaks.pixels,
