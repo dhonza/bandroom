@@ -1,6 +1,7 @@
 import {
   createLogger,
   enqueueDocumentBackfill,
+  enqueuePeaksBackfill,
   loadConfig,
   migrateDatabase,
   openDb,
@@ -27,6 +28,8 @@ async function main(): Promise<void> {
   logger.info({ dbPath: config.dbPath }, "database ready");
   const backfill = enqueueDocumentBackfill(db);
   if (backfill > 0) logger.info({ documents: backfill }, "queued document previews (backfill)");
+  const peaks = enqueuePeaksBackfill(db);
+  if (peaks > 0) logger.info({ assets: peaks }, "queued 16-bit waveform peaks (backfill)");
 
   const app = await buildApp({ config, db, logger, runJobs: true });
 

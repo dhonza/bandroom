@@ -9,6 +9,7 @@ import { createAsset } from "../media/assets";
 import { documentIngestHandler } from "../media/document";
 import { imageIngestHandler } from "../media/image";
 import { audioIngestHandler } from "../media/ingest";
+import { audioPeaksHandler } from "../media/peaksUpgrade";
 import { audioReencodeHandler } from "../media/reencode";
 import { DEFAULT_TOOLS, ffmpegArgs, runTool, type ToolPaths } from "../media/tools";
 import { getVariant, putVariant } from "../media/variants";
@@ -18,6 +19,7 @@ import { LocalStorage } from "../storage/local";
 export const HANDLERS = handlerRegistry([
   audioIngestHandler,
   audioReencodeHandler,
+  audioPeaksHandler,
   imageIngestHandler,
   documentIngestHandler,
 ]);

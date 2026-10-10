@@ -20,3 +20,4 @@ export * from "./opusRates";
 export * from "./reencode";
 export * from "./renderGraph";
 export * from "./render";
+export * from "./peaksUpgrade";
