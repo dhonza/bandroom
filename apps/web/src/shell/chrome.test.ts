@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   isChromeToggleKey,
+  chromeAutoOnly,
+  chromeCollapsed,
   isTypingTarget,
+  setChromeAuto,
+  showChrome,
   setChromeHidden,
   toggleChrome,
   useChrome,
@@ -47,5 +51,32 @@ describe("hide navigation (SPEC §25.2)", () => {
     expect(isTypingTarget(input)).toBe(true);
     expect(isTypingTarget(div)).toBe(false);
     expect(isTypingTarget(null)).toBe(false);
+  });
+});
+
+describe("automatic hiding (SPEC §31.6)", () => {
+  afterEach(() => {
+    setChromeAuto(false);
+  });
+
+  it("collapses without remembering; Show navigation ends it until the next time", () => {
+    setChromeAuto(true);
+    expect(chromeCollapsed(useChrome.getState())).toBe(true);
+    expect(chromeAutoOnly(useChrome.getState())).toBe(true);
+    expect(localStorage.getItem("bandroom.chromeHidden")).toBeNull();
+    setChromeAuto(true);
+    showChrome();
+    expect(chromeCollapsed(useChrome.getState())).toBe(false);
+    setChromeAuto(false);
+    setChromeAuto(true);
+    expect(chromeCollapsed(useChrome.getState())).toBe(true);
+    // The manual choice wins and keeps its restore button.
+    setChromeHidden(true);
+    expect(chromeAutoOnly(useChrome.getState())).toBe(false);
+    showChrome();
+    expect(useChrome.getState().hidden).toBe(false);
+    setChromeAuto(false);
+    showChrome();
+    expect(chromeCollapsed(useChrome.getState())).toBe(false);
   });
 });

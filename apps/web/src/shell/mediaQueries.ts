@@ -21,3 +21,9 @@ export const COARSE_POINTER_QUERY = "(pointer: coarse)";
  * low desktop window keeps its popovers.
  */
 export const SHORT_QUERY = "(max-height: 40em) and (max-width: 63.99em)";
+
+/**
+ * A phone in landscape (SPEC §31.6): a short viewport with a finger as the main pointer. The song
+ * page hides the app chrome there and puts the transport in one row.
+ */
+export const LANDSCAPE_PHONE_QUERY = "(max-height: 40em) and (pointer: coarse)";

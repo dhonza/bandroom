@@ -725,7 +725,10 @@
       "locked": "Píseň je zamčená",
       "lockedDone": "Píseň zamčena.",
       "unlockedDone": "Píseň odemčena."
-    }
+    },
+    "preferences": "Nastavení písně",
+    "moreActions": "Další",
+    "backTo": "Zpět na {{name}}"
   },
   "grants": {
     "title": "Členové a role",
@@ -972,7 +975,14 @@
       "mono": "Mono",
       "stereo": "Stereo",
       "dualMono": "Mono (z duálního mona)"
-    }
+    },
+    "mixes": "Mixy",
+    "moreTools": "Další nástroje",
+    "mixerTools": "Nástroje mixu",
+    "markerTools": "Nástroje značek",
+    "zoomTools": "Přiblížení",
+    "controlBar": "Ovládání přehrávače",
+    "transportRow": "Přehrávání"
   },
   "mixer": {
     "playerTitle": "Přehrávač"
@@ -1046,7 +1056,16 @@
     "loopWithOptions": "Opakovat (podržením možnosti)",
     "loopOptions": "Možnosti opakování",
     "anchorMusical": "Řídit se tempem",
-    "anchorMusicalHint": "Při změně tempa se posune s hudbou."
+    "anchorMusicalHint": "Při změně tempa se posune s hudbou.",
+    "pills": {
+      "toggle": "Části",
+      "show": "Zobrazit tlačítka částí",
+      "hide": "Skrýt tlačítka částí",
+      "add": "Přidat část z výběru",
+      "row": "Tlačítka částí",
+      "readout": "{{name}}. Zobrazit nebo skrýt tlačítka částí",
+      "readoutNoSection": "Zobrazit nebo skrýt tlačítka částí"
+    }
   },
   "timelineItems": {
     "open": "Značky, části a komentáře…",
@@ -1214,7 +1233,9 @@
       "current": "Aktuální",
       "restore": "Obnovit",
       "restored": "Tempová mapa obnovena"
-    }
+    },
+    "meterChange": "Změna taktu na {{meter}}",
+    "map": "Tempová mapa"
   },
   "click": {
     "click": "Metronom",
@@ -1245,7 +1266,11 @@
     "bars_many": "{{count}} taktu",
     "bars_other": "{{count}} taktů",
     "everyRepeat": "Předtaktí před každým opakováním",
-    "countingIn": "Předtaktí {{beat}} z {{clicks}}"
+    "countingIn": "Předtaktí {{beat}} z {{clicks}}",
+    "countInOn": "Předtaktí: zapnuto",
+    "countInOff": "Předtaktí: vypnuto",
+    "clickOn": "Metronom: zapnut",
+    "clickOff": "Metronom: vypnut"
   },
   "comments": {
     "title": "Komentáře",
@@ -2502,6 +2527,13 @@
       "bounceSongs_few": "Vytvořeny {{count}} skladby",
       "bounceSongs_many": "Vytvořeno {{count}} skladeb",
       "bounceSongs_other": "Vytvořeno {{count}} skladeb"
-    }
+    },
+    "editing_label": "Úpravy",
+    "tracksShort_one": "{{count}}/{{total}} stop",
+    "tracksShort_other": "{{count}}/{{total}} stop",
+    "tracksShort_few": "{{count}}/{{total}} stop",
+    "tracksShort_many": "{{count}}/{{total}} stop",
+    "moreTools": "Další nástroje úprav",
+    "cancelShort": "Zrušit"
   }
 }

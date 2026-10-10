@@ -25,7 +25,45 @@ function save(hidden: boolean): void {
   }
 }
 
-export const useChrome = create<{ hidden: boolean }>(() => ({ hidden: load() }));
+interface ChromeState {
+  /** "Hide navigation", remembered. */
+  hidden: boolean;
+  /**
+   * Hidden automatically (SPEC §31.6: the song page in a phone's landscape viewport); not
+   * remembered, and gone again in portrait or on another page.
+   */
+  auto: boolean;
+  /** "Show navigation" while auto-hidden: shown until the automatic state ends. */
+  autoDismissed: boolean;
+}
+
+export const useChrome = create<ChromeState>(() => ({
+  hidden: load(),
+  auto: false,
+  autoDismissed: false,
+}));
+
+/** The header and navigation are collapsed (by the user or automatically). */
+export function chromeCollapsed(s: ChromeState): boolean {
+  return s.hidden || (s.auto && !s.autoDismissed);
+}
+
+/** Only automatically hidden: no floating restore button (the page offers "Show navigation"). */
+export function chromeAutoOnly(s: ChromeState): boolean {
+  return !s.hidden && s.auto && !s.autoDismissed;
+}
+
+export function setChromeAuto(auto: boolean): void {
+  const s = useChrome.getState();
+  if (s.auto === auto) return;
+  useChrome.setState({ auto, autoDismissed: false });
+}
+
+/** "Show navigation" from the page: ends the manual and the automatic hiding. */
+export function showChrome(): void {
+  setChromeHidden(false);
+  if (useChrome.getState().auto) useChrome.setState({ autoDismissed: true });
+}
 
 export function setChromeHidden(hidden: boolean): void {
   save(hidden);

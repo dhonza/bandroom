@@ -699,7 +699,10 @@
       "locked": "Song is locked",
       "lockedDone": "Song locked.",
       "unlockedDone": "Song unlocked."
-    }
+    },
+    "preferences": "Song preferences",
+    "moreActions": "More",
+    "backTo": "Back to {{name}}"
   },
   "grants": {
     "title": "Members & roles",
@@ -944,7 +947,14 @@
       "mono": "Mono",
       "stereo": "Stereo",
       "dualMono": "Mono (dual mono source)"
-    }
+    },
+    "mixes": "Mixes",
+    "moreTools": "More tools",
+    "mixerTools": "Mixer tools",
+    "markerTools": "Marker tools",
+    "zoomTools": "Zoom",
+    "controlBar": "Player controls",
+    "transportRow": "Transport"
   },
   "mixer": {
     "playerTitle": "Player"
@@ -1018,7 +1028,16 @@
     "loopWithOptions": "Loop (long-press for options)",
     "loopOptions": "Loop options",
     "anchorMusical": "Follow the tempo map",
-    "anchorMusicalHint": "Moves with the music when the tempo changes."
+    "anchorMusicalHint": "Moves with the music when the tempo changes.",
+    "pills": {
+      "toggle": "Sections",
+      "show": "Show section buttons",
+      "hide": "Hide section buttons",
+      "add": "Add section from selection",
+      "row": "Section buttons",
+      "readout": "{{name}}. Show or hide section buttons",
+      "readoutNoSection": "Show or hide section buttons"
+    }
   },
   "timelineItems": {
     "open": "Markers, sections and comments…",
@@ -1176,7 +1195,9 @@
       "current": "Current",
       "restore": "Restore",
       "restored": "Tempo map restored"
-    }
+    },
+    "meterChange": "Time signature changes to {{meter}}",
+    "map": "Tempo map"
   },
   "click": {
     "click": "Click",
@@ -1205,7 +1226,11 @@
     "bars_one": "{{count}} bar",
     "bars_other": "{{count}} bars",
     "everyRepeat": "Count-in before every repeat",
-    "countingIn": "Count-in {{beat}} of {{clicks}}"
+    "countingIn": "Count-in {{beat}} of {{clicks}}",
+    "countInOn": "Count-in: on",
+    "countInOff": "Count-in: off",
+    "clickOn": "Click: on",
+    "clickOff": "Click: off"
   },
   "comments": {
     "title": "Comments",
@@ -2288,6 +2313,11 @@
       "bounceTracks_other": "Created {{count}} tracks",
       "bounceSongs_one": "Created {{count}} song",
       "bounceSongs_other": "Created {{count}} songs"
-    }
+    },
+    "editing_label": "Editing",
+    "tracksShort_one": "{{count}}/{{total}} tracks",
+    "tracksShort_other": "{{count}}/{{total}} tracks",
+    "moreTools": "More edit tools",
+    "cancelShort": "Cancel"
   }
 }

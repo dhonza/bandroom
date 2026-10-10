@@ -30,3 +30,17 @@ export function onZoomRequest(onZoom: (factor: number) => void): () => void {
     window.removeEventListener(ZOOM_EVENT, listener);
   };
 }
+
+/** "Fit song" from the control bar (SPEC §31.1): the whole song in the detail view. */
+export const FIT_EVENT = "bandroom:timeline-fit";
+
+export function requestFit(): void {
+  window.dispatchEvent(new Event(FIT_EVENT));
+}
+
+export function onFitRequest(cb: () => void): () => void {
+  window.addEventListener(FIT_EVENT, cb);
+  return () => {
+    window.removeEventListener(FIT_EVENT, cb);
+  };
+}
