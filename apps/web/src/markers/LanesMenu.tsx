@@ -67,14 +67,15 @@ export function LaneMenuItems() {
   );
 }
 
-/** The timeline corner's button that shows or hides the top lanes. */
-export function LanesMenu() {
+/** The control bar's button that shows or hides the top lanes (SPEC §31.1). */
+export function LanesMenu({ size = 28 }: { size?: number }) {
   const { t } = useTranslation();
   return (
     <Menu position="bottom-start" withinPortal closeOnItemClick={false}>
       <Menu.Target>
         <Tooltip label={t("markers.lanesMenu")} openDelay={400}>
           <ActionIcon
+            size={size}
             variant="subtle"
             color="gray"
             aria-label={t("markers.lanesMenu")}

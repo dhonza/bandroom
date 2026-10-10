@@ -1,12 +1,5 @@
 import { ActionIcon, Group, Tooltip } from "@mantine/core";
-import {
-  IconArrowsHorizontal,
-  IconViewportShort,
-  IconViewportTall,
-  IconZoomIn,
-  IconZoomInArea,
-  IconZoomOut,
-} from "@tabler/icons-react";
+import { IconViewportShort, IconViewportTall, IconZoomInArea } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 /** Lane height buttons (vertical zoom, SPEC §25.9); a disabled button is at its limit. */
@@ -16,17 +9,13 @@ export interface LaneZoom {
 }
 
 /**
- * Below the timeline: lane height (shorter/taller) on the left; zoom out, fit the whole song and
- * zoom in on the right.
+ * Below the timeline (SPEC §25.8, §25.9): lane height (shorter/taller) on the left, zoom to the
+ * loop on the right. Zoom in/out and fit are in the control bar (SPEC §31.1).
  */
 export function ZoomControls({
-  onZoom,
-  onFit,
   onZoomToRange,
   lanes,
 }: {
-  onZoom: (factor: number) => void;
-  onFit: () => void;
   /** Zoom to the loop or selection; null (disabled) when there is neither. */
   onZoomToRange: (() => void) | null;
   lanes?: LaneZoom | undefined;
@@ -64,30 +53,6 @@ export function ZoomControls({
           </Tooltip>
         </Group>
       )}
-      <Tooltip label={t("timeline.zoomOut")}>
-        <ActionIcon
-          variant="subtle"
-          color="gray"
-          size={44}
-          aria-label={t("timeline.zoomOut")}
-          onClick={() => {
-            onZoom(1 / 1.5);
-          }}
-        >
-          <IconZoomOut size={18} />
-        </ActionIcon>
-      </Tooltip>
-      <Tooltip label={t("timeline.fit")}>
-        <ActionIcon
-          variant="subtle"
-          color="gray"
-          size={44}
-          aria-label={t("timeline.fit")}
-          onClick={onFit}
-        >
-          <IconArrowsHorizontal size={18} />
-        </ActionIcon>
-      </Tooltip>
       <Tooltip label={t("timeline.zoomToLoop")}>
         <ActionIcon
           variant="subtle"
@@ -99,19 +64,6 @@ export function ZoomControls({
           data-testid="zoom-to-loop"
         >
           <IconZoomInArea size={18} />
-        </ActionIcon>
-      </Tooltip>
-      <Tooltip label={t("timeline.zoomIn")}>
-        <ActionIcon
-          variant="subtle"
-          color="gray"
-          size={44}
-          aria-label={t("timeline.zoomIn")}
-          onClick={() => {
-            onZoom(1.5);
-          }}
-        >
-          <IconZoomIn size={18} />
         </ActionIcon>
       </Tooltip>
     </Group>

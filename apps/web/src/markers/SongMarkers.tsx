@@ -7,7 +7,13 @@ export { LoopButton } from "./LoopButton";
 export { MarkerEditor } from "./MarkerEditor";
 export { MarkerToolbar, SnapMenu } from "./MarkerToolbar";
 export { SectionReadout, useCurrentSectionId } from "./SectionReadout";
-export { SectionPills, usePillsOn, usePillsUserId, useTogglePills } from "./SectionPills";
+export {
+  PillsIcon,
+  SectionPills,
+  usePillsOn,
+  usePillsUserId,
+  useTogglePills,
+} from "./SectionPills";
 export { SelectionBar } from "./SelectionBar";
 export { TimelineMenu } from "./TimelineMenu";
 export { useTimelineMarkers } from "./useTimelineMarkers";

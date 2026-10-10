@@ -1,6 +1,6 @@
 import { type Song, type SongTempo } from "@bandroom/shared";
-import { Badge, Button, Tabs, Text } from "@mantine/core";
-import { IconMetronome } from "@tabler/icons-react";
+import { ActionIcon, Menu, Tabs, Text, Tooltip } from "@mantine/core";
+import { IconClock } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { create } from "zustand";
@@ -12,7 +12,6 @@ import { tempoSummaryParams } from "./midi";
 import { summarize } from "./model";
 import { useSongTempo } from "./queries";
 import { endTempoPreview } from "./store";
-import { BTN } from "./styles";
 import { TempoHistory } from "./TempoHistory";
 import { AppModal } from "../components/ResponsivePanel";
 
@@ -36,54 +35,74 @@ function closeTempoDialog(): void {
 }
 
 /**
- * Toolbar button: the tempo summary (or "Set tempo") that opens the tempo dialog for editors
- * (SPEC §7.2, §7.3); others see the summary only.
+ * "Tempo map" in the control bar (SPEC §7.2, §7.3, §31.1): an icon for editors, with the summary
+ * (or "Set tempo") in its tooltip; frozen while the song is locked (SPEC §25.12) or edited
+ * (SPEC §24.7). Others see the summary in the song header only. The dialog is `TempoDialogHost`.
  */
-export function TempoButton({ song }: { song: Song }) {
+export function TempoButton({ song, size = 44 }: { song: Song; size?: number }) {
   const { t } = useTranslation();
   const { tempo } = useSongTempo(song.id);
   const label = useTempoLabel(tempo);
+  if (!song.access.capabilities.includes("tempo.edit")) return null;
+  const lockReason = frozenBy(song, "tempo.edit");
+  const locked = lockReason !== null;
+  const button = (
+    <ActionIcon
+      size={size}
+      variant="subtle"
+      color="gray"
+      disabled={locked}
+      onClick={openTempoDialog}
+      aria-label={t("tempo.map")}
+      data-testid="tempo-button"
+    >
+      <IconClock size={Math.round(size * 0.55)} />
+    </ActionIcon>
+  );
+  if (locked)
+    return (
+      <LockedHint locked reason={lockReason}>
+        {button}
+      </LockedHint>
+    );
+  return <Tooltip label={`${t("tempo.map")} · ${label ?? t("tempo.set")}`}>{button}</Tooltip>;
+}
+
+/** "Tempo map" in the phone and landscape "⋯" menu. */
+export function TempoMenuItem({ song }: { song: Song }) {
+  const { t } = useTranslation();
+  const { tempo } = useSongTempo(song.id);
+  const label = useTempoLabel(tempo);
+  if (!song.access.capabilities.includes("tempo.edit")) return null;
+  return (
+    <Menu.Item
+      leftSection={<IconClock size={14} />}
+      closeMenuOnClick
+      disabled={frozenBy(song, "tempo.edit") !== null}
+      onClick={openTempoDialog}
+      data-testid="tempo-button"
+    >
+      {label ? `${t("tempo.map")} · ${label}` : t("tempo.set")}
+    </Menu.Item>
+  );
+}
+
+/** The tempo dialog of the song page, opened by the tempo button, menu item or a ruler meter. */
+export function TempoDialogHost({ song }: { song: Song }) {
+  const { tempo } = useSongTempo(song.id);
   const open = useTempoDialog((s) => s.open);
   // Leaving the song page closes it (the next song must not open with it).
   useEffect(() => closeTempoDialog, []);
-  const canEdit = song.access.capabilities.includes("tempo.edit");
-  if (!canEdit) {
-    return label ? (
-      <Badge variant="light" color="gray" size="lg" data-testid="tempo-summary">
-        {label}
-      </Badge>
-    ) : null;
-  }
-  // The tempo map is frozen while the song is locked (SPEC §25.12).
-  // ... and while the song is being edited (SPEC §24.7).
-  const lockReason = frozenBy(song, "tempo.edit");
-  const locked = lockReason !== null;
+  if (!open || frozenBy(song, "tempo.edit") !== null) return null;
   return (
-    <>
-      <LockedHint locked={locked} reason={lockReason}>
-        <Button
-          {...BTN}
-          size="sm"
-          variant="default"
-          leftSection={<IconMetronome size={16} />}
-          disabled={locked}
-          onClick={openTempoDialog}
-          data-testid="tempo-button"
-        >
-          {label ?? t("tempo.set")}
-        </Button>
-      </LockedHint>
-      {open && !locked && (
-        <TempoDialog
-          song={song}
-          tempo={tempo}
-          onClose={() => {
-            endTempoPreview();
-            closeTempoDialog();
-          }}
-        />
-      )}
-    </>
+    <TempoDialog
+      song={song}
+      tempo={tempo}
+      onClose={() => {
+        endTempoPreview();
+        closeTempoDialog();
+      }}
+    />
   );
 }
 
@@ -133,7 +152,7 @@ function TempoDialog({
 }
 
 /** "120 BPM · 4/4" beside the song title (SPEC §11.3 header). */
-export function SongTempoSummary({ songId }: { songId: string }) {
+export function SongTempoSummary({ songId, size = "sm" }: { songId: string; size?: "xs" | "sm" }) {
   const { t } = useTranslation();
   const { tempo } = useSongTempo(songId);
   const label = useTempoLabel(tempo);
@@ -141,7 +160,7 @@ export function SongTempoSummary({ songId }: { songId: string }) {
   const rate = usePlayerView((s) => (s.songId === songId ? (s.mix.practice?.rate ?? 1) : 1));
   if (!label) return null;
   return (
-    <Text c="dimmed" size="sm" className="tabular-nums" data-testid="song-tempo">
+    <Text c="dimmed" size={size} className="tabular-nums" data-testid="song-tempo" truncate="end">
       {rate === 1
         ? label
         : t("tempo.summaryPractice", { summary: label, rate: Math.round(rate * 100) })}

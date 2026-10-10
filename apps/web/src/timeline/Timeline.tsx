@@ -38,13 +38,13 @@ import {
 import { LANE_STEP, MAX_LANE_H, MIN_LANE_H, clampLaneHeight, zoomLaneHeight } from "./laneHeight";
 import { pinchAxis, type PinchAxis } from "./gesture";
 import { ZoomControls } from "./ZoomControls";
-import { onZoomRequest, onZoomToRangeRequest } from "./zoom";
+import { onFitRequest, onZoomRequest, onZoomToRangeRequest } from "./zoom";
 
 export type { TimelineMark, TimelineProps, TimeRange } from "./types";
 
 const NO_LANES: Lane[] = [];
 export { detailLayout, RULER_H } from "./types";
-export { requestZoom, requestZoomToRange, ZOOM_EVENT } from "./zoom";
+export { requestFit, requestZoom, requestZoomToRange, ZOOM_EVENT } from "./zoom";
 
 /**
  * Canvas timeline (SPEC §11.6): overview strip (whole song, sections, the audible lanes summed,
@@ -496,6 +496,13 @@ export function Timeline({
     setFollowOn(false);
   }, [zoomRange]);
   useEffect(() => onZoomToRangeRequest(zoomToRange), [zoomToRange]);
+  useEffect(
+    () =>
+      onFitRequest(() => {
+        if (viewRef.current) setView(fitAll(durationSec, viewRef.current.widthPx));
+      }),
+    [durationSec],
+  );
 
   return (
     <Box
@@ -675,11 +682,7 @@ export function Timeline({
                 : null,
           }
         }
-        onZoom={zoom}
         onZoomToRange={zoomRange ? zoomToRange : null}
-        onFit={() => {
-          if (viewRef.current) setView(fitAll(durationSec, viewRef.current.widthPx));
-        }}
       />
     </Box>
   );

@@ -34,6 +34,26 @@ export function useTogglePills(): () => void {
   };
 }
 
+/** The section pills icon (SPEC §31.3): four pills on two rows. */
+export function PillsIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ flex: "none" }}
+    >
+      <path d="M3 5h8v5H3z M13 5h8v5h-8z M3 14h5v5H3z M10 14h11v5H10z" />
+    </svg>
+  );
+}
+
 let lastTap: { id: string; at: number } | null = null;
 
 /**
@@ -58,7 +78,8 @@ export function SectionPills({ song }: { song: Song }) {
   return (
     <Group
       gap={3}
-      wrap="wrap"
+      wrap="nowrap"
+      align="flex-start"
       px={8}
       py={4}
       role="group"
@@ -66,85 +87,86 @@ export function SectionPills({ song }: { song: Song }) {
       data-testid="section-pills"
       style={{ borderBottom: "1px solid var(--mantine-color-default-border)" }}
     >
-      {sections.map((s) => {
-        const looped = loop !== null && loop.start === s.startSec && loop.end === s.endSec;
-        const here = current === s.id;
-        return (
-          <UnstyledButton
-            key={s.id}
-            px={coarse ? 8 : 7}
-            data-touch-exempt
-            data-testid="section-chip"
-            data-looped={looped || undefined}
-            data-current={here || undefined}
-            aria-label={t("markers.chipLabel", { name: s.name })}
-            onDoubleClick={() => {
-              loopSection(s);
-            }}
-            onClick={() => {
-              const now = Date.now();
-              if (isDoubleTap(lastTap, s.id, now)) {
-                lastTap = null;
+      <Group gap={3} wrap="wrap" style={{ flex: "1 1 auto", minWidth: 0 }}>
+        {sections.map((s) => {
+          const looped = loop !== null && loop.start === s.startSec && loop.end === s.endSec;
+          const here = current === s.id;
+          return (
+            <UnstyledButton
+              key={s.id}
+              px={coarse ? 8 : 7}
+              data-touch-exempt
+              data-testid="section-chip"
+              data-looped={looped || undefined}
+              data-current={here || undefined}
+              aria-label={t("markers.chipLabel", { name: s.name })}
+              onDoubleClick={() => {
                 loopSection(s);
-              } else {
-                lastTap = { id: s.id, at: now };
-                seekTo(s.startSec);
-              }
-            }}
-            style={{
-              height: h,
-              flex: coarse ? "1 0 auto" : "none",
-              minWidth: coarse ? 52 : 56,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 5,
-              boxSizing: "border-box",
-              borderRadius: 4,
-              borderTop: `2px solid var(--mantine-color-${s.color}-filled)`,
-              background: looped
-                ? "var(--mantine-color-yellow-filled)"
-                : here
-                  ? "var(--mantine-color-default-hover)"
-                  : "var(--mantine-color-default)",
-              color: looped ? "var(--mantine-color-black)" : "var(--mantine-color-text)",
-              fontSize: coarse ? 12 : 11.5,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-              touchAction: "manipulation",
-            }}
+              }}
+              onClick={() => {
+                const now = Date.now();
+                if (isDoubleTap(lastTap, s.id, now)) {
+                  lastTap = null;
+                  loopSection(s);
+                } else {
+                  lastTap = { id: s.id, at: now };
+                  seekTo(s.startSec);
+                }
+              }}
+              style={{
+                height: h,
+                flex: coarse ? "1 0 auto" : "none",
+                minWidth: coarse ? 52 : 56,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 5,
+                boxSizing: "border-box",
+                borderRadius: 4,
+                borderTop: `2px solid var(--mantine-color-${s.color}-filled)`,
+                background: looped
+                  ? "var(--mantine-color-yellow-filled)"
+                  : here
+                    ? "var(--mantine-color-default-hover)"
+                    : "var(--mantine-color-default)",
+                color: looped ? "var(--mantine-color-black)" : "var(--mantine-color-text)",
+                fontSize: coarse ? 12 : 11.5,
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+                touchAction: "manipulation",
+              }}
+            >
+              {s.name}
+              {looped && <IconRepeat size={coarse ? 13 : 12} stroke={2.5} aria-hidden />}
+            </UnstyledButton>
+          );
+        })}
+        {mayCreate && (
+          <Tooltip
+            label={isLoopable(selection) ? t("markers.pills.add") : t("markers.addSectionHint")}
           >
-            {s.name}
-            {looped && <IconRepeat size={coarse ? 13 : 12} stroke={2.5} aria-hidden />}
-          </UnstyledButton>
-        );
-      })}
-      {mayCreate && (
-        <Tooltip
-          label={isLoopable(selection) ? t("markers.pills.add") : t("markers.addSectionHint")}
-        >
-          <ActionIcon
-            size={h}
-            variant="default"
-            data-touch-exempt
-            disabled={locked || !selection}
-            aria-label={t("markers.pills.add")}
-            onClick={() => {
-              addSectionFromSelection();
-            }}
-            data-testid="pills-add-section"
-            style={{ borderStyle: "dashed" }}
-          >
-            <IconPlus size={14} stroke={2.5} />
-          </ActionIcon>
-        </Tooltip>
-      )}
+            <ActionIcon
+              size={h}
+              variant="default"
+              data-touch-exempt
+              disabled={locked || !selection}
+              aria-label={t("markers.pills.add")}
+              onClick={() => {
+                addSectionFromSelection();
+              }}
+              data-testid="pills-add-section"
+              style={{ borderStyle: "dashed" }}
+            >
+              <IconPlus size={14} stroke={2.5} />
+            </ActionIcon>
+          </Tooltip>
+        )}
+      </Group>
       <Tooltip label={t("markers.pills.hide")}>
         <ActionIcon
           size={h}
           variant="subtle"
           color="gray"
-          ml="auto"
           data-touch-exempt
           aria-label={t("markers.pills.hide")}
           onClick={() => {

@@ -6,7 +6,7 @@ import {
   practiceOf,
   type Practice,
 } from "@bandroom/shared";
-import { ActionIcon, Box, Button, Group, Menu, Slider, Stack, Text } from "@mantine/core";
+import { ActionIcon, Box, Button, Group, Menu, Slider, Stack, Text, Tooltip } from "@mantine/core";
 import { IconGauge, IconMinus, IconPlus, IconPlayerTrackNext } from "@tabler/icons-react";
 import type { TFunction } from "i18next";
 import { useMemo } from "react";
@@ -14,7 +14,7 @@ import { create } from "zustand";
 import { useTranslation } from "react-i18next";
 import type { PracticeAction } from "../markers/shortcuts";
 import { pageState, setPractice, usePlayerView } from "./controller";
-import { AppModal, CaptionButton, PanelPopover } from "../components/ResponsivePanel";
+import { AppModal, PanelPopover } from "../components/ResponsivePanel";
 import { practiceLabel as label, practiceShortLabel, signed } from "./practiceLabel";
 
 /** Speed limits (SPEC §30.2) and the range where quality holds up. */
@@ -286,29 +286,68 @@ function Stepper({
 }
 
 /**
- * Desktop transport button (SPEC §30.6): shows the setting when it is not neutral. The form is a
- * popover; on short screens (a phone in landscape) a full-screen panel.
+ * The Practice target (SPEC §30.6, §31.1): an icon while neutral, the setting in a few
+ * characters while not; `label` gives the longer desktop form.
  */
-export function PracticeButton() {
+function PracticeTarget({
+  size,
+  long,
+  testId,
+  onClick,
+}: {
+  size: number;
+  long: boolean;
+  testId: string;
+  onClick?: () => void;
+}) {
   const { t } = useTranslation();
   const p = usePractice();
   const active = !isNeutralPractice(p);
+  if (!active) {
+    return (
+      <ActionIcon
+        size={size}
+        variant="subtle"
+        color="gray"
+        aria-label={t("practice.title")}
+        onClick={onClick}
+        data-testid={testId}
+      >
+        <IconGauge size={Math.round(size * 0.5)} />
+      </ActionIcon>
+    );
+  }
+  return (
+    <Button
+      h={size}
+      px={8}
+      size="compact-sm"
+      variant="filled"
+      color="teal"
+      leftSection={<IconGauge size={16} />}
+      aria-label={t("practice.active", { label: practiceLabel(t, p) })}
+      onClick={onClick}
+      data-testid={testId}
+    >
+      {long ? practiceLabel(t, p) : practiceShortLabel(p, t)}
+    </Button>
+  );
+}
+
+/** Desktop transport: the Practice target opens the form in a popover. */
+export function PracticeButton({ size = 44 }: { size?: number }) {
+  const { t } = useTranslation();
   return (
     <PanelPopover
       position="top-end"
       width={340}
       title={t("practice.title")}
       target={
-        <Button
-          h={44}
-          size="sm"
-          variant={active ? "filled" : "default"}
-          color="teal"
-          aria-label={active ? t("practice.active", { label: practiceLabel(t, p) }) : undefined}
-          data-testid="practice-button"
-        >
-          {active ? practiceLabel(t, p) : t("practice.title")}
-        </Button>
+        <span style={{ display: "inline-flex" }}>
+          <Tooltip label={t("practice.title")}>
+            <PracticeTarget size={size} long testId="practice-button" />
+          </Tooltip>
+        </span>
       }
     >
       <PracticeForm />
@@ -335,26 +374,10 @@ export function PracticeMenuItem({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-/**
- * Phone readout button (always shown): "Practice", or the setting in a few characters while it
- * is not neutral; opens the full-screen panel.
- */
-export function PracticePhoneButton({ onOpen }: { onOpen: () => void }) {
-  const { t } = useTranslation();
-  const p = usePractice();
-  const active = !isNeutralPractice(p);
+/** Phones and landscape (SPEC §31.1): the Practice target opens the full-screen panel. */
+export function PracticePhoneButton({ onOpen, size = 44 }: { onOpen: () => void; size?: number }) {
   return (
-    <CaptionButton
-      icon={<IconGauge size={20} />}
-      caption={active ? practiceShortLabel(p, t) : t("practice.title")}
-      active={active}
-      color="teal"
-      onClick={onOpen}
-      aria-label={
-        active ? t("practice.active", { label: practiceLabel(t, p) }) : t("practice.title")
-      }
-      data-testid="practice-phone-button"
-    />
+    <PracticeTarget size={size} long={false} testId="practice-phone-button" onClick={onOpen} />
   );
 }
 

@@ -27,7 +27,7 @@ export function useCurrentSectionId(): string | null {
 }
 
 /** Big readout of the section under the playhead ("CHORUS 2", SPEC §11.1). */
-export function SectionReadout({ size = "lg" }: { size?: "lg" | "xl" }) {
+export function SectionReadout({ size = "lg" }: { size?: "xs" | "sm" | "md" | "lg" | "xl" }) {
   const id = useCurrentSectionId();
   const markers = useTimelineUi((s) => s.markers);
   const m = markers.find((x) => x.id === id);

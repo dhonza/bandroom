@@ -15,6 +15,7 @@ import {
   Center,
   Group,
   Loader,
+  Menu,
   Stack,
   Text,
   Textarea,
@@ -25,7 +26,7 @@ import {
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
-import { IconArrowLeft } from "@tabler/icons-react";
+import { IconArrowLeft, IconSettings } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -44,6 +45,7 @@ import { RehearsePanel } from "../../rehearse/RehearsePanel";
 import { WhatsNewBanner } from "../../markers/WhatsNewBanner";
 import { SongTempoSummary } from "../../tempo/TempoDialog";
 import { useTempoUi } from "../../tempo/store";
+import { useSongTempo } from "../../tempo/queries";
 import { TracksSection } from "./TracksSection";
 import { NotFoundPage } from "../../pages/NotFoundPage";
 import { songKeys, useInvalidateContent, useSong, useSongTracks } from "../library/queries";
@@ -64,15 +66,20 @@ import {
 } from "../../edit/EditMode";
 import { useEditSessionSync } from "../../edit/session";
 import { useBarLayout, type BarLayout } from "../../rehearse/barLayout";
+import type { BarSongSlots } from "../../rehearse/Transport";
 import {
   closeSongPreferences,
   SONG_SECTION_IDS,
   SongMenuDialogs,
+  openSongPreferences,
+  SongMenuItems,
   SongMoreMenu,
   SongPreferencesButton,
   useSongMenuUi,
 } from "./SongMenu";
 
+/** Between the song info and the tempo summary (not text to translate). */
+const META_SEP = "·";
 /** Icon buttons of the desktop song header (SPEC §31.2). */
 const HEADER_ICON = 36;
 
@@ -104,11 +111,17 @@ function SongHeader({
     .filter(Boolean)
     .join(" · ");
   const back = `/projects/${song.project.id}`;
+  const hasTempoMap = useSongTempo(song.id).tempo !== null;
   const info = (size: "xs" | "sm") => (
     <Group gap={6} wrap="wrap" style={{ rowGap: 0 }}>
       {meta && (
         <Text c="dimmed" size={size} data-testid="song-meta">
           {meta}
+        </Text>
+      )}
+      {meta && hasTempoMap && (
+        <Text c="dimmed" size={size} aria-hidden>
+          {META_SEP}
         </Text>
       )}
       <SongTempoSummary songId={song.id} />
@@ -239,7 +252,6 @@ export function SongPage() {
         }
         phoneActions={
           <>
-            <MixerButton mixer={mixer} disabled={tracks.data?.tracks.length === 0 && !hasTempo} />
             <EditButton song={song} tracks={tracks.data?.tracks ?? null} iconOnly />
             <SongPreferencesButton song={song} size={44} />
             <SongMoreMenu song={song} compact size={44} />
@@ -251,7 +263,38 @@ export function SongPage() {
       <SongLockBanner song={song} />
       <EditBanner song={song} tracks={tracks.data?.tracks ?? null} />
       <WhatsNewBanner song={song} />
-      <SongPlayer song={song} mixer={editing ? { ...mixer, open: true } : mixer} />
+      <SongPlayer
+        song={song}
+        mixer={editing ? { ...mixer, open: true } : mixer}
+        bar={{
+          backTo: `/projects/${song.project.id}`,
+          backLabel: t("songs.backTo", { name: song.project.name }),
+          title: song.title,
+          info: <SongTempoSummary songId={song.id} size="xs" />,
+          editAudio: (
+            <EditButton song={song} tracks={tracks.data?.tracks ?? null} iconOnly size={44} />
+          ),
+          menuItems: (
+            <>
+              <Menu.Item
+                leftSection={<IconSettings size={14} />}
+                closeMenuOnClick
+                disabled={!caps.has("edit.any") || !!song.editing}
+                onClick={openSongPreferences}
+                data-testid="edit-song"
+              >
+                {t("songs.preferences")}
+              </Menu.Item>
+              <SongMenuItems song={song} compact />
+            </>
+          ),
+          mixer: {
+            open: editing || mixer.open,
+            toggle: mixer.toggle,
+            disabled: editing || (tracks.data?.tracks.length === 0 && !hasTempo),
+          },
+        }}
+      />
       <TracksSection song={song} />
       <DocsPanel song={song} />
 
@@ -432,11 +475,19 @@ function DeleteSongSection({ song }: { song: Song }) {
  * button shows or hides the mixer tools and the track lanes while the engine plays on. A song
  * without tracks has it too: tempo, click and the transport, running until Stop (SPEC §9).
  */
-function SongPlayer({ song, mixer }: { song: Song; mixer: MixerToggle }) {
+function SongPlayer({ song, mixer, bar }: { song: Song; mixer: MixerToggle; bar: BarSongSlots }) {
   const tracks = useSongTracks(song.id);
   if (tracks.isPending) return <Loader size="sm" />;
   const list = tracks.data?.tracks ?? NO_TRACKS;
-  return <RehearsePanel song={song} tracks={list} mixerOpen={mixer.open} songPath={appSongPath} />;
+  return (
+    <RehearsePanel
+      song={song}
+      tracks={list}
+      mixerOpen={mixer.open}
+      songPath={appSongPath}
+      bar={bar}
+    />
+  );
 }
 
 const appSongPath = (id: string) => `/songs/${id}`;
