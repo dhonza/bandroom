@@ -835,7 +835,8 @@
     "fit": "Show whole song",
     "zoomToLoop": "Zoom to loop (Z)",
     "lanesShorter": "Shorter lanes (Alt+wheel)",
-    "lanesTaller": "Taller lanes (Alt+wheel)"
+    "lanesTaller": "Taller lanes (Alt+wheel)",
+    "wholeSong": "Whole song"
   },
   "versions": {
     "title": "Versions of {{track}}",

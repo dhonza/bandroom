@@ -1,7 +1,6 @@
 import { compileTempo, type Marker } from "@bandroom/shared";
 import { describe, expect, it } from "vitest";
 import {
-  bandsOf,
   boundaries,
   clampRange,
   dragRange,
@@ -154,12 +153,8 @@ describe("section names", () => {
   });
 });
 
-describe("overview strip", () => {
-  it("draws lane-0 sections as bands and point markers as guides", () => {
-    expect(bandsOf(song)).toEqual([
-      { start: 10, end: 30, color: "blue" },
-      { start: 30, end: 50, color: "blue" },
-    ]);
+describe("marker guides", () => {
+  it("draws point markers as guides across the lanes", () => {
     expect(guidesOf(song)).toEqual([{ start: 45, color: "blue" }]);
   });
 });
@@ -217,15 +212,12 @@ describe("taps and edits", () => {
 });
 
 describe("timeline items", () => {
-  it("sizes lanes for touch (compact with a mouse) and counts section lanes", () => {
+  it("sizes the Sections lane for touch (compact with a mouse); markers are on the ruler", () => {
     expect(layoutFor(song, false)).toEqual({
-      signatureH: 0,
       sectionH: 22,
-      markerH: 20,
       sectionLanes: 2,
-      sectionsTop: 0,
-      markersTop: 44,
-      height: 64,
+      height: 44,
+      rulerH: 28,
       coarse: false,
     });
     expect(
@@ -233,50 +225,15 @@ describe("timeline items", () => {
         song.filter((m) => m.type !== "section"),
         true,
       ),
-    ).toMatchObject({
-      sectionH: 44,
-      markerH: 36,
-      sectionLanes: 0,
-      height: 36,
-      coarse: true,
-    });
+    ).toEqual({ sectionH: 44, sectionLanes: 0, height: 0, rulerH: 36, coarse: true });
   });
 
-  it("gives empty lanes no height", () => {
-    expect(layoutFor([], true)).toMatchObject({
-      sectionH: 44,
-      markerH: 0,
+  it("gives a hidden Sections lane no height", () => {
+    expect(layoutFor(song, true, { hidden: { sections: true } })).toMatchObject({
       sectionLanes: 0,
       height: 0,
-      coarse: true,
     });
-    expect(
-      layoutFor(
-        song.filter((m) => m.type === "section"),
-        false,
-      ),
-    ).toMatchObject({
-      markerH: 0,
-      sectionLanes: 2,
-      height: 44,
-    });
-  });
-
-  it("puts the signature lane first and gives hidden lanes no height", () => {
-    expect(layoutFor(song, false, { signature: true })).toMatchObject({
-      signatureH: 20,
-      sectionsTop: 20,
-      markersTop: 64,
-      height: 84,
-    });
-    expect(
-      layoutFor(song, false, { signature: true, hidden: { signature: true, sections: true } }),
-    ).toMatchObject({ signatureH: 0, sectionLanes: 0, markersTop: 0, markerH: 20, height: 20 });
-    expect(layoutFor(song, true, { hidden: { markers: true } })).toMatchObject({
-      sectionLanes: 2,
-      markerH: 0,
-      height: 88,
-    });
+    expect(layoutFor([], false)).toMatchObject({ height: 0 });
   });
 
   it("grabs a section's edges and a marker's body", () => {

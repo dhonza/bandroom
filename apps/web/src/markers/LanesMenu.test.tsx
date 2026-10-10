@@ -28,19 +28,16 @@ describe("lanes menu (SPEC §11.3)", () => {
     fireEvent.click(screen.getByTestId("lanes-menu"));
     const comments = await screen.findByTestId("lane-toggle-comments");
     expect(comments.getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByTestId("lane-toggle-signature").textContent).toContain("Time signature");
+    expect(screen.getByTestId("lane-toggle-sections").textContent).toContain("Sections");
+    // Markers and meter changes are on the ruler (SPEC §31.4): no lane to toggle.
+    expect(screen.queryByTestId("lane-toggle-markers")).toBeNull();
     fireEvent.click(comments);
     expect(useLaneVisibility.getState().hidden.comments).toBe(true);
     expect(screen.getByTestId("lane-toggle-comments").getAttribute("aria-checked")).toBe("false");
     fireEvent.click(screen.getByTestId("lanes-hide-all"));
-    expect(Object.values(useLaneVisibility.getState().hidden)).toEqual([true, true, true, true]);
+    expect(Object.values(useLaneVisibility.getState().hidden)).toEqual([true, true]);
     fireEvent.click(screen.getByTestId("lanes-show-all"));
-    expect(Object.values(useLaneVisibility.getState().hidden)).toEqual([
-      false,
-      false,
-      false,
-      false,
-    ]);
+    expect(Object.values(useLaneVisibility.getState().hidden)).toEqual([false, false]);
     view.unmount();
   });
 });

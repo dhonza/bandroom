@@ -323,7 +323,7 @@ export function RehearsePanel({
               {markerProps.renderOverlay?.(v)}
               <ClipOverlay
                 view={v}
-                top={RULER_H + (markerProps.topLanesHeight ?? 0)}
+                top={(markerProps.rulerHeight ?? RULER_H) + (markerProps.topLanesHeight ?? 0)}
                 laneHeight={laneHeight}
                 lanes={editLanes}
                 markers={timelineMarkers.markers}

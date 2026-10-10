@@ -316,26 +316,17 @@ export function overviewLanes<L extends Pick<Lane, "dimmed" | "click">>(lanes: r
   return lanes.filter((l) => !l.dimmed && !l.click);
 }
 
-/** Overview strip content: section bands, the audible lanes' waveforms and the loop range. */
+/** Overview strip content: the audible lanes' waveforms and the loop range (no sections). */
 export function drawOverview(
   ctx: CanvasRenderingContext2D,
   all: View,
   h: number,
   content: {
-    bands: readonly TimelineMark[];
     lanes: readonly Lane[];
     range: TimeRange | null | undefined;
     rangeColor: string;
   },
 ): void {
-  ctx.globalAlpha = 0.28;
-  for (const b of content.bands) {
-    const x0 = secToX(all, b.start);
-    const x1 = secToX(all, b.end ?? b.start);
-    ctx.fillStyle = cssColor(`--mantine-color-${b.color}-6`);
-    ctx.fillRect(x0, 0, Math.max(1, x1 - x0), h);
-  }
-  ctx.globalAlpha = 1;
   for (const lane of overviewLanes(content.lanes))
     drawWaveform(ctx, all, lane, 2, h - 4, cssColor(`--mantine-color-${lane.color}-5`));
   const range = content.range;

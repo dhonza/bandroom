@@ -15,25 +15,24 @@ import { resetTimelineUiForTests, useTimelineUi } from "./store";
 
 const i18n = i18next.createInstance();
 
-const section = (id: string, name: string, startSec: number, endSec: number): Marker =>
-  ({
-    id,
-    songId: "s1",
-    type: "section",
-    name,
-    color: "red",
-    note: "",
-    startSec,
-    endSec,
-    anchor: "time",
-    startBeat: null,
-    endBeat: null,
-    lane: 0,
-    createdBy: "u1",
-    createdByName: "Jana",
-    createdAt: 0,
-    updatedAt: 0,
-  });
+const section = (id: string, name: string, startSec: number, endSec: number): Marker => ({
+  id,
+  songId: "s1",
+  type: "section",
+  name,
+  color: "red",
+  note: "",
+  startSec,
+  endSec,
+  anchor: "time",
+  startBeat: null,
+  endBeat: null,
+  lane: 0,
+  createdBy: "u1",
+  createdByName: "Jana",
+  createdAt: 0,
+  updatedAt: 0,
+});
 
 const song = {
   id: "s1",

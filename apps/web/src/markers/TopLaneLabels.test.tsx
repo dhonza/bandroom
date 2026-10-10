@@ -35,24 +35,15 @@ function labels(
   return shown;
 }
 
-describe("top lane labels (SPEC §11.3)", () => {
-  it("labels only the lanes with items", () => {
-    expect(labels([marker], 28)).toEqual(["markers", "comments"]);
+describe("top lane labels (SPEC §11.3, §31.4)", () => {
+  it("labels only the lanes with items; markers have no lane (they are on the ruler)", () => {
+    expect(labels([marker], 28)).toEqual(["comments"]);
     expect(labels([section], 0)).toEqual(["sections"]);
-    expect(labels([section, marker], 28)).toEqual(["sections", "markers", "comments"]);
+    expect(labels([section, marker], 28)).toEqual(["sections", "comments"]);
     expect(labels([], 0)).toEqual([]);
   });
 
-  it("puts the time-signature lane first, when there is a tempo map", () => {
-    expect(labels([section], 0, { signature: true })).toEqual(["signature", "sections"]);
-  });
-
   it("has no label for a hidden lane", () => {
-    expect(
-      labels([section, marker], 0, {
-        signature: true,
-        hidden: { sections: true, signature: true },
-      }),
-    ).toEqual(["markers"]);
+    expect(labels([section, marker], 28, { hidden: { sections: true } })).toEqual(["comments"]);
   });
 });

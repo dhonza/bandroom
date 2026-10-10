@@ -13,6 +13,7 @@ import {
 import { DOUBLE_TAP_MS } from "../lib/gestures";
 import { parseClock } from "../player/format";
 import type { HiddenLanes } from "../timeline/laneVisibility";
+import { RULER_H, RULER_H_TOUCH } from "../timeline/types";
 
 /**
  * Timeline editing and navigation logic for markers, sections, selection and loops (SPEC §7.4–
@@ -253,15 +254,6 @@ export function isDoubleTap(
   return last?.id === id && now - last.at < DOUBLE_TAP_MS;
 }
 
-/** Sections on the first lane as colored bands on the overview strip. */
-export function bandsOf(
-  markers: readonly Marker[],
-): { start: number; end: number; color: string }[] {
-  return sectionsOf(markers)
-    .filter((s) => s.lane === 0)
-    .map((s) => ({ start: s.startSec, end: s.endSec, color: s.color }));
-}
-
 /** Point markers as vertical guides on the overview strip. */
 export function guidesOf(markers: readonly Marker[]): { start: number; color: string }[] {
   return markers
@@ -309,37 +301,32 @@ export function validateMarkerForm(
 }
 
 /**
- * Lane heights: touch devices get 44 px section lanes (SPEC §11.1 touch targets); with a mouse the
- * lanes are compact (22 px sections, 20 px markers and signatures). Only lanes with
- * items take space (SPEC §11.3): no sections, no section lane; no markers, a 0 px markers lane.
- * Lanes the user hid (`hidden`) take no space either. `signature`: the song has a tempo map, so
- * the time-signature lane (first, above the sections) has items.
+ * Top-lane layout (SPEC §11.3, §31.4): the Sections lane only (markers and meter changes are on
+ * the ruler, which is 36 px on touch screens). Touch devices get 44 px section rows (SPEC §11.1
+ * touch targets), a mouse 22 px. No sections, or the lane hidden, take no space.
  */
 export function layoutFor(
   markers: readonly Marker[],
   coarse: boolean,
-  opts: { hidden?: Partial<HiddenLanes>; signature?: boolean } = {},
+  opts: { hidden?: Partial<HiddenLanes> } = {},
 ) {
   const hidden = opts.hidden ?? {};
-  const signatureH = opts.signature && !hidden.signature ? (coarse ? 36 : 20) : 0;
   const sectionH = coarse ? 44 : 22;
-  const markerH =
-    !hidden.markers && markers.some((m) => m.type !== "section") ? (coarse ? 36 : 20) : 0;
   const sectionLanes = hidden.sections
     ? 0
     : Math.max(0, ...markers.filter((m) => m.type === "section").map((m) => m.lane + 1));
-  const sectionsTop = signatureH;
-  const markersTop = sectionsTop + sectionLanes * sectionH;
   return {
-    signatureH,
     sectionH,
-    markerH,
     sectionLanes,
-    sectionsTop,
-    markersTop,
-    height: markersTop + markerH,
+    height: sectionLanes * sectionH,
+    rulerH: rulerHeightFor(coarse),
     coarse,
   };
+}
+
+/** The ruler's height: markers and meter changes sit on it (SPEC §31.4). */
+export function rulerHeightFor(coarse: boolean): number {
+  return coarse ? RULER_H_TOUCH : RULER_H;
 }
 
 /** Dragging a timeline item: its body moves it, a section's edges resize it. */

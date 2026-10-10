@@ -863,7 +863,8 @@
     "fit": "Zobrazit celou píseň",
     "zoomToLoop": "Přiblížit na smyčku (Z)",
     "lanesShorter": "Nižší stopy (Alt+kolečko)",
-    "lanesTaller": "Vyšší stopy (Alt+kolečko)"
+    "lanesTaller": "Vyšší stopy (Alt+kolečko)",
+    "wholeSong": "Celá píseň"
   },
   "versions": {
     "title": "Verze stopy {{track}}",

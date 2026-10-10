@@ -62,6 +62,7 @@ describe("Timeline props", () => {
     topLanesHeight?: number;
     labelWidth?: number;
     renderCorner?: () => ReactNode;
+    rulerHeight?: number;
   }) => (
     <I18nextProvider i18n={i18n}>
       <MantineProvider>
@@ -139,6 +140,33 @@ describe("Timeline props", () => {
     expect(screen.getByTestId("timeline-corner").style.width).toBe(remOf(88));
     expect(screen.getByText("lanes menu")).toBeTruthy();
     expect(screen.queryByText("top labels")).toBeNull();
+    view.unmount();
+  });
+
+  it("indents the overview like the ruler and lanes in both Mixer states (SPEC §31.4)", () => {
+    const corner = () => <span>Whole song</span>;
+    for (const hideLanes of [false, true]) {
+      const view = render(
+        timeline({ hideLanes, topLanesHeight: 22, labelWidth: 88, renderCorner: corner }),
+      );
+      const column = screen.getByTestId(hideLanes ? "lane-labels" : "track-headers");
+      expect(screen.getByTestId("timeline-corner").style.width).toBe(column.style.width);
+      view.unmount();
+    }
+  });
+
+  it("makes room for a taller ruler (touch screens)", () => {
+    expect(
+      detailLayout({
+        laneCount: 1,
+        laneHeight: 50,
+        topLanesHeight: 0,
+        hideLanes: false,
+        rulerHeight: 36,
+      }),
+    ).toEqual({ lanesTop: 36, shownLanes: 1, height: 86 });
+    const view = render(timeline({ rulerHeight: 36 }));
+    expect(screen.getByTestId("track-headers").style.paddingTop).toBe("36px");
     view.unmount();
   });
 

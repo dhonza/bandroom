@@ -10,9 +10,7 @@ import {
 } from "../timeline/laneVisibility";
 
 const LABEL_KEYS = {
-  signature: "markers.signatures",
   sections: "markers.sections",
-  markers: "markers.markers",
   comments: "comments.lane",
 } as const satisfies Record<TopLane, string>;
 

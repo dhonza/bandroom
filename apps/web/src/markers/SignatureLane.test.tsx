@@ -6,7 +6,7 @@ import { I18nextProvider } from "react-i18next";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { initI18n } from "../i18n/i18n";
 import { fitAll } from "../timeline/view";
-import { SignatureLane, signatureMarks } from "./SignatureLane";
+import { meterChangeMarks, RulerMeters, signatureMarks } from "./SignatureLane";
 
 const i18n = i18next.createInstance();
 beforeAll(async () => {
@@ -23,7 +23,7 @@ const map: TempoMap = {
 };
 const grid = compileTempo({ map, bar1OffsetSec: 1 });
 
-describe("time-signature lane (SPEC §11.3)", () => {
+describe("meter changes on the ruler (SPEC §31.4)", () => {
   it("marks bar 1 and every meter change, not tempo changes", () => {
     const marks = signatureMarks(grid);
     expect(marks.map((m) => [m.bar, m.label])).toEqual([
@@ -32,26 +32,26 @@ describe("time-signature lane (SPEC §11.3)", () => {
     ]);
     expect(marks[0]?.sec).toBeCloseTo(1);
     expect(marks[1]?.sec).toBeCloseTo(7);
+    expect(meterChangeMarks(grid).map((m) => m.label)).toEqual(["7/8"]);
+    const one = compileTempo({ map: { segments: map.segments.slice(0, 1) }, bar1OffsetSec: 0 });
+    expect(meterChangeMarks(one)).toEqual([]);
   });
 
-  it("places the labels on the timeline's time axis; editors can open the tempo dialog", () => {
+  it("boxes the changes on the ruler's time axis; editors can open the tempo dialog", () => {
     const onOpen = vi.fn();
     const lane = (open: (() => void) | null) => (
       <I18nextProvider i18n={i18n}>
         <MantineProvider>
-          <SignatureLane view={fitAll(10, 1000)} grid={grid} top={28} height={20} onOpen={open} />
+          <RulerMeters view={fitAll(10, 1000)} grid={grid} height={28} onOpen={open} />
         </MantineProvider>
       </I18nextProvider>
     );
     const view = render(lane(onOpen));
     const items = screen.getAllByTestId("signature-item");
-    expect(items.map((el) => [el.dataset.x, el.textContent])).toEqual([
-      ["100", "4/4"],
-      ["700", "7/8"],
-    ]);
-    expect(items[1]?.getAttribute("aria-label")).toBe("Time signature 7/8 from bar 3");
-    expect(items[1]?.getAttribute("data-timeline-item")).toBe("signature:1");
-    if (items[1]) fireEvent.keyDown(items[1], { key: "Enter" });
+    expect(items.map((el) => [el.dataset.x, el.textContent])).toEqual([["700", "7/8"]]);
+    expect(items[0]?.getAttribute("aria-label")).toBe("Time signature 7/8 from bar 3");
+    expect(items[0]?.getAttribute("data-timeline-item")).toBe("signature:1");
+    if (items[0]) fireEvent.keyDown(items[0], { key: "Enter" });
     expect(onOpen).toHaveBeenCalledTimes(1);
     view.rerender(lane(null));
     const readOnly = screen.getAllByTestId("signature-item");

@@ -71,7 +71,6 @@ export function Timeline({
   renderCorner,
   labelWidth = 0,
   renderOverlay,
-  bands,
   guides,
   overviewRange,
   overviewRangeColor,
@@ -80,6 +79,7 @@ export function Timeline({
   onLongPress,
   onItemTap,
   grid = null,
+  rulerHeight = RULER_H,
 }: TimelineProps) {
   const { t } = useTranslation();
   const { ref: sizeRef, width: fullWidth } = useElementSize();
@@ -123,6 +123,7 @@ export function Timeline({
     laneHeight,
     topLanesHeight,
     hideLanes,
+    rulerHeight,
   });
   const lanesShown = hideLanes ? NO_LANES : lanes;
 
@@ -152,8 +153,8 @@ export function Timeline({
         drawLaneTint(ctx, view.widthPx, lanesTop + i * laneHeight, laneHeight, color);
       }
     });
-    if (grid) drawGrid(ctx, view, grid, RULER_H, detailH, pal);
-    else drawRuler(ctx, view, RULER_H, pal);
+    if (grid) drawGrid(ctx, view, grid, rulerHeight, detailH, pal);
+    else drawRuler(ctx, view, rulerHeight, pal);
     lanesShown.forEach((lane, i) => {
       if (lane.click) {
         drawClickLane(
@@ -178,7 +179,7 @@ export function Timeline({
       );
     });
     drawGuides(ctx, view, guides ?? [], lanesTop, detailH);
-  }, [view, lanesShown, detailH, laneHeight, colors, lanesTop, guides, grid, scheme]);
+  }, [view, lanesShown, detailH, laneHeight, colors, lanesTop, guides, grid, scheme, rulerHeight]);
 
   // Overview: sections, the audible lanes summed visually (max) and the loop are drawn once into
   // an offscreen canvas; scrolling and zooming only copy it and draw the viewport box.
@@ -205,7 +206,6 @@ export function Timeline({
     if (!ctx) return;
     ctx.clearRect(0, 0, overviewW, overviewH);
     drawOverview(ctx, fitAll(durationSec, overviewW), overviewH, {
-      bands: bands ?? [],
       lanes,
       range: overviewRange,
       rangeColor: overviewRangeColor ?? "yellow",
@@ -217,7 +217,6 @@ export function Timeline({
     hasView,
     lanes,
     durationSec,
-    bands,
     overviewRange,
     overviewRangeColor,
     scheme,
@@ -346,7 +345,8 @@ export function Timeline({
         ?.closest("[data-timeline-item]")
         ?.getAttribute("data-timeline-item") ?? null;
     anchor.current = { sec: secAt(v, x), clientX: e.clientX, clientY: e.clientY, item };
-    const inRuler = localY(e) < RULER_H;
+    // A marker or meter on the ruler keeps its own actions: it does not start a ruler drag.
+    const inRuler = localY(e) < rulerHeight && item === null;
     const mouse = e.pointerType === "mouse";
     gesture.current = startGesture(!!onSelectDrag, inRuler, mouse);
     if (!mouse && gesture.current.kind === "pending") {
@@ -553,7 +553,7 @@ export function Timeline({
         {(trackHeaders || labelColumn) && (
           <Box
             w={headerW}
-            style={{ flex: "none", paddingTop: RULER_H }}
+            style={{ flex: "none", paddingTop: rulerHeight }}
             data-testid={trackHeaders ? "track-headers" : "lane-labels"}
           >
             {topLanesHeight > 0 && (

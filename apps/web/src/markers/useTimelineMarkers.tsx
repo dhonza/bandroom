@@ -5,10 +5,9 @@ import { useSongTempo } from "../tempo/queries";
 import { useTempoUi } from "../tempo/store";
 import { openTempoDialog } from "../tempo/TempoDialog";
 import { useLaneVisibility } from "../timeline/laneVisibility";
-import { RULER_H, type TimelineProps } from "../timeline/Timeline";
+import type { TimelineProps } from "../timeline/Timeline";
 import type { View } from "../timeline/view";
 import {
-  bandsOf,
   guidesOf,
   markerPatch,
   MIN_SELECTION_SEC,
@@ -16,8 +15,7 @@ import {
   sectionMatching,
   type Range,
 } from "./model";
-import { LanesMenu } from "./LanesMenu";
-import { SIGNATURE_ITEM_PREFIX, SignatureLane } from "./SignatureLane";
+import { RulerMeters, SIGNATURE_ITEM_PREFIX } from "./SignatureLane";
 import { useMarkerActions, useMarkerPermissions, useSongMarkers } from "./queries";
 import { COMMENT_ITEM_PREFIX, commentLaneHeight, CommentsLane } from "../comments/CommentsLane";
 import { useSongComments } from "../comments/queries";
@@ -36,6 +34,7 @@ import {
 import {
   makeSnapper,
   MarkersOverlay,
+  OverviewLabel,
   tapItem,
   TopLaneLabels,
   useMarkerLayout,
@@ -55,7 +54,6 @@ type TimelineMarkerProps = Pick<
   | "renderOverlay"
   | "renderTopHeader"
   | "renderCorner"
-  | "bands"
   | "guides"
   | "overviewRange"
   | "zoomRange"
@@ -64,6 +62,7 @@ type TimelineMarkerProps = Pick<
   | "onLongPress"
   | "onItemTap"
   | "grid"
+  | "rulerHeight"
 >;
 
 /**
@@ -88,7 +87,7 @@ export function useTimelineMarkers(
   const grid = useTempoUi((s) => (s.songId === song.id ? s.grid : null));
   const { canEdit, canCreate } = useMarkerPermissions(song);
   const actions = useMarkerActions(song.id);
-  const layout = useMarkerLayout(markers, grid !== null);
+  const layout = useMarkerLayout(markers);
   // Tapping a time signature opens the tempo dialog (not while the song is locked, SPEC §25.12).
   const tempoEditable =
     song.access.capabilities.includes("tempo.edit") && frozenBy(song, "tempo.edit") === null;
@@ -97,8 +96,6 @@ export function useTimelineMarkers(
   // The comment lane shows only when the song has comments and it is not hidden (SPEC §11.3).
   const commentsHidden = useLaneVisibility((s) => s.hidden.comments);
   const commentH = comments.length > 0 && !commentsHidden ? commentLaneHeight(layout.coarse) : 0;
-  // The lanes menu, once some top lane has items (shown or not).
-  const hasLaneItems = grid !== null || markers.length > 0 || comments.length > 0;
   const selection = useTimelineUi((s) => s.selection);
   const loopOn = useTimelineUi((s) => s.loopOn);
   const [menu, setMenu] = useState<TimelineMenuState | null>(null);
@@ -117,20 +114,20 @@ export function useTimelineMarkers(
   );
 
   // `laneCount` 0: the waveform lanes are hidden (Mixer closed, SPEC §11.3).
-  const detailHeight = RULER_H + layout.height + commentH + laneCount * laneHeight;
+  const detailHeight = layout.rulerH + layout.height + commentH + laneCount * laneHeight;
   const props: TimelineMarkerProps = {
     grid,
+    rulerHeight: layout.rulerH,
     topLanesHeight: layout.height + commentH,
     renderTopHeader: () => <TopLaneLabels layout={layout} commentsHeight={commentH} />,
-    ...(hasLaneItems && { renderCorner: () => <LanesMenu /> }),
+    renderCorner: () => <OverviewLabel />,
     renderOverlay: (view: View) => (
       <>
-        {grid && layout.signatureH > 0 && (
-          <SignatureLane
+        {grid && (
+          <RulerMeters
             view={view}
             grid={grid}
-            top={RULER_H}
-            height={layout.signatureH}
+            height={layout.rulerH}
             onOpen={tempoEditable ? openTempoDialog : null}
           />
         )}
@@ -138,7 +135,7 @@ export function useTimelineMarkers(
           <CommentsLane
             view={view}
             comments={comments}
-            top={RULER_H + layout.height}
+            top={layout.rulerH + layout.height}
             height={commentH}
           />
         )}
@@ -153,7 +150,6 @@ export function useTimelineMarkers(
         />
       </>
     ),
-    bands: bandsOf(markers),
     guides: guidesOf(markers),
     overviewRange: selection,
     // While the loop is on it equals the selection (store.ts), so both are the selection.

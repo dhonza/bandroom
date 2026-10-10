@@ -8,7 +8,7 @@ export interface TimeRange {
   end: number;
 }
 
-/** Colored band on the overview strip (sections) or a vertical guide (markers). */
+/** A vertical guide across the lanes (markers). */
 export interface TimelineMark {
   start: number;
   end?: number;
@@ -59,8 +59,7 @@ export interface TimelineProps {
   renderCorner?: () => ReactNode;
   /** Absolutely positioned content over the detail view, laid out from the current view. */
   renderOverlay?: (view: View) => ReactNode;
-  /** Section bands on the overview strip and marker guides across the lanes. */
-  bands?: TimelineMark[];
+  /** Marker guides across the lanes (the overview has no section colours, SPEC §31.4). */
   guides?: TimelineMark[];
   /** What "zoom to loop" (button, `Z`) shows: the loop, else the selection (SPEC §25.8). */
   zoomRange?: TimeRange | null;
@@ -79,12 +78,19 @@ export interface TimelineProps {
   onLongPress?: (sec: number, clientX: number, clientY: number, item: string | null) => void;
   /** Tap on an overlay item (`data-timeline-item="<id>"`) instead of a seek; `sec`: where. */
   onItemTap?: (id: string, sec: number) => void;
+  /**
+   * Height of the ruler, which carries the markers and meter changes (SPEC §31.4): 28 px, 36 px on
+   * touch screens.
+   */
+  rulerHeight?: number;
   /** Tempo grid: bar/beat lines and a bars.beats ruler instead of m:ss (SPEC §11.3, §11.6). */
   grid?: TempoGrid | null;
 }
 
 /** Height of the detail view's ruler (CSS px). */
 export const RULER_H = 28;
+/** The ruler on touch screens: tall enough to tap a marker on it (SPEC §31.4). */
+export const RULER_H_TOUCH = 36;
 /** Default height of the overview strip (CSS px). */
 export const OVERVIEW_H = 36;
 
@@ -97,8 +103,9 @@ export function detailLayout(f: {
   laneHeight: number;
   topLanesHeight: number;
   hideLanes: boolean;
+  rulerHeight?: number;
 }): { lanesTop: number; shownLanes: number; height: number } {
-  const lanesTop = RULER_H + f.topLanesHeight;
+  const lanesTop = (f.rulerHeight ?? RULER_H) + f.topLanesHeight;
   const shownLanes = f.hideLanes ? 0 : Math.max(1, f.laneCount);
   return { lanesTop, shownLanes, height: lanesTop + shownLanes * f.laneHeight };
 }

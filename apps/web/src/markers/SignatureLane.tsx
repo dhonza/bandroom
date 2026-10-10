@@ -25,19 +25,29 @@ export function signatureMarks(grid: TempoGrid): SignatureMark[] {
 }
 
 /**
- * The time-signature lane (SPEC §11.3): the first top lane, a label such as "4/4" at each meter
- * change. Editors tap one to open the tempo dialog; for others a tap seeks like the ruler.
+ * The meter changes after bar 1 (SPEC §31.4): what the ruler shows. Nothing when the song keeps
+ * one meter; a new bar in the same meter is no change.
  */
-export function SignatureLane({
+export function meterChangeMarks(grid: TempoGrid): (SignatureMark & { index: number })[] {
+  const marks = signatureMarks(grid);
+  return marks
+    .map((m, index) => ({ ...m, index }))
+    .filter((m, i) => i > 0 && m.label !== marks[i - 1]?.label);
+}
+
+/**
+ * Meter changes on the ruler (SPEC §31.4): a boxed "7/8" at each change. Editors tap one to open
+ * the tempo dialog; for others a tap seeks like the ruler.
+ */
+export function RulerMeters({
   view,
   grid,
-  top,
   height,
   onOpen,
 }: {
   view: View;
   grid: TempoGrid;
-  top: number;
+  /** The ruler's height. */
   height: number;
   /** Opens the tempo dialog (editors only); a tap arrives as `onItemTap` of the timeline. */
   onOpen: (() => void) | null;
@@ -46,7 +56,8 @@ export function SignatureLane({
   const { t } = useTranslation();
   return (
     <>
-      {signatureMarks(grid).map((s, i) => {
+      {meterChangeMarks(grid).map((s) => {
+        const i = s.index;
         const x = secToX(view, s.sec);
         if (x < -80 || x > view.widthPx + 2) return null;
         return (
@@ -68,20 +79,31 @@ export function SignatureLane({
             })}
             style={{
               position: "absolute",
-              left: x,
-              top,
+              left: x + 2,
+              top: 0,
               height,
-              minWidth: editable ? 44 : undefined,
+              minWidth: editable && height >= 36 ? 44 : undefined,
               display: "flex",
               alignItems: "center",
-              paddingLeft: 4,
-              borderLeft: "2px solid var(--mantine-color-dimmed)",
               pointerEvents: editable ? "auto" : "none",
               cursor: editable ? "pointer" : undefined,
               touchAction: "pan-y",
             }}
           >
-            <Text size="xs" fw={700} lh={1.1} c="dimmed" className="tabular-nums">
+            <Text
+              component="span"
+              size="10px"
+              fw={700}
+              lh="12px"
+              px={3}
+              className="tabular-nums"
+              style={{
+                border: "1px solid var(--mantine-color-default-border)",
+                borderRadius: 3,
+                background: "var(--mantine-color-body)",
+                pointerEvents: "none",
+              }}
+            >
               {s.label}
             </Text>
           </Box>

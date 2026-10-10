@@ -3,7 +3,6 @@ import { Box, Text } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import { useLaneVisibility } from "../timeline/laneVisibility";
-import { RULER_H } from "../timeline/Timeline";
 import type { View } from "../timeline/view";
 import { MarkerItem, SectionItem } from "./MarkerItems";
 import { layoutFor, type Range } from "./model";
@@ -13,17 +12,17 @@ import { useTimelineUi } from "./store";
 export { makeSnapper, tapItem } from "./interaction";
 
 /**
- * Lane heights: touch devices get 44 px section lanes (SPEC §11.1 touch targets); lanes hidden on
- * this device take no space. `signature`: the song has a tempo map (the time-signature lane).
+ * Lane heights: touch devices get 44 px section lanes (SPEC §11.1 touch targets) and a 36 px
+ * ruler; lanes hidden on this device take no space.
  */
-export function useMarkerLayout(markers: readonly Marker[], signature = false) {
+export function useMarkerLayout(markers: readonly Marker[]) {
   const coarse = useMediaQuery("(pointer: coarse)", false, { getInitialValueInEffect: false });
   const hidden = useLaneVisibility((s) => s.hidden);
-  return layoutFor(markers, coarse, { hidden, signature });
+  return layoutFor(markers, coarse, { hidden });
 }
 export type MarkerLayout = ReturnType<typeof useMarkerLayout>;
 
-/** Everything drawn over the detail timeline: section lanes, markers lane, selection. */
+/** Everything drawn over the detail timeline: section lanes, markers on the ruler, selection. */
 export function MarkersOverlay({
   view,
   markers,
@@ -44,12 +43,9 @@ export function MarkersOverlay({
   const selection = useTimelineUi((s) => s.selection);
   const loopOn = useTimelineUi((s) => s.loopOn);
   const picked = useTimelineUi((s) => s.picked);
-  const markerTop = RULER_H + layout.markersTop;
   const common = { view, markers, durationSec, onCommit };
-  // A hidden lane has no rows: its items are not drawn (sections keep their overview bands).
-  const shown = markers.filter((m) =>
-    m.type === "section" ? layout.sectionLanes > 0 : layout.markerH > 0,
-  );
+  // A hidden Sections lane has no rows: its items are not drawn. Markers are on the ruler.
+  const shown = markers.filter((m) => m.type !== "section" || layout.sectionLanes > 0);
   return (
     <>
       {shown.map((m) =>
@@ -58,7 +54,7 @@ export function MarkersOverlay({
             key={m.id}
             m={m}
             {...common}
-            top={RULER_H + layout.sectionsTop + m.lane * layout.sectionH}
+            top={layout.rulerH + m.lane * layout.sectionH}
             height={layout.sectionH}
             picked={picked === m.id}
             editable={canEdit(m)}
@@ -68,8 +64,8 @@ export function MarkersOverlay({
             key={m.id}
             m={m}
             {...common}
-            top={markerTop}
-            height={layout.markerH}
+            top={0}
+            height={layout.rulerH}
             picked={picked === m.id}
             editable={canEdit(m)}
           />
@@ -99,9 +95,7 @@ export function TopLaneLabels({
 }) {
   const { t } = useTranslation();
   const rows = [
-    { key: "signature", h: layout.signatureH, label: t("markers.signatures") },
-    { key: "sections", h: layout.sectionLanes * layout.sectionH, label: t("markers.sections") },
-    { key: "markers", h: layout.markerH, label: t("markers.markers") },
+    { key: "sections", h: layout.height, label: t("markers.sections") },
     { key: "comments", h: commentsHeight, label: t("comments.lane") },
   ];
   return (
@@ -122,6 +116,18 @@ export function TopLaneLabels({
             </Text>
           </Box>
         ))}
+    </Box>
+  );
+}
+
+/** The corner left of the overview: what the strip is ("Whole song", SPEC §31.4). */
+export function OverviewLabel() {
+  const { t } = useTranslation();
+  return (
+    <Box h="100%" px={4} style={{ display: "flex", alignItems: "center", minWidth: 0 }}>
+      <Text size="xs" c="dimmed" lh={1.1} truncate="end">
+        {t("timeline.wholeSong")}
+      </Text>
     </Box>
   );
 }

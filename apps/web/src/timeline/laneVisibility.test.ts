@@ -10,12 +10,7 @@ const hidden = () => useLaneVisibility.getState().hidden;
 
 describe("lane visibility (SPEC §11.3)", () => {
   it("shows every lane by default", () => {
-    expect(hidden()).toEqual({
-      signature: false,
-      sections: false,
-      markers: false,
-      comments: false,
-    });
+    expect(hidden()).toEqual({ sections: false, comments: false });
   });
 
   it("toggles one lane and remembers it on this device", () => {
@@ -31,19 +26,20 @@ describe("lane visibility (SPEC §11.3)", () => {
 
   it("hides and shows all lanes", () => {
     setAllLanes(true);
-    expect(Object.values(hidden())).toEqual([true, true, true, true]);
+    expect(Object.values(hidden())).toEqual([true, true]);
     setAllLanes(false);
-    expect(Object.values(hidden())).toEqual([false, false, false, false]);
+    expect(Object.values(hidden())).toEqual([false, false]);
     expect(localStorage.getItem("bandroom.hiddenLanes")).toBe("[]");
   });
 
   it("ignores unknown or broken stored values", () => {
-    localStorage.setItem("bandroom.hiddenLanes", '["markers","bogus",3]');
+    // "markers" and "signature" were lanes before SPEC §31.4: ignored now.
+    localStorage.setItem("bandroom.hiddenLanes", '["markers","sections","bogus",3]');
     reloadLaneVisibility();
-    expect(hidden()).toEqual({ signature: false, sections: false, markers: true, comments: false });
+    expect(hidden()).toEqual({ sections: true, comments: false });
     localStorage.setItem("bandroom.hiddenLanes", "{not json");
     reloadLaneVisibility();
-    expect(hidden().markers).toBe(false);
+    expect(hidden().sections).toBe(false);
   });
 
   it("works for the page only when storage is unavailable", () => {
