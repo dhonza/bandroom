@@ -3,6 +3,7 @@ import {
   collectGarbageBlobs,
   expiredTrashIds,
   getSetting,
+  projectIsEditing,
   purgeTrashItems,
   purgeClientRequests,
   purgeExpiredLinkSessions,
@@ -50,7 +51,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 export function purgeExpiredTrash(db: Db, now: number): { purged: number; bytesFreed: number } {
   const cutoff = now - getSetting(db, "trash.retentionDays") * DAY_MS;
-  const ids = expiredTrashIds(db, cutoff);
+  const expired = expiredTrashIds(db, cutoff);
+  // A project with a song in an edit session waits for the next run (SPEC §24.7).
+  const ids = { ...expired, projects: expired.projects.filter((id) => !projectIsEditing(db, id)) };
   const total =
     ids.songs.length +
     ids.tracks.length +

@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
+  cancelEditSessionRow,
   createAsset,
+  createEditSessionRow,
   createProjectRow,
   createSongRow,
   createTestDb,
@@ -218,5 +220,35 @@ describe("Trash purge after the retention period (SPEC §26.3)", () => {
       listEvents(t.db, { action: "project.purged" }).map((e) => [e.targetId, e.actorType]),
     ).toEqual([[gone.id, "system"]]);
     expect(listEvents(t.db, { action: "document.purged" })).toHaveLength(1);
+  });
+
+  it("skips a deleted project while a song in it is being edited", () => {
+    const user = insertUser(t.db, {
+      username: "u",
+      displayName: "U",
+      globalRole: "member",
+      passwordHash: "x",
+    });
+    const held = createProjectRow(t.db, { name: "Held", createdBy: user.id });
+    const song = createSongRow(t.db, { projectId: held.id, title: "S", createdBy: user.id });
+    softDeleteProject(t.db, held.id, now - 200 * DAY);
+    const session = createEditSessionRow(t.db, {
+      songId: song.id,
+      projectId: held.id,
+      userId: user.id,
+      base: { tracks: [], remap: [], foldedOps: 0 },
+    });
+    const gone = createProjectRow(t.db, { name: "Gone", createdBy: user.id });
+    softDeleteProject(t.db, gone.id, now - 200 * DAY);
+    const byId = (id: string) =>
+      t.db.select().from(schema.projects).where(eq(schema.projects.id, id)).get();
+
+    expect(purgeExpiredTrash(t.db, now)).toMatchObject({ purged: 1 });
+    expect(byId(gone.id)).toBeUndefined();
+    expect(byId(held.id)).toBeDefined();
+    // Purged on a later run once the session has ended.
+    cancelEditSessionRow(t.db, session);
+    expect(purgeExpiredTrash(t.db, now)).toMatchObject({ purged: 1 });
+    expect(byId(held.id)).toBeUndefined();
   });
 });
